@@ -1,0 +1,20 @@
+{
+  "name": "@vibe-teacher/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.123",
+    "@hono/node-server": "^2.1",
+    "@vibe-teacher/shared": "*",
+    "hono": "^4.13",
+    "zod": "^4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.23"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@vibe-teacher/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vibe-teacher/shared": "*",
+    "react": "^19.2",
+    "react-dom": "^19.2",
+    "react-router": "^8.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2",
+    "@types/react-dom": "^19.2",
+    "@vitejs/plugin-react": "^6",
+    "vite": "^8"
+  }
+}

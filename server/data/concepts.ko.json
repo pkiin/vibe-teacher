@@ -1,0 +1,945 @@
+[
+  {
+    "id": "git-basics",
+    "name": "Git 기본 (commit / push / branch)",
+    "category": "버전 관리",
+    "level": "beginner",
+    "triggers": {
+      "files": [],
+      "commands": [
+        "^git (add|commit|push|pull|status|log|checkout|switch|branch|merge|init)\\b"
+      ],
+      "packages": [],
+      "text": [
+        "\\bgit\\b",
+        "커밋",
+        "푸시",
+        "브랜치"
+      ],
+      "stack": [
+        "^git$"
+      ]
+    },
+    "explanation": "Git은 코드의 변경 이력을 저장하는 도구입니다. commit은 '지금 상태를 사진 찍어 두는 것', push는 그 사진들을 GitHub 같은 원격 저장소로 올리는 것, branch는 원본을 건드리지 않고 다른 갈래에서 작업하는 것입니다. 잘못 바꿔도 이전 커밋으로 되돌릴 수 있어 안전망 역할을 합니다.",
+    "links": [
+      {
+        "title": "Git 공식 입문서 (한국어)",
+        "url": "https://git-scm.com/book/ko/v2"
+      }
+    ]
+  },
+  {
+    "id": "gitignore",
+    "name": ".gitignore",
+    "category": "버전 관리",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)\\.gitignore$"
+      ],
+      "commands": [],
+      "packages": [],
+      "text": [
+        "gitignore"
+      ],
+      "stack": []
+    },
+    "explanation": ".gitignore는 Git이 추적하지 말아야 할 파일 목록입니다. node_modules처럼 다시 만들 수 있는 것, .env처럼 비밀이 든 것은 여기에 적어 저장소에 올라가지 않게 합니다. 한 번 올라간 비밀 키는 이력에 남으니 처음부터 막는 것이 중요합니다."
+  },
+  {
+    "id": "npm-package-json",
+    "name": "npm과 package.json (의존성 관리)",
+    "category": "패키지/빌드",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)package(-lock)?\\.json$"
+      ],
+      "commands": [
+        "^(npm|pnpm|yarn|bun) (install|i|add|ci)\\b"
+      ],
+      "packages": [],
+      "text": [
+        "package\\.json",
+        "npm install",
+        "의존성",
+        "dependencies"
+      ],
+      "stack": [
+        "^npm$",
+        "^pnpm$",
+        "^bun$"
+      ]
+    },
+    "explanation": "package.json은 프로젝트의 이름, 실행 스크립트(npm run dev 등), 그리고 사용하는 외부 라이브러리(의존성) 목록을 적는 파일입니다. npm install은 그 목록대로 node_modules 폴더에 라이브러리를 내려받습니다. node_modules는 언제든 다시 만들 수 있으므로 저장소에 올리지 않습니다."
+  },
+  {
+    "id": "semver",
+    "name": "버전 번호 규칙 (시맨틱 버전)",
+    "category": "패키지/빌드",
+    "level": "intermediate",
+    "triggers": {
+      "files": [],
+      "commands": [
+        "@\\^?\\d+\\.\\d+"
+      ],
+      "packages": [],
+      "text": [
+        "\\^\\d+\\.\\d+\\.\\d+",
+        "semver",
+        "시맨틱 버전"
+      ],
+      "stack": []
+    },
+    "explanation": "라이브러리 버전은 보통 '주.부.수정' 세 숫자로 적습니다. 주 버전이 바뀌면 호환이 깨질 수 있고, 부 버전은 기능 추가, 수정 버전은 버그 수정입니다. package.json의 ^는 '주 버전은 그대로, 나머지는 최신으로'라는 뜻입니다."
+  },
+  {
+    "id": "env-variables",
+    "name": "환경 변수와 .env 파일",
+    "category": "설정/보안",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)\\.env(\\.|$)",
+        "(^|/)\\.env\\.(sample|example|local)$"
+      ],
+      "commands": [
+        "\\bexport [A-Z_]+=",
+        "dotenv"
+      ],
+      "packages": [
+        "^dotenv$",
+        "^python-dotenv$"
+      ],
+      "text": [
+        "환경 ?변수",
+        "\\.env\\b",
+        "API ?키",
+        "process\\.env",
+        "import\\.meta\\.env",
+        "secret"
+      ],
+      "stack": [
+        "^dotenv$"
+      ]
+    },
+    "explanation": "비밀 키나 접속 주소처럼 코드에 직접 적으면 안 되는 값을 .env 파일에 두고, 프로그램이 실행될 때 읽어 쓰는 방식입니다. .env는 Git에 올리지 않고, 대신 값이 비어 있는 .env.sample 같은 템플릿을 공유합니다. 배포 서비스에서는 같은 이름의 환경 변수를 설정 화면에서 입력합니다.",
+    "links": [
+      {
+        "title": "Vite 환경 변수 문서",
+        "url": "https://vitejs.dev/guide/env-and-mode"
+      }
+    ]
+  },
+  {
+    "id": "terminal-basics",
+    "name": "터미널(셸) 기본 명령",
+    "category": "도구",
+    "level": "beginner",
+    "triggers": {
+      "files": [],
+      "commands": [
+        "^(ls|cd|mkdir|cat|cp|mv|rm|touch|pwd)\\b"
+      ],
+      "packages": [],
+      "text": [
+        "터미널",
+        "명령어",
+        "커맨드"
+      ],
+      "stack": [
+        "^shell$"
+      ]
+    },
+    "explanation": "터미널은 마우스 대신 글자로 컴퓨터에 지시하는 창입니다. ls(목록 보기), cd(폴더 이동), mkdir(폴더 만들기), cat(파일 내용 보기), rm(삭제) 같은 명령이 기본입니다. AI 코딩 도구가 실행한 명령을 읽을 수 있으면 무슨 일이 일어났는지 따라갈 수 있습니다."
+  },
+  {
+    "id": "paths",
+    "name": "절대 경로와 상대 경로",
+    "category": "도구",
+    "level": "beginner",
+    "triggers": {
+      "files": [],
+      "commands": [
+        "\\.\\./",
+        "^cd \\."
+      ],
+      "packages": [],
+      "text": [
+        "상대 ?경로",
+        "절대 ?경로",
+        "\\.\\./"
+      ],
+      "stack": []
+    },
+    "explanation": "절대 경로는 /home/사용자/프로젝트/파일 처럼 맨 위부터 전부 적은 주소이고, 상대 경로는 지금 있는 폴더를 기준으로 ./ 나 ../ 로 적는 주소입니다. import 문이나 명령이 파일을 못 찾는 문제는 대부분 '지금 어디에 있는지'와 경로 기준이 어긋나서 생깁니다."
+  },
+  {
+    "id": "dev-vs-build",
+    "name": "개발 서버 vs 빌드",
+    "category": "패키지/빌드",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)dist/",
+        "(^|/)build/"
+      ],
+      "commands": [
+        "^(npm|pnpm|bun|yarn) run (dev|build|start|preview)\\b",
+        "^(npx )?vite( build)?$",
+        "^(npx )?tsc\\b"
+      ],
+      "packages": [],
+      "text": [
+        "개발 ?서버",
+        "빌드",
+        "npm run dev",
+        "npm run build"
+      ],
+      "stack": [
+        "^vite$"
+      ]
+    },
+    "explanation": "개발 서버(npm run dev)는 코드를 고칠 때마다 바로 화면에 반영해 주는 작업용 실행 방식이고, 빌드(npm run build)는 배포용으로 파일을 압축·정리해 dist 같은 폴더에 내놓는 과정입니다. 배포 서비스에 올리는 것은 빌드 결과물입니다."
+  },
+  {
+    "id": "ports-localhost",
+    "name": "포트와 localhost",
+    "category": "웹 기본",
+    "level": "beginner",
+    "triggers": {
+      "files": [],
+      "commands": [
+        "--port \\d+",
+        "localhost:\\d+"
+      ],
+      "packages": [],
+      "text": [
+        "localhost",
+        "포트",
+        "port \\d{4}",
+        "EADDRINUSE",
+        "127\\.0\\.0\\.1"
+      ],
+      "stack": []
+    },
+    "explanation": "localhost는 '내 컴퓨터 자신'을 가리키는 주소이고, 뒤에 붙는 숫자(예: 5173, 3000, 8787)는 포트로 같은 컴퓨터 안에서 어떤 프로그램에게 말을 거는지 구분하는 번호입니다. 'address already in use' 오류는 그 포트를 다른 프로그램이 이미 쓰고 있다는 뜻입니다."
+  },
+  {
+    "id": "vite",
+    "name": "Vite (프런트엔드 개발 도구)",
+    "category": "프레임워크/도구",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)vite\\.config\\.[cm]?[jt]s$"
+      ],
+      "commands": [
+        "\\bvite\\b",
+        "create-vite",
+        "npm create vite"
+      ],
+      "packages": [
+        "^vite$"
+      ],
+      "text": [
+        "\\bvite\\b"
+      ],
+      "stack": [
+        "^vite$"
+      ]
+    },
+    "explanation": "Vite는 React, Vue 같은 프런트엔드 프로젝트를 빠르게 실행(dev)하고 배포용으로 묶어(build) 주는 도구입니다. vite.config.ts에서 포트, 프록시, 플러그인을 설정합니다. index.html이 시작점이고 src/main.tsx 같은 파일이 여기서 불려집니다.",
+    "links": [
+      {
+        "title": "Vite 시작하기",
+        "url": "https://vitejs.dev/guide/"
+      }
+    ]
+  },
+  {
+    "id": "react-components",
+    "name": "React 컴포넌트와 props",
+    "category": "프레임워크/도구",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "\\.(jsx|tsx)$"
+      ],
+      "commands": [],
+      "packages": [
+        "^react$",
+        "^react-dom$"
+      ],
+      "text": [
+        "컴포넌트",
+        "\\bprops\\b",
+        "\\bReact\\b"
+      ],
+      "stack": [
+        "^react$"
+      ]
+    },
+    "explanation": "React에서는 화면을 '컴포넌트'라는 작은 조각(함수)으로 나누어 만들고, 조각끼리 props라는 인자로 데이터를 넘깁니다. 예를 들어 <Button label=\"저장\" />에서 label이 props입니다. 파일 하나가 컴포넌트 하나인 경우가 많습니다.",
+    "links": [
+      {
+        "title": "React 공식 문서 (한국어)",
+        "url": "https://ko.react.dev/learn"
+      }
+    ]
+  },
+  {
+    "id": "react-hooks",
+    "name": "React 훅 (useState / useEffect)",
+    "category": "프레임워크/도구",
+    "level": "intermediate",
+    "triggers": {
+      "files": [],
+      "commands": [],
+      "packages": [],
+      "text": [
+        "useState",
+        "useEffect",
+        "useMemo",
+        "useCallback",
+        "\\bhook",
+        "훅"
+      ],
+      "stack": []
+    },
+    "explanation": "useState는 컴포넌트가 기억해야 할 값(입력창 내용, 열림/닫힘 등)을 다루고, 값이 바뀌면 화면이 다시 그려집니다. useEffect는 '화면이 그려진 뒤에 할 일'(서버에서 데이터 가져오기 등)을 적는 곳입니다. 둘 다 컴포넌트 함수 맨 위에서만 호출해야 합니다."
+  },
+  {
+    "id": "jsx",
+    "name": "JSX (HTML처럼 보이는 JavaScript)",
+    "category": "프레임워크/도구",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "\\.(jsx|tsx)$"
+      ],
+      "commands": [],
+      "packages": [],
+      "text": [
+        "\\bJSX\\b",
+        "className="
+      ],
+      "stack": []
+    },
+    "explanation": "JSX는 JavaScript 안에 HTML 같은 태그를 쓰는 문법입니다. class 대신 className, 중괄호 {}로 변수를 끼워 넣는 것이 다릅니다. 브라우저는 JSX를 직접 이해하지 못하므로 Vite 같은 도구가 일반 JavaScript로 바꿔 줍니다."
+  },
+  {
+    "id": "typescript-types",
+    "name": "TypeScript 타입과 인터페이스",
+    "category": "언어",
+    "level": "intermediate",
+    "triggers": {
+      "files": [
+        "\\.tsx?$"
+      ],
+      "commands": [
+        "^(npx )?tsc\\b"
+      ],
+      "packages": [
+        "^typescript$"
+      ],
+      "text": [
+        "타입 ?오류",
+        "\\binterface\\b",
+        "type error",
+        "TS\\d{4}",
+        "TypeScript"
+      ],
+      "stack": [
+        "^typescript$"
+      ]
+    },
+    "explanation": "TypeScript는 JavaScript에 '이 값은 문자열, 이 함수는 숫자를 돌려준다' 같은 타입 정보를 덧붙인 언어입니다. 실행 전에 실수를 잡아 주지만, 그만큼 빨간 밑줄(타입 오류)을 자주 만납니다. tsc는 타입을 검사하는 명령입니다.",
+    "links": [
+      {
+        "title": "TypeScript 핸드북",
+        "url": "https://www.typescriptlang.org/ko/docs/handbook/intro.html"
+      }
+    ]
+  },
+  {
+    "id": "tsconfig",
+    "name": "tsconfig.json",
+    "category": "패키지/빌드",
+    "level": "intermediate",
+    "triggers": {
+      "files": [
+        "(^|/)tsconfig.*\\.json$"
+      ],
+      "commands": [],
+      "packages": [],
+      "text": [
+        "tsconfig"
+      ],
+      "stack": []
+    },
+    "explanation": "tsconfig.json은 TypeScript가 어떤 파일을 어떤 규칙으로 검사할지 정하는 설정입니다. strict(엄격 검사), target(어떤 버전의 JavaScript로 바꿀지), include(검사할 폴더) 정도만 알아도 대부분 문제를 이해할 수 있습니다."
+  },
+  {
+    "id": "async-await",
+    "name": "비동기 처리 (async / await / Promise)",
+    "category": "언어",
+    "level": "intermediate",
+    "triggers": {
+      "files": [],
+      "commands": [],
+      "packages": [],
+      "text": [
+        "\\basync\\b",
+        "\\bawait\\b",
+        "Promise",
+        "비동기",
+        "then\\("
+      ],
+      "stack": []
+    },
+    "explanation": "서버에 요청하거나 파일을 읽는 일은 시간이 걸리므로 결과를 '나중에' 받습니다. async 함수 안에서 await를 붙이면 결과가 올 때까지 기다렸다가 다음 줄로 넘어가듯 읽기 쉽게 쓸 수 있습니다. await를 빼먹으면 값 대신 Promise 객체가 들어가 이상한 동작이 납니다."
+  },
+  {
+    "id": "fetch-http",
+    "name": "fetch와 HTTP 요청",
+    "category": "웹 기본",
+    "level": "beginner",
+    "triggers": {
+      "files": [],
+      "commands": [
+        "^curl\\b"
+      ],
+      "packages": [
+        "^axios$",
+        "^requests$",
+        "^httpx$"
+      ],
+      "text": [
+        "\\bfetch\\(",
+        "\\baxios\\b",
+        "HTTP 요청",
+        "API 호출",
+        "\\bGET\\b",
+        "\\bPOST\\b"
+      ],
+      "stack": [
+        "^axios$"
+      ]
+    },
+    "explanation": "브라우저나 서버가 다른 서버에 데이터를 달라고(또는 보내겠다고) 하는 것이 HTTP 요청입니다. GET은 가져오기, POST는 보내기입니다. JavaScript의 fetch()가 기본 도구이고, curl은 터미널에서 같은 일을 해 보는 명령입니다."
+  },
+  {
+    "id": "rest-api",
+    "name": "REST API와 라우팅",
+    "category": "웹 기본",
+    "level": "intermediate",
+    "triggers": {
+      "files": [
+        "(^|/)(routes?|api)/"
+      ],
+      "commands": [],
+      "packages": [
+        "^express$",
+        "^hono$",
+        "^fastapi$",
+        "^flask$",
+        "^koa$"
+      ],
+      "text": [
+        "\\bAPI\\b",
+        "엔드포인트",
+        "라우트",
+        "/api/"
+      ],
+      "stack": [
+        "^express$",
+        "^hono$",
+        "^fastapi$",
+        "^flask$"
+      ]
+    },
+    "explanation": "API는 프로그램끼리 약속된 주소(예: GET /api/users)로 데이터를 주고받는 창구입니다. 서버 코드에서 '이 주소로 요청이 오면 이 함수를 실행한다'고 연결하는 것을 라우팅이라고 합니다. 화면(프런트)과 데이터(백엔드)를 나누는 기본 구조입니다."
+  },
+  {
+    "id": "http-status",
+    "name": "HTTP 상태 코드 (200 / 404 / 500)",
+    "category": "웹 기본",
+    "level": "beginner",
+    "triggers": {
+      "files": [],
+      "commands": [],
+      "packages": [],
+      "text": [
+        "\\b(200|201|400|401|403|404|500|502|503) ?(OK|Not Found|Unauthorized|Forbidden|Bad Request|Internal)",
+        "상태 코드",
+        "status code",
+        "\\b404\\b",
+        "\\b500\\b"
+      ],
+      "stack": []
+    },
+    "explanation": "서버가 요청 결과를 숫자로 알려 주는 규칙입니다. 200번대는 성공, 400번대는 요청 쪽 문제(404 없는 주소, 401 로그인 필요), 500번대는 서버 쪽 오류입니다. 오류 메시지에 이 숫자가 보이면 어느 쪽 문제인지 먼저 가늠할 수 있습니다."
+  },
+  {
+    "id": "json",
+    "name": "JSON 데이터 형식",
+    "category": "웹 기본",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "\\.json$"
+      ],
+      "commands": [
+        "\\bjq\\b"
+      ],
+      "packages": [],
+      "text": [
+        "\\bJSON\\b",
+        "JSON\\.parse",
+        "JSON\\.stringify"
+      ],
+      "stack": []
+    },
+    "explanation": "JSON은 {\"이름\": \"값\"} 꼴로 데이터를 적는 형식으로, 설정 파일과 API 응답에 두루 쓰입니다. 따옴표는 큰따옴표만 쓰고 마지막 항목 뒤에 쉼표를 붙이면 안 됩니다. JSON.parse는 문자열을 객체로, JSON.stringify는 객체를 문자열로 바꿉니다."
+  },
+  {
+    "id": "cors",
+    "name": "CORS (다른 주소에서 API 호출하기)",
+    "category": "웹 기본",
+    "level": "intermediate",
+    "triggers": {
+      "files": [],
+      "commands": [],
+      "packages": [
+        "^cors$",
+        "^flask-cors$"
+      ],
+      "text": [
+        "\\bCORS\\b",
+        "Access-Control-Allow",
+        "cross-origin",
+        "프록시 설정",
+        "proxy"
+      ],
+      "stack": []
+    },
+    "explanation": "브라우저는 화면이 뜬 주소(예: localhost:5173)와 다른 주소(예: localhost:8787)의 API를 함부로 부르지 못하게 막습니다. 이것이 CORS 오류입니다. 서버가 허용 헤더를 보내거나, 개발 서버의 proxy 설정으로 같은 주소처럼 보이게 해서 해결합니다."
+  },
+  {
+    "id": "static-deploy",
+    "name": "정적 사이트 배포 (GitHub Pages / Vercel / Netlify)",
+    "category": "배포",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)\\.github/workflows/",
+        "(^|/)vercel\\.json$",
+        "(^|/)netlify\\.toml$"
+      ],
+      "commands": [
+        "^(vercel|netlify|gh-pages|surge)\\b",
+        "gh repo create"
+      ],
+      "packages": [
+        "^gh-pages$"
+      ],
+      "text": [
+        "배포",
+        "GitHub Pages",
+        "Vercel",
+        "Netlify",
+        "deploy"
+      ],
+      "stack": [
+        "^vercel$",
+        "^netlify$"
+      ]
+    },
+    "explanation": "HTML/CSS/JS 파일만으로 된 사이트는 서버 프로그램 없이 파일을 올려 두는 것만으로 공개할 수 있습니다. GitHub Pages, Vercel, Netlify가 대표적이며, 보통 저장소에 push하면 자동으로 빌드해 배포합니다. 빌드 결과 폴더(dist)와 시작 파일 위치만 맞춰 주면 됩니다."
+  },
+  {
+    "id": "serverless",
+    "name": "서버리스 / Edge 함수",
+    "category": "배포",
+    "level": "intermediate",
+    "triggers": {
+      "files": [
+        "(^|/)(api|functions|netlify/functions|supabase/functions)/"
+      ],
+      "commands": [
+        "^wrangler\\b",
+        "supabase functions"
+      ],
+      "packages": [
+        "^wrangler$",
+        "^@vercel/"
+      ],
+      "text": [
+        "서버리스",
+        "serverless",
+        "edge function",
+        "Edge 함수",
+        "Cloudflare Workers"
+      ],
+      "stack": [
+        "^cloudflare$"
+      ]
+    },
+    "explanation": "서버 컴퓨터를 직접 켜 두지 않고, 요청이 올 때만 잠깐 실행되는 작은 함수를 배포하는 방식입니다. Vercel의 api 폴더, Netlify Functions, Cloudflare Workers, Supabase Edge Functions가 여기에 속합니다. 비밀 키를 브라우저에 노출하지 않고 외부 API를 부를 때 자주 씁니다."
+  },
+  {
+    "id": "database-sql",
+    "name": "데이터베이스와 SQL",
+    "category": "데이터",
+    "level": "intermediate",
+    "triggers": {
+      "files": [
+        "\\.sql$",
+        "(^|/)(migrations?|schema)/",
+        "(^|/)schema\\.prisma$"
+      ],
+      "commands": [
+        "^(psql|sqlite3|mysql)\\b",
+        "prisma (migrate|db)",
+        "drizzle-kit"
+      ],
+      "packages": [
+        "^(pg|postgres|sqlite3|better-sqlite3|mysql2|prisma|drizzle-orm|sqlalchemy|psycopg2?)$",
+        "^@prisma/"
+      ],
+      "text": [
+        "데이터베이스",
+        "\\bSQL\\b",
+        "테이블",
+        "\\bSELECT\\b",
+        "\\bINSERT\\b",
+        "마이그레이션"
+      ],
+      "stack": [
+        "^(sqlite|postgres|prisma|drizzle)$"
+      ]
+    },
+    "explanation": "데이터를 표(테이블) 형태로 저장하고 SQL이라는 언어로 넣고(INSERT) 찾는(SELECT) 시스템입니다. SQLite는 파일 하나짜리 가벼운 DB, PostgreSQL은 서비스용 DB입니다. Prisma, Drizzle 같은 ORM은 SQL 대신 코드로 테이블을 다루게 해 줍니다."
+  },
+  {
+    "id": "supabase",
+    "name": "Supabase와 RLS(행 단위 보안)",
+    "category": "데이터",
+    "level": "intermediate",
+    "triggers": {
+      "files": [
+        "(^|/)supabase/"
+      ],
+      "commands": [
+        "^supabase\\b"
+      ],
+      "packages": [
+        "^@supabase/"
+      ],
+      "text": [
+        "supabase",
+        "\\bRLS\\b",
+        "row level security",
+        "anon key",
+        "service_role"
+      ],
+      "stack": [
+        "^supabase$"
+      ]
+    },
+    "explanation": "Supabase는 PostgreSQL 데이터베이스, 로그인, 파일 저장을 묶어 제공하는 서비스입니다. 브라우저에서 직접 DB를 부르기 때문에 '누가 어떤 행을 볼 수 있는지'를 RLS 정책으로 반드시 정해야 합니다. anon 키는 공개해도 되지만 service_role 키는 서버에서만 써야 합니다."
+  },
+  {
+    "id": "auth",
+    "name": "인증 (로그인, 세션, 토큰)",
+    "category": "설정/보안",
+    "level": "intermediate",
+    "triggers": {
+      "files": [
+        "(^|/)(auth|login)[^/]*\\.[jt]sx?$"
+      ],
+      "commands": [],
+      "packages": [
+        "^(next-auth|@auth/|passport|jsonwebtoken|bcrypt|firebase-auth|@supabase/auth)"
+      ],
+      "text": [
+        "로그인",
+        "인증",
+        "\\bJWT\\b",
+        "토큰",
+        "OAuth",
+        "세션 ?쿠키"
+      ],
+      "stack": []
+    },
+    "explanation": "인증은 '지금 요청한 사람이 누구인지' 확인하는 과정입니다. 로그인하면 서버가 세션 쿠키나 JWT 같은 토큰을 주고, 이후 요청마다 그것을 함께 보내 신원을 증명합니다. 비밀번호는 절대 그대로 저장하지 않고 해시로 저장합니다."
+  },
+  {
+    "id": "testing",
+    "name": "테스트 (단위 / E2E)",
+    "category": "품질",
+    "level": "intermediate",
+    "triggers": {
+      "files": [
+        "\\.(test|spec)\\.[jt]sx?$",
+        "(^|/)tests?/",
+        "(^|/)__tests__/"
+      ],
+      "commands": [
+        "^(npx |bunx )?(vitest|jest|pytest|playwright|mocha)\\b",
+        "^(npm|pnpm|bun|yarn) (run )?test\\b",
+        "^go test",
+        "^cargo test"
+      ],
+      "packages": [
+        "^(vitest|jest|pytest|@playwright/test|playwright|mocha|cypress)$"
+      ],
+      "text": [
+        "테스트",
+        "\\btest\\b",
+        "\\bspec\\b"
+      ],
+      "stack": [
+        "^(vitest|jest|playwright|pytest)$"
+      ]
+    },
+    "explanation": "테스트는 '이 함수에 이 값을 넣으면 이 결과가 나와야 한다'를 코드로 적어 두고 자동으로 확인하는 것입니다. 단위 테스트는 함수 하나를, E2E 테스트는 실제 브라우저로 화면 전체를 검사합니다. AI가 고친 코드가 다른 곳을 망가뜨리지 않았는지 확인하는 가장 싼 방법입니다."
+  },
+  {
+    "id": "lint-format",
+    "name": "린트와 포매터 (ESLint / Prettier)",
+    "category": "품질",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)(\\.eslintrc|eslint\\.config|\\.prettierrc|biome\\.json)"
+      ],
+      "commands": [
+        "^(npx )?(eslint|prettier|biome|ruff|black)\\b",
+        "^(npm|pnpm|bun) run (lint|format)"
+      ],
+      "packages": [
+        "^(eslint|prettier|@biomejs/biome|ruff|black)$"
+      ],
+      "text": [
+        "린트",
+        "lint",
+        "포맷터",
+        "prettier"
+      ],
+      "stack": [
+        "^(eslint|prettier)$"
+      ]
+    },
+    "explanation": "린트는 버그가 될 만한 코드 습관을 찾아 주는 검사기이고, 포매터는 들여쓰기와 따옴표 같은 모양을 자동으로 맞춰 주는 도구입니다. 둘 다 코드가 '틀렸다'기보다 '규칙에 어긋난다'고 알려 주는 것이라 경고를 읽고 필요한 것만 고치면 됩니다."
+  },
+  {
+    "id": "docker",
+    "name": "Docker 컨테이너",
+    "category": "배포",
+    "level": "intermediate",
+    "triggers": {
+      "files": [
+        "(^|/)Dockerfile$",
+        "(^|/)docker-compose\\.ya?ml$",
+        "(^|/)\\.dockerignore$"
+      ],
+      "commands": [
+        "^docker(-compose)?\\b"
+      ],
+      "packages": [],
+      "text": [
+        "도커",
+        "docker",
+        "컨테이너"
+      ],
+      "stack": [
+        "^docker$"
+      ]
+    },
+    "explanation": "Docker는 프로그램과 그것이 필요로 하는 환경(운영체제 라이브러리, 런타임 버전)을 한 상자(이미지)로 묶어 어디서나 똑같이 실행하게 해 줍니다. Dockerfile이 상자를 만드는 조리법이고, docker compose는 여러 상자를 함께 띄우는 설정입니다."
+  },
+  {
+    "id": "python-venv",
+    "name": "Python 가상환경과 pip",
+    "category": "패키지/빌드",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)requirements\\.txt$",
+        "(^|/)pyproject\\.toml$",
+        "\\.py$"
+      ],
+      "commands": [
+        "^(pip3?|uv|poetry) (install|add|sync)\\b",
+        "^python3? -m venv",
+        "^uv venv",
+        "source .*activate"
+      ],
+      "packages": [],
+      "text": [
+        "가상 ?환경",
+        "venv",
+        "pip install",
+        "requirements"
+      ],
+      "stack": [
+        "^(pip|uv|python)$"
+      ]
+    },
+    "explanation": "Python 프로젝트마다 라이브러리를 따로 설치해 서로 섞이지 않게 하는 폴더가 가상환경(venv)입니다. 활성화한 뒤 pip install(또는 uv add)로 설치하고, requirements.txt나 pyproject.toml에 목록을 적어 다른 사람도 같은 환경을 만들 수 있게 합니다."
+  },
+  {
+    "id": "markdown-readme",
+    "name": "마크다운과 README",
+    "category": "문서",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)README\\.md$",
+        "\\.md$"
+      ],
+      "commands": [],
+      "packages": [],
+      "text": [
+        "README",
+        "마크다운",
+        "markdown"
+      ],
+      "stack": [
+        "^markdown$"
+      ]
+    },
+    "explanation": "마크다운은 #으로 제목, -로 목록, ```로 코드 블록을 적는 간단한 문서 형식입니다. README.md는 프로젝트 첫 화면에 보이는 소개 문서로, 무엇을 하는 프로젝트인지·어떻게 실행하는지를 적습니다. AI에게 프로젝트 맥락을 알려 주는 용도로도 좋습니다."
+  },
+  {
+    "id": "regex",
+    "name": "정규 표현식",
+    "category": "언어",
+    "level": "intermediate",
+    "triggers": {
+      "files": [],
+      "commands": [
+        "^(grep|rg|sed) .*-[Ee]\\b",
+        "\\bsed -i\\b"
+      ],
+      "packages": [],
+      "text": [
+        "정규 ?표현식",
+        "정규식",
+        "\\bregex\\b",
+        "RegExp",
+        "\\\\d\\+"
+      ],
+      "stack": []
+    },
+    "explanation": "정규 표현식은 '숫자 3개 뒤에 하이픈' 같은 글자 패턴을 짧은 기호로 적는 방법입니다. 검색·치환, 입력값 검사에 두루 쓰이지만 읽기 어렵습니다. AI가 만든 정규식은 예시 몇 개로 꼭 시험해 보는 것이 좋습니다."
+  },
+  {
+    "id": "html-head-meta",
+    "name": "HTML 문서 구조와 head 메타 정보",
+    "category": "웹 기본",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "\\.html$",
+        "(^|/)favicon\\.(ico|svg|png)$"
+      ],
+      "commands": [],
+      "packages": [],
+      "text": [
+        "파비콘",
+        "favicon",
+        "<meta",
+        "viewport",
+        "<head>"
+      ],
+      "stack": [
+        "^html$"
+      ]
+    },
+    "explanation": "HTML 문서는 head(제목, 파비콘, 글자 인코딩, 모바일용 viewport 같은 정보)와 body(실제 화면 내용)로 나뉩니다. 탭에 보이는 아이콘(파비콘)이나 검색 결과의 제목·설명은 head 안의 태그로 정합니다."
+  },
+  {
+    "id": "css-layout",
+    "name": "CSS 기본과 레이아웃",
+    "category": "웹 기본",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "\\.(css|scss)$",
+        "(^|/)tailwind\\.config\\."
+      ],
+      "commands": [],
+      "packages": [
+        "^tailwindcss$"
+      ],
+      "text": [
+        "\\bCSS\\b",
+        "flexbox",
+        "\\bgrid\\b",
+        "반응형",
+        "스타일",
+        "tailwind"
+      ],
+      "stack": [
+        "^(css|tailwind)$"
+      ]
+    },
+    "explanation": "CSS는 색·여백·배치 같은 겉모습을 정하는 언어입니다. 요소를 가로·세로로 나란히 놓는 flexbox, 격자로 놓는 grid, 화면 크기에 따라 바꾸는 미디어 쿼리(반응형)가 핵심입니다. Tailwind는 미리 만들어 둔 짧은 클래스 이름으로 CSS를 대신 쓰는 방식입니다."
+  },
+  {
+    "id": "llm-api",
+    "name": "LLM API 호출과 API 키",
+    "category": "AI",
+    "level": "intermediate",
+    "triggers": {
+      "files": [],
+      "commands": [],
+      "packages": [
+        "^(openai|anthropic|@anthropic-ai/sdk|@google/generative-ai|langchain)"
+      ],
+      "text": [
+        "OpenAI",
+        "Anthropic",
+        "Claude API",
+        "GPT",
+        "\\bLLM\\b",
+        "프롬프트",
+        "API 키",
+        "토큰 ?비용"
+      ],
+      "stack": [
+        "^(openai|anthropic)$"
+      ]
+    },
+    "explanation": "프로그램 안에서 AI 모델을 부를 때는 서비스가 준 API 키를 붙여 HTTP 요청을 보냅니다. 키는 돈과 직결되므로 .env에 두고 서버 쪽에서만 씁니다. 요청과 응답은 토큰 단위로 과금되니 긴 입력을 그대로 보내기보다 필요한 부분만 추려 보내는 습관이 중요합니다."
+  },
+  {
+    "id": "ai-agent-tools",
+    "name": "AI 코딩 도구의 동작 방식 (도구 호출)",
+    "category": "AI",
+    "level": "beginner",
+    "triggers": {
+      "files": [
+        "(^|/)(CLAUDE|AGENTS)\\.md$",
+        "(^|/)\\.claude/"
+      ],
+      "commands": [],
+      "packages": [],
+      "text": [
+        "CLAUDE\\.md",
+        "AGENTS\\.md",
+        "서브에이전트",
+        "subagent",
+        "권한",
+        "permission",
+        "플랜 모드",
+        "plan mode"
+      ],
+      "stack": []
+    },
+    "explanation": "Claude Code, Codex, Copilot 같은 도구는 사용자의 말을 받아 파일 읽기·쓰기, 명령 실행 같은 '도구'를 반복해서 호출하며 일을 합니다. CLAUDE.md나 AGENTS.md는 그 도구에게 프로젝트 규칙을 알려 주는 메모입니다. 무엇을 실행했는지 기록(이 앱이 읽는 파일)을 보면 결과를 검증할 수 있습니다."
+  }
+]

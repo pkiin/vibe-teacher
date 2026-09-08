@@ -1,0 +1,27 @@
+{
+  "name": "vibe-teacher",
+  "private": true,
+  "version": "0.1.0",
+  "description": "바이브 코딩 채팅 기록을 읽어 내가 시킨 것, 만들어진 것, 알아야 할 개념을 정리해 주는 로컬 웹 앱",
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "tsx watch --clear-screen=false server/src/index.ts",
+    "dev:web": "vite web",
+    "build": "npm -w web run build",
+    "start": "tsx server/src/index.ts",
+    "typecheck": "tsc -p shared --noEmit && tsc -p server --noEmit && tsc -p web --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "concurrently": "^10",
+    "typescript": "^5.9",
+    "vitest": "^5"
+  }
+}

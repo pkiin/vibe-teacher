@@ -1,0 +1,22 @@
+{"id": "e1", "type": "session.start", "timestamp": "2026-09-01T12:00:00.000Z", "data": {"selectedModel": "gpt-5", "context": {"cwd": "/home/tester/goapp", "gitRoot": "/home/tester/goapp", "repository": "tester/goapp"}, "startTime": "2026-09-01T12:00:00.000Z", "version": "1.0.73", "producer": "copilot-developer-cli"}}
+{"id": "e2", "type": "session.title_changed", "timestamp": "2026-09-01T12:00:01.000Z", "data": {"title": "임시 제목"}}
+{"id": "e3", "type": "user.message", "timestamp": "2026-09-01T12:00:02.000Z", "data": {"content": "Go 서버 만들어줘"}}
+{"id": "e4", "type": "user.message", "timestamp": "2026-09-01T12:00:03.000Z", "data": {"content": "help text", "source": "command-help"}}
+{"id": "e5", "type": "user.message", "timestamp": "2026-09-01T12:00:04.000Z", "data": {"content": "injected", "source": "system"}}
+{"id": "e6", "type": "assistant.turn_start", "timestamp": "2026-09-01T12:00:05.000Z", "data": {}}
+{"id": "e7", "type": "tool.execution_start", "timestamp": "2026-09-01T12:00:06.000Z", "data": {"toolName": "bash", "toolCallId": "tc1", "arguments": {"command": "go mod init example.com/goapp && go get github.com/gin-gonic/gin", "description": "모듈 초기화"}}}
+{"id": "e8", "type": "tool.execution_complete", "timestamp": "2026-09-01T12:00:07.000Z", "data": {"toolCallId": "tc1", "success": true, "result": {"content": "go: creating new go.mod"}}}
+{"id": "e9", "type": "tool.execution_start", "timestamp": "2026-09-01T12:00:08.000Z", "data": {"toolName": "create", "toolCallId": "tc2", "arguments": {"path": "/home/tester/goapp/main.go", "file_text": "package main"}}}
+{"id": "e10", "type": "tool.execution_complete", "timestamp": "2026-09-01T12:00:09.000Z", "data": {"toolCallId": "tc2", "success": true, "result": {"content": "created"}}}
+{"id": "e11", "type": "tool.execution_start", "timestamp": "2026-09-01T12:00:10.000Z", "data": {"toolName": "str_replace_editor", "toolCallId": "tc3", "arguments": {"command": "create", "path": "/home/tester/goapp/README.md"}}}
+{"id": "e12", "type": "tool.execution_complete", "timestamp": "2026-09-01T12:00:11.000Z", "data": {"toolCallId": "tc3", "success": true, "result": {"content": "ok"}}}
+{"id": "e13", "type": "tool.execution_start", "timestamp": "2026-09-01T12:00:12.000Z", "data": {"toolName": "view", "toolCallId": "tc4", "arguments": {"path": "/home/tester/goapp/main.go"}}}
+{"id": "e14", "type": "tool.execution_complete", "timestamp": "2026-09-01T12:00:13.000Z", "data": {"toolCallId": "tc4", "success": true, "result": {"content": "package main"}}}
+{"id": "e15", "type": "tool.execution_start", "timestamp": "2026-09-01T12:00:14.000Z", "data": {"toolName": "report_intent", "toolCallId": "tc5", "arguments": {"intent": "Creating server"}}}
+{"id": "e16", "type": "tool.execution_complete", "timestamp": "2026-09-01T12:00:15.000Z", "data": {"toolCallId": "tc5", "success": true, "result": {"content": ""}}}
+{"id": "e17", "type": "tool.execution_start", "timestamp": "2026-09-01T12:00:16.000Z", "data": {"toolName": "task", "toolCallId": "tc6", "arguments": {"description": "테스트 작성"}}}
+{"id": "e18", "type": "child_session_ref", "timestamp": "2026-09-01T12:00:17.000Z", "data": {"sessionId": "child-1"}}
+{"id": "e19", "type": "tool.execution_complete", "timestamp": "2026-09-01T12:00:18.000Z", "data": {"toolCallId": "tc6", "success": false, "result": {"content": "failed"}}}
+{"id": "e20", "type": "assistant.message", "timestamp": "2026-09-01T12:00:19.000Z", "data": {"content": "Go 서버를 만들었습니다."}}
+{"id": "e21", "type": "session.title_changed", "timestamp": "2026-09-01T12:00:20.000Z", "data": {"title": "Go 서버 만들기"}}
+{"id": "e22", "type": "compaction", "timestamp": "2026-09-01T12:00:21.000Z", "data": {}}
