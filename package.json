@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "description": "바이브 코딩 채팅 기록을 읽어 내가 시킨 것, 만들어진 것, 알아야 할 개념을 정리해 주는 로컬 웹 앱",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "shared",
     "server",

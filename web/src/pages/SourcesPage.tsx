@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import type { Account, HealthResponse, Provider, RescanResponse, SettingsResponse, SourceStatus } from '@vibe-teacher/shared';
+import type { Account, HealthResponse, LlmEffort, Provider, RescanResponse, SettingsResponse, SourceStatus } from '@vibe-teacher/shared';
 import { apiDelete, apiPatch, apiPost, apiPut } from '../api/client';
 import { Breadcrumb } from '../components/Layout';
+import { LlmProviderChoice } from '../components/LlmProviderPicker';
 import { ErrorBox, Loading, Notice } from '../components/Notice';
 import { SourceCard } from '../components/SourceCard';
 import { useApi } from '../hooks/useApi';
@@ -28,6 +29,7 @@ export function SourcesPage() {
   const [llmModel, setLlmModel] = useState('');
   const [llmBudget, setLlmBudget] = useState('0.5');
   const [llmCliPath, setLlmCliPath] = useState('');
+  const [llmEffort, setLlmEffort] = useState<LlmEffort>('medium');
 
   const [authMode, setAuthMode] = useState<'none' | 'home-token'>('none');
   const [admins, setAdmins] = useState('');
@@ -47,6 +49,7 @@ export function SourcesPage() {
     setLlmModel(settings.data.llm.model ?? '');
     setLlmBudget(String(settings.data.llm.maxBudgetUsd));
     setLlmCliPath(settings.data.llm.claudeCliPath ?? '');
+    setLlmEffort(settings.data.llm.effort ?? 'medium');
     setAuthMode(settings.data.auth.mode);
     setAdmins(settings.data.auth.admins.join(', '));
     setSessionTtl(String(settings.data.auth.sessionTtlHours));
@@ -92,6 +95,7 @@ export function SourcesPage() {
           model: llmModel.trim() || null,
           maxBudgetUsd: Number(llmBudget) || 0.5,
           claudeCliPath: llmCliPath.trim() || null,
+          effort: llmEffort,
         },
       });
     }, ko.sources.saved);
@@ -234,19 +238,29 @@ export function SourcesPage() {
           </Notice>
         )}
         <div className="form-grid">
+          {settings.data && (
+            <LlmProviderChoice
+              value={llmProvider}
+              onChange={setLlmProvider}
+              options={settings.data.llmOptions}
+              defaultModel={settings.data.llmDefaultModel}
+              model={llmModel.trim() || null}
+              envOverride={settings.data.llmEnvOverride}
+            />
+          )}
           <label className="field">
-            제공자
-            <select value={llmProvider} onChange={(e) => setLlmProvider(e.target.value as typeof llmProvider)}>
-              {(['auto', 'claude-cli', 'anthropic-sdk', 'none'] as const).map((p) => (
-                <option key={p} value={p}>
-                  {ko.sources.llmProvider[p]}
+            {ko.sources.llmModel}
+            <input value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder={`비우면 ${settings.data?.llmDefaultModel ?? 'claude-opus-5-5'} (API) / Claude Code 기본 모델 (CLI)`} />
+          </label>
+          <label className="field">
+            {ko.sources.llmEffort}
+            <select value={llmEffort} onChange={(e) => setLlmEffort(e.target.value as LlmEffort)}>
+              {(['low', 'medium', 'high', 'xhigh', 'max'] as const).map((v) => (
+                <option key={v} value={v}>
+                  {ko.sources.llmEffortLevel[v]}
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            {ko.sources.llmModel}
-            <input value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder="예: sonnet, claude-opus-5" />
           </label>
           <label className="field">
             {ko.sources.llmBudget}

@@ -32,11 +32,16 @@ export function resolveClaudeBinary(configured: string | null | undefined, env: 
   return null;
 }
 
-/** 중첩 실행 차단을 피하기 위해 CLAUDE_CONFIG_DIR 를 제외한 CLAUDE* 변수를 모두 지운다 */
+/**
+ * - 중첩 실행 차단을 피하기 위해 CLAUDE_CONFIG_DIR 를 제외한 CLAUDE* 변수를 모두 지운다.
+ * - ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN 도 지운다. 그대로 넘기면 claude 가 로그인 대신
+ *   API 키로 과금되므로, "Claude Code 로그인"을 고른 의미가 없어진다.
+ */
 export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(env)) {
     if (/^CLAUDE/i.test(k) && k !== 'CLAUDE_CONFIG_DIR') continue;
+    if (k === 'ANTHROPIC_API_KEY' || k === 'ANTHROPIC_AUTH_TOKEN') continue;
     out[k] = v;
   }
   return out;

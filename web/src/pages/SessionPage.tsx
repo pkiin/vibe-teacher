@@ -10,10 +10,11 @@ import { MessageList } from '../components/MessageList';
 import { ErrorBox, Loading, Notice, fmtDate, fmtDuration } from '../components/Notice';
 import { Tabs } from '../components/Tabs';
 import { useAuth } from '../context/AuthContext';
+import { WikiTab } from '../components/WikiTab';
 import { useApi } from '../hooks/useApi';
 import { ko } from '../i18n/ko';
 
-type TabId = 'messages' | 'built' | 'concepts';
+type TabId = 'messages' | 'built' | 'concepts' | 'wiki';
 
 export function SessionPage() {
   const { sessionKey = '' } = useParams();
@@ -117,6 +118,7 @@ export function SessionPage() {
               { id: 'messages', label: ko.session.tabs.messages, badge: s.counts.human + s.counts.slashCommands },
               { id: 'built', label: ko.session.tabs.built },
               { id: 'concepts', label: ko.session.tabs.concepts, badge: concepts?.length },
+              { id: 'wiki', label: ko.wiki.tab },
             ]}
             active={tab}
             onChange={setTab}
@@ -130,7 +132,7 @@ export function SessionPage() {
           )}
           {tab === 'built' && (
             <div className="tab-body">
-              <EnrichPanel sessionKey={key} llmStatus={me?.llmStatus ?? null} canEnrich={me?.canEnrich ?? false} enrichReason={me?.enrichReason} cached={enrichment} onResult={onEnrichResult} />
+              <EnrichPanel sessionKey={key} llmStatus={me?.llmStatus ?? null} canEnrich={me?.canEnrich ?? false} enrichReason={me?.enrichReason} cached={enrichment} onResult={onEnrichResult} isAdmin={me?.isAdmin ?? false} />
               {built.loading && <Loading />}
               {built.error && <ErrorBox error={built.error} onRetry={built.reload} />}
               {built.data && <BuiltSummaryView built={built.data} onJump={jump} />}
@@ -138,11 +140,16 @@ export function SessionPage() {
           )}
           {tab === 'concepts' && (
             <div className="tab-body">
-              <EnrichPanel sessionKey={key} llmStatus={me?.llmStatus ?? null} canEnrich={me?.canEnrich ?? false} enrichReason={me?.enrichReason} cached={enrichment} onResult={onEnrichResult} />
+              <EnrichPanel sessionKey={key} llmStatus={me?.llmStatus ?? null} canEnrich={me?.canEnrich ?? false} enrichReason={me?.enrichReason} cached={enrichment} onResult={onEnrichResult} isAdmin={me?.isAdmin ?? false} />
               {!enrichment && <Notice kind="info">{ko.concepts.ruleBasedOnly}</Notice>}
               {concepts === null && !conceptsErr && <Loading />}
               {conceptsErr && <ErrorBox error={conceptsErr} onRetry={loadConcepts} />}
               {concepts && <ConceptList concepts={concepts} onJump={jump} />}
+            </div>
+          )}
+          {tab === 'wiki' && (
+            <div className="tab-body">
+              <WikiTab sessionKey={key} projectId={s.projectId} onJump={jump} />
             </div>
           )}
         </>

@@ -5,15 +5,19 @@ import { createApp } from './app';
 import { allAdapters } from './adapters/registry';
 import { AnalysisService } from './analyzers/index';
 import { AuthService } from './auth/service';
+import { loadDotEnv } from './config/dotenv';
 import { currentUser, parseServerArgs, readServerEnv } from './config/env';
 import { ConfigStore, resolveHome, resolvePaths } from './config/store';
 import { SessionIndex } from './index/session-index';
 import { EnrichService } from './llm/service';
+import { createWikiServices } from './wiki/service';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = '0.1.0';
 
 async function main() {
+  const dotenv = loadDotEnv(path.resolve(here, '../../.env'));
+  if (dotenv.loaded) console.log(`[vibe-teacher] .env 를 읽었습니다 (${dotenv.keys.length ? dotenv.keys.join(', ') : '새 값 없음 — 셸 환경변수가 우선'})`);
   const args = parseServerArgs(process.argv.slice(2));
   const paths = resolvePaths(args.home ?? resolveHome());
   const store = new ConfigStore(paths);
@@ -39,9 +43,10 @@ async function main() {
   const enrich = new EnrichService({ store, paths });
   const auth = new AuthService({ store, paths, index, serviceUser: currentUser().username, bearerToken: env.token, isLoopback: env.isLoopback, cookieSecure: process.env.VIBE_TEACHER_COOKIE_SECURE === '1' });
   await auth.init();
+  const { wiki, learner, assessments, wikiAi } = createWikiServices(paths.home, store, () => enrich.resolveProvider());
 
   const app = createApp({
-    deps: { store, index, paths, analysis, enrich, auth, version: VERSION },
+    deps: { store, index, paths, analysis, enrich, auth, wiki, learner, assessments, wikiAi, version: VERSION },
     distDir: path.resolve(here, '../../web/dist'),
   });
 

@@ -15,7 +15,9 @@ describe('concept dictionary', () => {
     expect(dict.length).toBeGreaterThan(25);
     for (const c of dict) {
       expect(c.explanation.length).toBeGreaterThan(30);
-      expect(c.re.files.length + c.re.commands.length + c.re.packages.length + c.re.text.length + c.re.stack.length).toBeGreaterThan(0);
+      const triggers = c.re.files.length + c.re.commands.length + c.re.packages.length + c.re.text.length + c.re.stack.length;
+      if (c.wikiOnly) expect(triggers, c.id).toBe(0);
+      else expect(triggers, c.id).toBeGreaterThan(0);
     }
   });
   it('rejects duplicate ids', () => {

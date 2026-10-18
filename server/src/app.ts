@@ -7,11 +7,13 @@ import { accountsRoutes } from './routes/accounts';
 import { authRoutes } from './routes/auth';
 import { HttpError, type AppDeps, type AppEnv } from './routes/deps';
 import { jobsRoutes } from './routes/jobs';
+import { learnerRoutes } from './routes/learner';
 import { projectsRoutes } from './routes/projects';
 import { sessionsRoutes } from './routes/sessions';
 import { settingsRoutes } from './routes/settings';
 import { rescanRoute, sourcesRoutes } from './routes/sources';
 import { staticRoutes } from './routes/static';
+import { wikiRoutes } from './routes/wiki';
 
 export interface CreateAppOptions {
   deps: AppDeps;
@@ -44,7 +46,9 @@ export function createApp({ deps, distDir, quiet = false }: CreateAppOptions): H
   api.route('/sources', sourcesRoutes(deps));
   api.route('/rescan', rescanRoute(deps));
   api.route('/projects', projectsRoutes(deps));
+  api.route('/projects', learnerRoutes(deps));
   api.route('/sessions', sessionsRoutes(deps));
+  api.route('/sessions', wikiRoutes(deps));
   api.route('/settings', settingsRoutes(deps));
   api.route('/jobs', jobsRoutes(deps));
   app.route('/api', api);

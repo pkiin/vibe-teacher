@@ -1,11 +1,11 @@
-import { ENRICH_PROMPT_VERSION, EnrichmentSchema, type BuiltSummary, type ConceptHit, type EnrichStartResponse, type EnrichmentRecord, type LlmProviderId, type LlmStatus, type NormalizedSession } from '@vibe-teacher/shared';
+import { ENRICH_PROMPT_VERSION, EnrichmentSchema, type BuiltSummary, type ConceptHit, type EnrichStartResponse, type EnrichmentRecord, type LlmProviderId, type LlmProviderOption, type LlmStatus, type NormalizedSession } from '@vibe-teacher/shared';
 import { summarizeBuilt } from '../analyzers/built/index';
 import type { ConfigStore, Paths } from '../config/store';
 import { enrichCacheKey, readEnrichment, writeEnrichment } from './cache';
 import { buildDigest } from './digest';
 import { JobQueue } from './jobs';
 import { SYSTEM_PROMPT, buildUserPrompt } from './prompts';
-import { resolveLlm, type ResolvedLlm } from './select';
+import { probeProviders, resolveLlm, type ResolvedLlm } from './select';
 import type { LlmProvider } from './types';
 
 export interface EnrichServiceOptions {
@@ -25,6 +25,19 @@ export class EnrichService {
 
   invalidate(): void {
     this.resolved = null;
+  }
+
+  /** 위키 AI 보강처럼 같은 제공자 설정을 쓰는 다른 기능용 */
+  resolveProvider(): Promise<ResolvedLlm> {
+    return this.resolve();
+  }
+
+  async providerOptions(): Promise<LlmProviderOption[]> {
+    if (this.opts.providerOverride !== undefined) {
+      const p = this.opts.providerOverride;
+      return p ? [{ id: p.id, available: true }] : [];
+    }
+    return probeProviders(this.opts.store.get().llm, this.opts.paths.llmCwd, this.opts.env ?? process.env);
   }
 
   private async resolve(): Promise<ResolvedLlm> {
@@ -100,7 +113,8 @@ export class EnrichService {
         user: buildUserPrompt(digest),
         schema: EnrichmentSchema,
         schemaName: 'session_enrichment',
-        maxTokens: 16_000,
+        // 생각(thinking) 토큰도 max_tokens 에 포함되므로 여유 있게 잡는다 (CLI 에는 적용되지 않음)
+        maxTokens: 32_000,
         timeoutMs: cfg.timeoutMs,
         signal,
       });

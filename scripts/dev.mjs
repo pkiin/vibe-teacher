@@ -3,10 +3,17 @@
  * 개발 서버 실행기.
  *   npm run dev -- --port 3050 --api-port 3060 [--host 0.0.0.0] [--api-host 127.0.0.1] [--home ~/.vibe-teacher]
  * 웹(Vite)과 API(Hono)를 함께 띄우고, 웹의 /api 프록시가 API 포트를 따라가도록 환경변수로 맞춘다.
- * 우선순위: CLI 인자 > 환경변수 > 기본값 (API 는 설정 파일 server.port/host 도 읽음)
+ * 우선순위: CLI 인자 > 환경변수 > .env > 기본값 (API 는 설정 파일 server.port/host 도 읽음)
  */
 import concurrently from 'concurrently';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+
+// 저장소 루트의 .env (셸 환경변수가 우선). 웹 프록시도 같은 포트 값을 보도록 여기서 먼저 읽는다.
+const dotenvFile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.env');
+if (fs.existsSync(dotenvFile) && typeof process.loadEnvFile === 'function') process.loadEnvFile(dotenvFile);
 
 let values;
 try {

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { SettingsResponse, SettingsUpdateRequest } from '@vibe-teacher/shared';
+import { DEFAULT_SDK_MODEL } from '../llm/anthropic-sdk';
 import { HttpError, requireAdmin, type AppDeps, type AppEnv } from './deps';
 
 const UpdateSchema = z.object({
@@ -18,6 +19,7 @@ const UpdateSchema = z.object({
       model: z.string().nullable().optional(),
       maxBudgetUsd: z.number().positive().optional(),
       timeoutMs: z.number().int().positive().optional(),
+      effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     })
     .optional(),
   auth: z
@@ -35,7 +37,17 @@ export function settingsRoutes(deps: AppDeps): Hono<AppEnv> {
 
   const respond = async (): Promise<SettingsResponse> => {
     const cfg = deps.store.get();
-    return { scan: cfg.scan, llm: cfg.llm, auth: cfg.auth, llmStatus: await deps.enrich.status(), home: deps.paths.home };
+    const envOverride = process.env.VIBE_TEACHER_LLM_PROVIDER?.trim();
+    return {
+      scan: cfg.scan,
+      llm: cfg.llm,
+      auth: cfg.auth,
+      llmStatus: await deps.enrich.status(),
+      llmOptions: await deps.enrich.providerOptions(),
+      ...(envOverride ? { llmEnvOverride: envOverride } : {}),
+      llmDefaultModel: DEFAULT_SDK_MODEL,
+      home: deps.paths.home,
+    };
   };
 
   app.get('/', async (c) => {

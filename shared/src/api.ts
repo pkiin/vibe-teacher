@@ -33,6 +33,8 @@ export interface ScanSettings {
 
 export type LlmProviderId = 'claude-cli' | 'anthropic-sdk';
 export type LlmProviderSetting = 'auto' | LlmProviderId | 'none';
+/** Anthropic API 요청의 생각 깊이·토큰 사용량 (claude CLI 에는 적용되지 않음) */
+export type LlmEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface LlmSettings {
   provider: LlmProviderSetting;
@@ -40,6 +42,16 @@ export interface LlmSettings {
   model: string | null;
   maxBudgetUsd: number;
   timeoutMs: number;
+  effort: LlmEffort;
+}
+
+/** 제공자별 사용 가능 여부 (선택 UI 에 함께 보여 줌) */
+export interface LlmProviderOption {
+  id: LlmProviderId;
+  available: boolean;
+  reason?: string;
+  /** CLI 버전 또는 API 모델 */
+  detail?: string;
 }
 
 export interface LlmStatus {
@@ -89,6 +101,11 @@ export interface SettingsResponse {
   llm: LlmSettings;
   auth: AuthSettings;
   llmStatus: LlmStatus;
+  llmOptions: LlmProviderOption[];
+  /** VIBE_TEACHER_LLM_PROVIDER 환경변수가 설정되어 있으면 그 값 (화면의 선택보다 우선) */
+  llmEnvOverride?: string;
+  /** model 을 비웠을 때 Anthropic API 에 쓰는 모델 */
+  llmDefaultModel: string;
   home: string;
 }
 
@@ -156,7 +173,8 @@ export type ConceptsResponse = ConceptHit[];
 
 export type JobState = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
 
-export interface JobStatus {
+/** 작업 상태. 결과 타입만 작업 종류마다 다르다 */
+export interface BaseJobStatus<R> {
   id: string;
   sessionKey: string;
   state: JobState;
@@ -165,8 +183,10 @@ export interface JobStatus {
   finishedAt?: string;
   durationMs?: number;
   error?: { kind: string; message: string; detail?: string };
-  result?: EnrichmentRecord;
+  result?: R;
 }
+
+export type JobStatus = BaseJobStatus<EnrichmentRecord>;
 
 export interface EnrichmentRecord {
   sessionKey: string;

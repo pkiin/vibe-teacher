@@ -45,7 +45,7 @@ describe('claude-cli provider', () => {
     const args = buildArgs({ schemaJson: '{}', system: 'sys', model: 'sonnet', maxBudgetUsd: 0.25 });
     expect(args).toEqual(expect.arrayContaining(['-p', '--output-format', 'json', '--json-schema', '{}', '--system-prompt', 'sys', '--no-session-persistence', '--tools', '', '--restricted', '--strict-mcp-config', '--disable-slash-commands', '--max-budget-usd', '0.25', '--model', 'sonnet']));
     expect(args).not.toContain('--bare');
-    const env = childEnv({ PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'x', CLAUDE_CONFIG_DIR: '/cfg', HOME: '/h' });
+    const env = childEnv({ PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'x', CLAUDE_CONFIG_DIR: '/cfg', HOME: '/h', ANTHROPIC_API_KEY: 'sk-ant-x', ANTHROPIC_AUTH_TOKEN: 't' });
     expect(env).toEqual({ PATH: '/bin', CLAUDE_CONFIG_DIR: '/cfg', HOME: '/h' });
   });
 

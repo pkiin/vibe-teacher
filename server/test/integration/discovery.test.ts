@@ -10,6 +10,7 @@ import { createApp } from '../../src/app';
 import { ConfigStore, resolvePaths } from '../../src/config/store';
 import { SessionIndex } from '../../src/index/session-index';
 import { EnrichService } from '../../src/llm/service';
+import { createWikiServices } from '../../src/wiki/service';
 import { AuthService } from '../../src/auth/service';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -52,7 +53,7 @@ describe('multi-account discovery through the HTTP app', () => {
     index = new SessionIndex({ adapters: allAdapters(), store, cacheDir: paths.indexCacheDir, hiddenRoot: paths.home, currentHome: path.join(homes, 'alice'), env: {} });
     const enrich = new EnrichService({ store, paths, providerOverride: null });
     const auth = new AuthService({ store, paths, index, serviceUser: 'svc', bearerToken: 'secret', isLoopback: false });
-    app = createApp({ deps: { store, index, paths, analysis: new AnalysisService('/home/tester'), enrich, auth, version: 'test' }, quiet: true });
+    app = createApp({ deps: { store, index, paths, analysis: new AnalysisService('/home/tester'), enrich, auth, ...createWikiServices(paths.home, store, () => enrich.resolveProvider()), version: 'test' }, quiet: true });
   });
 
   afterAll(async () => {

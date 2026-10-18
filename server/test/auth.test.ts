@@ -8,6 +8,7 @@ import { allAdapters } from '../src/adapters/registry';
 import { AnalysisService } from '../src/analyzers/index';
 import { createApp } from '../src/app';
 import { CookieSigner, loadOrCreateSecret } from '../src/auth/cookie';
+import { createWikiServices } from '../src/wiki/service';
 import { AuthService } from '../src/auth/service';
 import { readLoginToken, tokenHash, tokenSetupCommand } from '../src/auth/token-file';
 import { ConfigStore, resolvePaths } from '../src/config/store';
@@ -93,7 +94,7 @@ describe('home-token login and account scoping', () => {
     const enrich = new EnrichService({ store, paths, providerOverride: null });
     const auth = new AuthService({ store, paths, index, serviceUser: 'svc', bearerToken: 'master', isLoopback: true });
     await auth.init();
-    app = createApp({ deps: { store, index, paths, analysis: new AnalysisService('/home/tester'), enrich, auth, version: 'test' }, quiet: true });
+    app = createApp({ deps: { store, index, paths, analysis: new AnalysisService('/home/tester'), enrich, auth, ...createWikiServices(paths.home, store, () => enrich.resolveProvider()), version: 'test' }, quiet: true });
     await index.rescan();
   });
 
