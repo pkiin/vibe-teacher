@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { BuiltSummary as Built, CommandFact, Evidence, FileFact } from '@vibe-teacher/shared';
+import { FocusChip } from './FocusChip';
 import { ko } from '../i18n/ko';
 
 function EvidenceList({ evidence, onJump }: { evidence: Evidence[]; onJump?: (i: number) => void }) {
@@ -25,7 +27,7 @@ function EvidenceList({ evidence, onJump }: { evidence: Evidence[]; onJump?: (i:
   );
 }
 
-function FileTable({ title, files, onJump }: { title: string; files: FileFact[]; onJump?: (i: number) => void }) {
+function FileTable({ title, files, onJump, fileExtra }: { title: string; files: FileFact[]; onJump?: (i: number) => void; fileExtra?: (f: FileFact) => ReactNode }) {
   if (!files.length) return null;
   return (
     <section className="section">
@@ -35,10 +37,11 @@ function FileTable({ title, files, onJump }: { title: string; files: FileFact[];
       <ul className="file-list">
         {files.map((f) => (
           <li key={f.path}>
-            <span className="mono">{f.relPath ?? f.path}</span>
+            <FocusChip focus={{ kind: 'file', id: f.path }} label={f.relPath ?? f.path} className="mono file-name" />
             {f.language && <span className="pill pill-outline">{f.language}</span>}
             {f.via === 'shell' && <span className="pill pill-gray">{ko.built.viaShell}</span>}
             {f.count > 1 && <span className="muted small">×{f.count}</span>}
+            {fileExtra?.(f)}
             <EvidenceList evidence={f.evidence} onJump={onJump} />
           </li>
         ))}
@@ -90,7 +93,8 @@ function CommandGroups({ commands, onJump }: { commands: CommandFact[]; onJump?:
   );
 }
 
-export function BuiltSummaryView({ built, onJump }: { built: Built; onJump?: (i: number) => void }) {
+/** fileExtra: 파일 줄마다 덧붙일 내용 (통합 화면에서 관련 위키 항목·개념) */
+export function BuiltSummaryView({ built, onJump, fileExtra }: { built: Built; onJump?: (i: number) => void; fileExtra?: (f: FileFact) => ReactNode }) {
   const empty = !built.filesCreated.length && !built.filesModified.length && !built.filesDeleted.length && !built.commandsRun.length && !built.packagesInstalled.length;
   return (
     <div className="built">
@@ -137,9 +141,9 @@ export function BuiltSummaryView({ built, onJump }: { built: Built; onJump?: (i:
         </section>
       )}
 
-      <FileTable title={ko.built.filesCreated} files={built.filesCreated} onJump={onJump} />
-      <FileTable title={ko.built.filesModified} files={built.filesModified} onJump={onJump} />
-      <FileTable title={ko.built.filesDeleted} files={built.filesDeleted} onJump={onJump} />
+      <FileTable title={ko.built.filesCreated} files={built.filesCreated} onJump={onJump} fileExtra={fileExtra} />
+      <FileTable title={ko.built.filesModified} files={built.filesModified} onJump={onJump} fileExtra={fileExtra} />
+      <FileTable title={ko.built.filesDeleted} files={built.filesDeleted} onJump={onJump} fileExtra={fileExtra} />
       {built.dirsCreated.length > 0 && (
         <section className="section">
           <h3>{ko.built.dirsCreated}</h3>

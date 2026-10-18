@@ -20,6 +20,7 @@ export function QuizCard({
   target,
   learner,
   explanationSeen,
+  helpUsed = false,
   onClose,
 }: {
   projectId: string;
@@ -27,6 +28,8 @@ export function QuizCard({
   target: QuizTarget;
   learner: LearnerActions;
   explanationSeen: boolean;
+  /** 이 개념을 도움 패널로 물어본 뒤의 응답이면 true — 보조(assisted)로 기록되어 이해 상태 추정에 쓰지 않는다 */
+  helpUsed?: boolean;
   onClose?: () => void;
 }) {
   const [start, setStart] = useState<AssessmentStartResponse | null>(null);
@@ -70,7 +73,7 @@ export function QuizCard({
           ...(status === 'answered' && selected ? { selectedOptionId: selected } : {}),
           ...(reason.trim() ? { reason: reason.trim() } : {}),
           explanationSeen,
-          helpUsed: false,
+          helpUsed,
         }),
       );
       setResult(r);

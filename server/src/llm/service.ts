@@ -107,6 +107,13 @@ export class EnrichService {
     return out;
   }
 
+  /** 보내기 전에 확인할 수 있도록 세션 분석에 보낼 내용을 그대로 돌려준다 */
+  preview(session: NormalizedSession, concepts: ConceptHit[]): { system: string; user: string; chars: number } {
+    const digest = buildDigest(session, (this.opts.buildBuilt ?? summarizeBuilt)(session), concepts);
+    const user = buildUserPrompt(digest);
+    return { system: SYSTEM_PROMPT, user, chars: SYSTEM_PROMPT.length + user.length };
+  }
+
   async start(session: NormalizedSession, concepts: ConceptHit[], force = false): Promise<EnrichStartResponse> {
     const { provider, status } = await this.resolve();
     if (!provider) throw new EnrichUnavailable(status.reason ?? 'AI 제공자를 사용할 수 없습니다');

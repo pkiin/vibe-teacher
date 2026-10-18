@@ -55,11 +55,14 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
   src/wiki/        프로젝트 위키: build(세션 → 원장, 규칙) · validate(출처 검사·격리) · plan(설명 계획) · graph(선행관계) · catalog · service
   src/learner/     내 이해 정보: reducer(원장 → 개념 상태, 순수 함수) · service(원장 쓰기, revision 충돌)
   src/assessment/  문항 은행(bank) · 출제·채점(service)
+  src/help/        도움 패널 질문: answer(대상별 근거 고르기·프롬프트·답 검사·AI 없는 대체 답) · service(개인 기록·작업)
   src/storage/     <home>/wiki 저장소 (경로 검사, 키별 직렬화, JSONL 원장)
   data/            concepts.ko.json (개념 사전) · prerequisites.json (선행관계) · questions.json (문항 은행)
   test/            vitest 테스트와 합성 픽스처
 web/               Vite + React 19 + react-router UI (한국어)
   src/i18n/ko.ts   화면 문자열 모음
+  src/components/SessionUnderstand.tsx  "이번 세션 이해하기" 통합 화면 (위키·만들어진 것·개념 + 도움 패널)
+  src/components/HelpPanel.tsx          도움 패널 (설명/질문/퀴즈), src/context/FocusContext.tsx 가 지금 보는 대상을 공유
 scripts/           dev.mjs(웹+API 동시 실행), grant-read-acl.sh(다중 계정 읽기 ACL)
 ```
 
@@ -97,6 +100,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **이해 증거는 명시적 입력만.** 세션 로그에서 사용자 이해 증거를 뽑지 않는다(동의 전). 자기보고·노출·건너뛰기·모르겠어요는 이해/오답으로 바꾸지 않고, 검토 전(candidate) 문항·해설 뒤 재시도·도움 사용 응답은 연습으로만 센다 (`server/src/learner/reducer.ts` 의 policy). 학습자 ID 는 인증 주체에서만 만든다 (`learnerIdFor`).
 - **위키 AI 는 후보만.** AI 응답은 `server/src/wiki/ai.ts` 의 `acceptWikiAiOutput` 을 거쳐야 실린다: 제공한 ID 만 인용(하나라도 지어내면 그 제안 전체를 버림), 프로젝트 문장은 근거 주장 인용 필수, 출력도 `maskSecrets`. finding 과 공통 알림은 AI 가 바꾸지 못하며, AI 결과는 `wiki/projects/<p>/ai/<revision>.json` 레이어로 원장과 따로 둔다. 전송 전 미리 보기(`/wiki/ai/preview`)를 유지한다.
 - **CLI 로그인을 고르면 API 키를 넘기지 않는다.** `claude` 자식 프로세스 환경에서 `ANTHROPIC_API_KEY`·`ANTHROPIC_AUTH_TOKEN` 을 지운다 (`childEnv`).
+- **도움 패널 질문은 이해 증거가 아니다.** 질문은 `help.jsonl` 에 개인 기록으로만 남기고 learner 원장을 바꾸지 않는다. 답의 프로젝트 연결은 검증된 claim 인용이 있어야 싣는다 (`acceptHelpOutput`). 도움 패널로 물어본 개념의 문제 응답은 `helpUsed` 로 보조 응답이 된다.
 - **정답은 제출 전에 내보내지 않는다.** 브라우저로 가는 문항은 `toPublicQuestion` 을 거친다.
 - **"내 메시지"는 사람이 실제로 입력한 것만.** 도구 결과, `<system-reminder>` 같은 주입 메시지, 사이드체인은 `human` 으로 분류하지 않습니다. 분류 규칙을 바꾸면 해당 어댑터의 분류 테스트를 갱신합니다.
 
@@ -187,8 +191,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - [x] AI 제공자 선택 UI (Claude Code 로그인 / API 키 / 자동 / 끔, 선택지별 사용 가능 여부), API 기본 모델 `claude-opus-5-5` + effort 설정 + 거절 시 서버 대체(fallbacks)
 - [x] OpenRouter·OpenAI 제공자 (fetch, SDK 없음), OpenRouter 모델 목록에서 고르기(기본 `openrouter/free`, 무료만 보기), `.env.example` 에 키 칸
 - [x] 위키 AI 보강 (M3 일부): 항목별 프로젝트 맞춤 설명·새 사실·새 항목·개념 제안, ID 검사·격리, 별도 레이어, 전송 미리 보기
-- [ ] 질문 패널의 AI 경로 (M3 나머지)
-- [ ] 질문 패널(도움) — mock 응답부터, 이후 M3 에서 LLM 연결
+- [x] 통합 화면 "이번 세션 이해하기": 위키·만들어진 것·개념을 한 탭에 잇고 오른쪽 도움 패널(설명/질문/퀴즈), AI 버튼 하나로 합침
+- [x] 도움 패널 질문 (M3): 대상별 근거로 답, 인용 검사, AI 없을 때 대체 답, 개인 기록, 재시도 중복 방지
 - [ ] Markdown 내보내기 (개인 정보 기본 제외, T22)
 - [ ] 프로젝트 단위 위키(여러 세션 통합) · 두 번째 세션의 `supersedes` / `resolved_in_scope` (사례 C, T17, T18, T27)
 - [ ] 프로젝트 확인(project_awareness) 문항 — 검증된 claim 으로만 생성

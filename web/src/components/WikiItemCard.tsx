@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import type { ExplanationDepth, KnowledgeItem, LearnerProfile, RenderBundle, WikiConcept, WikiResponse } from '@vibe-teacher/shared';
 import type { LearnerActions } from '../hooks/useLearner';
 import { ko } from '../i18n/ko';
+import { useFocus } from '../context/FocusContext';
 import { ClaimList } from './ClaimList';
+import { FocusChip } from './FocusChip';
 import { InlineText } from './InlineText';
 import { QuizCard } from './QuizCard';
 import { UnderstandingBadge } from './UnderstandingBadge';
@@ -95,6 +97,7 @@ export function WikiItemCard({
   const findings = item.findingIds.map((id) => wiki.snapshot.findings.find((f) => f.id === id)).filter((f) => !!f);
   const name = (id: string) => wiki.concepts[id]?.name ?? id;
   const narrative = wiki.ai?.narratives.find((n) => n.itemId === item.id);
+  const focus = useFocus();
 
   const changeDepth = (next: ExplanationDepth, action: 'deeper' | 'simpler') => {
     setDepth(next);
@@ -151,7 +154,7 @@ export function WikiItemCard({
       {primary && primaryId && (
         <section className="wiki-explain">
           <div className="wiki-explain-head">
-            <strong>{primary.name}</strong>
+            <FocusChip focus={{ kind: 'concept', id: primaryId }} label={primary.name} className="concept-name" />
             <UnderstandingBadge state={profile?.concepts[primaryId]} />
             <span className="pill pill-outline">{ko.wiki.depth[depth]}</span>
           </div>
@@ -225,7 +228,7 @@ export function WikiItemCard({
               const expanded = open.has(p.conceptId) || (simple && !p.recallOnly);
               return (
                 <li key={p.conceptId}>
-                  <strong>{c.name}</strong> <UnderstandingBadge state={profile?.concepts[p.conceptId]} /> — {c.summary}
+                  <FocusChip focus={{ kind: 'concept', id: p.conceptId }} label={c.name} className="concept-name" /> <UnderstandingBadge state={profile?.concepts[p.conceptId]} /> — {c.summary}
                   <button
                     className="link small"
                     aria-expanded={expanded}
@@ -253,9 +256,7 @@ export function WikiItemCard({
         <div className="small wiki-related">
           {ko.wiki.related}:{' '}
           {related.map((id) => (
-            <span key={id} className="pill pill-outline" title={wiki.concepts[id]?.summary}>
-              {name(id)}
-            </span>
+            <FocusChip key={id} focus={{ kind: 'concept', id }} label={name(id)} />
           ))}
         </div>
       )}
@@ -294,9 +295,14 @@ export function WikiItemCard({
           <button className="btn btn-small" disabled={busy} onClick={() => report('unsure')}>
             {ko.understanding.unsure}
           </button>
-          <button className="btn btn-small" onClick={() => setQuiz(true)}>
+          <button className="btn btn-small" onClick={() => (focus ? focus.show({ kind: 'concept', id: primaryId }, 'quiz') : setQuiz(true))}>
             {ko.understanding.quiz}
           </button>
+          {focus && (
+            <button className="btn btn-small" onClick={() => focus.show({ kind: 'item', id: item.id }, 'ask')}>
+              {ko.help.askAbout}
+            </button>
+          )}
           <button className="link small" onClick={() => setLater(true)}>
             {ko.understanding.later}
           </button>

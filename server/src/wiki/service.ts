@@ -7,6 +7,7 @@ import type { ConfigStore } from '../config/store';
 import type { ResolvedLlm } from '../llm/select';
 import { mergeWikiAi } from './ai';
 import { WikiAiService } from './ai-service';
+import { HelpService } from '../help/service';
 import { shortId } from '../lib/hash';
 import { WikiStorage } from '../storage/store';
 import { RULES_VERSION, buildWikiSnapshot, snapshotRevision } from './build';
@@ -106,9 +107,10 @@ export function createWikiServices(
   home: string,
   store: ConfigStore,
   resolveProvider: () => Promise<ResolvedLlm>,
-): { wiki: WikiService; learner: LearnerService; assessments: AssessmentService; wikiAi: WikiAiService } {
+): { wiki: WikiService; learner: LearnerService; assessments: AssessmentService; wikiAi: WikiAiService; help: HelpService } {
   const storage = new WikiStorage(home);
   const learner = new LearnerService(storage);
   const wiki = new WikiService(storage, store);
-  return { wiki, learner, assessments: new AssessmentService(learner, () => wiki.bank()), wikiAi: new WikiAiService({ storage, store, wiki, resolveProvider }) };
+  const wikiAi = new WikiAiService({ storage, store, wiki, resolveProvider });
+  return { wiki, learner, assessments: new AssessmentService(learner, () => wiki.bank()), wikiAi, help: new HelpService({ storage, store, wiki, wikiAi, resolveProvider }) };
 }

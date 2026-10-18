@@ -47,6 +47,12 @@ export function sessionsRoutes(deps: AppDeps): Hono<AppEnv> {
     return c.json(cached);
   });
 
+  app.get('/:key/enrich/preview', async (c) => {
+    const session = await load(c);
+    const { concepts } = await deps.analysis.analyze(session);
+    return c.json(deps.enrich.preview(session, concepts));
+  });
+
   app.post('/:key/enrich', async (c) => {
     const session = await load(c);
     const allowed = deps.auth.canEnrich(currentUser(c));

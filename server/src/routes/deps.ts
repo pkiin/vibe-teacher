@@ -8,6 +8,7 @@ import type { EnrichService } from '../llm/service';
 import type { AuthService, AuthUser } from '../auth/service';
 import type { AssessmentService } from '../assessment/service';
 import type { LearnerService } from '../learner/service';
+import type { HelpService } from '../help/service';
 import type { WikiAiService } from '../wiki/ai-service';
 import type { WikiService } from '../wiki/service';
 
@@ -22,6 +23,7 @@ export interface AppDeps {
   learner: LearnerService;
   assessments: AssessmentService;
   wikiAi: WikiAiService;
+  help: HelpService;
   version: string;
 }
 

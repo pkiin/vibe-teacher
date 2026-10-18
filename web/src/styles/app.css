@@ -260,3 +260,41 @@ textarea { font-family: var(--mono); font-size: 12.5px; }
 .llm-models-row input[type="search"] { flex: 1; min-width: 180px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
 .llm-models-select { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
 .llm-model-info .pill:first-child { margin-left: 0; }
+
+/* ---- 이번 세션 이해하기 (통합 화면 + 도움 패널) ---- */
+.content:has(.understand) { max-width: 1440px; }
+.understand { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+.understand-main { min-width: 0; }
+.understand-main > h2 { margin-top: 26px; }
+.section-title { margin: 0 0 6px; }
+.help-panel { position: sticky; top: 64px; max-height: calc(100vh - 80px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.help-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: #fafbff; }
+.help-toggle { flex: 1; text-align: left; background: none; border: none; padding: 0; font: inherit; color: var(--text); cursor: default; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.help-body { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.help-tabs { margin-top: 0; padding: 0 8px; }
+.help-tab-body { padding: 10px 12px; overflow: auto; flex: 1; }
+.help-explain p { margin: 6px 0; }
+.help-depth { display: flex; gap: 4px; flex-wrap: wrap; margin: 6px 0; }
+.help-related { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.help-related .pill { margin-left: 0; }
+.help-thread { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.help-msg { border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.help-msg.current { border-color: var(--accent); }
+.help-q { margin-bottom: 4px; }
+.help-answer p { margin: 4px 0; }
+.help-input { width: 100%; font: inherit; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.focus-chip { cursor: pointer; background: #fff; font: inherit; font-size: 11px; }
+.focus-chip:hover { border-color: var(--accent); color: var(--accent); }
+.focus-chip.concept-name, .focus-chip.file-name { border: none; background: none; padding: 0; margin: 0; font-size: inherit; font-weight: 600; color: var(--accent); text-align: left; }
+.focus-chip.file-name { font-weight: 400; font-family: var(--mono); font-size: 12.5px; }
+.concept-name { font-weight: 600; }
+.file-links { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.file-links .pill { margin-left: 0; }
+@media (max-width: 1000px) {
+  .understand { grid-template-columns: minmax(0, 1fr); }
+  .understand-main { padding-bottom: 56px; }
+  .help-panel { position: fixed; left: 8px; right: 8px; bottom: 8px; top: auto; max-height: 48px; z-index: 20; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15); transition: max-height 0.2s; }
+  .help-panel.open { max-height: 70vh; }
+  .help-panel:not(.open) .help-body { display: none; }
+  .help-toggle { cursor: pointer; }
+}
