@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import type { Account, HealthResponse, LlmEffort, Provider, RescanResponse, SettingsResponse, SourceStatus } from '@vibe-teacher/shared';
+import type { Account, HealthResponse, LlmEffort, LlmProviderSetting, Provider, RescanResponse, SettingsResponse, SourceStatus } from '@vibe-teacher/shared';
 import { apiDelete, apiPatch, apiPost, apiPut } from '../api/client';
 import { Breadcrumb } from '../components/Layout';
 import { LlmProviderChoice } from '../components/LlmProviderPicker';
@@ -25,7 +25,9 @@ export function SourcesPage() {
   const [scanMode, setScanMode] = useState<'current' | 'list' | 'all'>('current');
   const [homes, setHomes] = useState('');
   const [homeRoots, setHomeRoots] = useState('/home');
-  const [llmProvider, setLlmProvider] = useState<'auto' | 'claude-cli' | 'anthropic-sdk' | 'none'>('auto');
+  const [llmProvider, setLlmProvider] = useState<LlmProviderSetting>('auto');
+  const [openrouterModel, setOpenrouterModel] = useState('openrouter/free');
+  const [openaiModel, setOpenaiModel] = useState('gpt-5-mini');
   const [llmModel, setLlmModel] = useState('');
   const [llmBudget, setLlmBudget] = useState('0.5');
   const [llmCliPath, setLlmCliPath] = useState('');
@@ -50,6 +52,8 @@ export function SourcesPage() {
     setLlmBudget(String(settings.data.llm.maxBudgetUsd));
     setLlmCliPath(settings.data.llm.claudeCliPath ?? '');
     setLlmEffort(settings.data.llm.effort ?? 'medium');
+    setOpenrouterModel(settings.data.llm.openrouterModel);
+    setOpenaiModel(settings.data.llm.openaiModel);
     setAuthMode(settings.data.auth.mode);
     setAdmins(settings.data.auth.admins.join(', '));
     setSessionTtl(String(settings.data.auth.sessionTtlHours));
@@ -96,6 +100,8 @@ export function SourcesPage() {
           maxBudgetUsd: Number(llmBudget) || 0.5,
           claudeCliPath: llmCliPath.trim() || null,
           effort: llmEffort,
+          openrouterModel,
+          openaiModel,
         },
       });
     }, ko.sources.saved);
@@ -244,12 +250,13 @@ export function SourcesPage() {
               onChange={setLlmProvider}
               options={settings.data.llmOptions}
               defaultModel={settings.data.llmDefaultModel}
-              model={llmModel.trim() || null}
+              models={{ claude: llmModel.trim() || null, openrouter: openrouterModel, openai: openaiModel }}
+              onModelChange={(p, m) => (p === 'openrouter' ? setOpenrouterModel(m) : setOpenaiModel(m))}
               envOverride={settings.data.llmEnvOverride}
             />
           )}
           <label className="field">
-            {ko.sources.llmModel}
+            {ko.sources.llmModelClaude}
             <input value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder={`비우면 ${settings.data?.llmDefaultModel ?? 'claude-opus-5-5'} (API) / Claude Code 기본 모델 (CLI)`} />
           </label>
           <label className="field">

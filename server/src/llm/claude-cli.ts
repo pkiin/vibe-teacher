@@ -1,5 +1,6 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { LlmError, extractJson, type LlmAvailability, type LlmProvider, type LlmRequest, type LlmResult } from './types';
@@ -13,14 +14,52 @@ export interface ClaudeCliOptions {
   spawn?: typeof nodeSpawn;
 }
 
-/** 설정 → PATH 의 claude → CLAUDE_CODE_EXECPATH 순으로 바이너리를 찾는다 */
-export function resolveClaudeBinary(configured: string | null | undefined, env: NodeJS.ProcessEnv = process.env): string | null {
+const EXTENSION_ROOTS = ['.vscode-server/extensions', '.vscode/extensions', '.vscode-insiders/extensions', '.cursor-server/extensions', '.cursor/extensions'];
+
+function versionKey(dirName: string): number[] {
+  const m = /anthropic\.claude-code-(\d+(?:\.\d+)*)/.exec(dirName);
+  return m?.[1] ? m[1].split('.').map(Number) : [];
+}
+
+function newerFirst(a: string, b: string): number {
+  const va = versionKey(a);
+  const vb = versionKey(b);
+  for (let i = 0; i < Math.max(va.length, vb.length); i += 1) {
+    const d = (vb[i] ?? 0) - (va[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+/** VS Code·Cursor 의 Claude Code 확장에 들어 있는 claude (새 버전부터). 터미널 PATH 에 없을 때 쓴다 */
+export function extensionClaudeBinaries(home: string): string[] {
+  const out: string[] = [];
+  for (const root of EXTENSION_ROOTS) {
+    const dir = path.join(home, root);
+    let names: string[] = [];
+    try {
+      names = fs.readdirSync(dir).filter((n) => n.startsWith('anthropic.claude-code-'));
+    } catch {
+      continue;
+    }
+    for (const n of names.sort(newerFirst)) out.push(path.join(dir, n, 'resources', 'native-binary', 'claude'));
+  }
+  return out;
+}
+
+/**
+ * 설정 → PATH 의 claude → CLAUDE_CODE_EXECPATH → 흔한 설치 위치(~/.local/bin, ~/.claude/local)
+ * → VS Code·Cursor 확장에 들어 있는 claude 순으로 바이너리를 찾는다.
+ */
+export function resolveClaudeBinary(configured: string | null | undefined, env: NodeJS.ProcessEnv = process.env, home: string = env.HOME || os.homedir()): string | null {
   const candidates: string[] = [];
   if (configured) candidates.push(configured);
   for (const dir of (env.PATH ?? '').split(path.delimiter)) {
     if (dir) candidates.push(path.join(dir, 'claude'));
   }
   if (env.CLAUDE_CODE_EXECPATH) candidates.push(env.CLAUDE_CODE_EXECPATH);
+  candidates.push(path.join(home, '.local', 'bin', 'claude'), path.join(home, '.claude', 'local', 'claude'));
+  candidates.push(...extensionClaudeBinaries(home));
   for (const c of candidates) {
     try {
       fs.accessSync(c, fs.constants.X_OK);
@@ -92,7 +131,7 @@ export class ClaudeCliProvider implements LlmProvider {
   async availability(): Promise<LlmAvailability> {
     const bin = this.binary;
     if (!bin) {
-      return { ok: false, reason: 'claude CLI를 찾지 못했습니다 (PATH, CLAUDE_CODE_EXECPATH, 설정의 claudeCliPath 확인)' };
+      return { ok: false, reason: 'claude CLI를 찾지 못했습니다. 이 서버에 Claude Code 를 설치하거나(터미널에서 claude 가 실행되어야 함), 소스 설정의 "claude 실행 파일 경로"를 채우거나, API 키를 쓰는 다른 제공자를 고르세요' };
     }
     if (this.versionCache && Date.now() - this.versionCache.at < 60_000) return this.versionCache.value;
     const value: LlmAvailability = { ok: true, detail: bin };

@@ -252,3 +252,11 @@ textarea { font-family: var(--mono); font-size: 12.5px; }
 .wiki-ai-result ul { margin: 4px 0; padding-left: 18px; }
 .wiki-narrative { background: #f5f9ff; border: 1px solid #dbeafe; border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
 .wiki-narrative p { margin: 4px 0; }
+.llm-choice-item { flex-direction: column; align-items: stretch; }
+.llm-choice-label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.llm-choice-label input { margin-top: 3px; }
+.llm-models { margin: 8px 0 2px 24px; display: flex; flex-direction: column; gap: 6px; }
+.llm-models-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.llm-models-row input[type="search"] { flex: 1; min-width: 180px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.llm-models-select { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.llm-model-info .pill:first-child { margin-left: 0; }

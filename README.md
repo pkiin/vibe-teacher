@@ -49,7 +49,9 @@ npm run dev:web -- --port 3050                      # 웹만 (vite 옵션 그대
 | `VIBE_TEACHER_HOME` | 설정 파일과 캐시 위치 | `~/.vibe-teacher` |
 | `VIBE_TEACHER_TOKEN` | 비-loopback 바인딩 시 요구되는 Bearer 토큰 | 없음 |
 | `ANTHROPIC_API_KEY` | AI 분석을 Anthropic API 로 실행할 때의 키 (없으면 로그인된 Claude Code CLI 사용) | 없음 |
-| `VIBE_TEACHER_LLM_PROVIDER` | AI 제공자 강제 (`auto` · `claude-cli` · `anthropic-sdk` · `none`), 설정 파일 `llm.provider` 보다 우선 | 설정값 (`auto`) |
+| `OPENROUTER_API_KEY` | AI 를 OpenRouter 로 실행할 때의 키 (무료 모델도 필요) | 없음 |
+| `OPENAI_API_KEY` | AI 를 OpenAI 로 실행할 때의 키 | 없음 |
+| `VIBE_TEACHER_LLM_PROVIDER` | AI 제공자 강제 (`auto` · `claude-cli` · `anthropic-sdk` · `openrouter` · `openai` · `none`), 화면에서 고른 값보다 우선 | 설정값 (`auto`) |
 
 지정한 포트가 이미 사용 중이면 다른 포트로 조용히 옮기지 않고 바로 실패합니다(`strictPort`).
 
@@ -81,7 +83,7 @@ npm test
   "scan": { "mode": "current", "homes": [], "homeRoots": ["/home"] },
   "sources": [{ "id": "…", "provider": "claude-code", "path": "/mnt/backup/.claude/projects", "label": "백업", "enabled": true }],
   "disabledDefaultSourceIds": [],
-  "llm": { "provider": "auto", "claudeCliPath": null, "model": null, "maxBudgetUsd": 0.5, "timeoutMs": 180000, "effort": "medium" },
+  "llm": { "provider": "auto", "claudeCliPath": null, "model": null, "maxBudgetUsd": 0.5, "timeoutMs": 180000, "effort": "medium", "openrouterModel": "openrouter/free", "openaiModel": "gpt-5-mini" },
   "server": { "host": "127.0.0.1", "port": 8787 },
   "wiki": { "briefTokenBudget": 900, "maxPrerequisiteDepth": 2, "maxPrerequisitesPerBundle": 4, "maxOptionalQuestions": 2, "suggestQuestions": true }
 }
@@ -119,9 +121,11 @@ npm test
 
 | 제공자 | 조건 | 비고 |
 |---|---|---|
-| `claude-cli` | 로그인된 Claude Code (`claude` 가 PATH 에 있거나 `CLAUDE_CODE_EXECPATH`, 또는 설정 `claudeCliPath`) | `claude -p --output-format json --json-schema … --no-session-persistence --tools "" --restricted` 로 실행. 별도 API 키 불필요 |
+| `claude-cli` | 로그인된 Claude Code. `claude` 를 설정 `claudeCliPath` → PATH → `CLAUDE_CODE_EXECPATH` → `~/.local/bin`·`~/.claude/local` → VS Code·Cursor 의 Claude Code 확장 폴더(가장 새 버전) 순으로 찾음 | `claude -p --output-format json --json-schema … --no-session-persistence --tools "" --restricted` 로 실행. 별도 API 키 불필요 |
 | `anthropic-sdk` | `ANTHROPIC_API_KEY` | 기본 모델 `claude-opus-5-5` (입력 $4 / 출력 $20 per 1M 토큰), `effort` 기본 `medium`. 안전 분류기가 거절하면 서버가 권장 모델로 다시 실행합니다(`fallbacks: "default"`) |
-| `auto` (기본) | API 키가 있으면 SDK, 아니면 CLI | 둘 다 없으면 규칙 기반 결과만 표시 |
+| `openrouter` | `OPENROUTER_API_KEY` | 기본 모델 `openrouter/free`(무료 모델 라우터). 소스 설정에서 OpenRouter 모델 목록 중 고를 수 있음 |
+| `openai` | `OPENAI_API_KEY` | 기본 모델 `gpt-5-mini`. 키가 있으면 OpenAI 모델 목록 중 고를 수 있음 |
+| `auto` (기본) | Anthropic API 키 → Claude Code 로그인 → OpenRouter 키 → OpenAI 키 순 | 모두 없으면 규칙 기반 결과만 표시 |
 
 **AI 키 넣는 곳**: 이 서버에 Claude Code 가 로그인되어 있으면 키 없이 `claude-cli` 로 동작합니다. Anthropic API 를 쓰려면 저장소 루트에서
 
@@ -132,7 +136,9 @@ npm start                                # 또는 npm run dev — 시작 로그�
 
 `.env` 는 `.gitignore` 에 들어 있어 커밋되지 않습니다. 셸에서 `export ANTHROPIC_API_KEY=…` 로 넣어도 되고, 그쪽이 `.env` 보다 우선합니다. 키를 바꾼 뒤에는 서버를 다시 시작하세요.
 
-**CLI 로그인과 API 중 고르기** (관리자): 소스 설정 페이지의 "AI 분석 제공자", 또는 AI 버튼 아래의 "지금 쓰는 AI · 바꾸기"에서 **Claude Code 로그인 / Anthropic API 키 / 자동 / 사용 안 함** 중 하나를 고릅니다. 선택지마다 지금 실제로 쓸 수 있는지(CLI 버전, 키 유무)가 함께 보입니다. 환경변수 `VIBE_TEACHER_LLM_PROVIDER` 가 있으면 화면의 선택보다 우선합니다.
+**AI 제공자 고르기** (관리자): 소스 설정 페이지의 "AI 분석 제공자", 또는 AI 버튼 아래의 "지금 쓰는 AI · 바꾸기"에서 **Claude Code 로그인 / Anthropic API 키 / OpenRouter / OpenAI / 자동 / 사용 안 함** 중 하나를 고릅니다. 선택지마다 지금 실제로 쓸 수 있는지(CLI 버전, 키 유무)가 함께 보입니다. 환경변수 `VIBE_TEACHER_LLM_PROVIDER` 가 있으면 화면의 선택보다 우선합니다.
+
+OpenRouter 를 고르면 모델 선택이 나타납니다. 목록은 OpenRouter 의 공개 모델 목록(`https://openrouter.ai/api/v1/models`)에서 가져오며(1시간 캐시, "목록 새로고침"으로 다시 받기), 기본으로 **무료 모델만** 보여 줍니다. 모델마다 가격, 컨텍스트 크기, JSON 스키마 강제 지원 여부가 표시됩니다. 지원하지 않는 모델은 JSON 모드나 프롬프트 지시로 대신하므로 형식이 틀려 실패할 수 있습니다. 무료 모델은 공급자가 입력을 기록하거나 학습에 쓸 수 있고 요청 한도가 낮으니, 민감한 기록에는 유료 모델이나 Claude 를 쓰세요. 무료 모델이 "data policy" 오류를 내면 OpenRouter 계정 Settings › Privacy 에서 무료 모델 사용을 허용해야 합니다. OpenAI 를 고르면 키가 있을 때 계정의 모델 목록에서 고를 수 있습니다.
 
 Claude Code 세션 안에서 이 앱을 띄워도 중첩 실행이 막히지 않도록, 자식 프로세스에서는 `CLAUDE_CONFIG_DIR` 를 제외한 `CLAUDE*` 환경변수를 제거합니다. "Claude Code 로그인"을 고르면 `ANTHROPIC_API_KEY` 가 설정되어 있어도 `claude` 에는 넘기지 않으므로, 키가 아니라 로그인(구독)으로 실행됩니다.
 

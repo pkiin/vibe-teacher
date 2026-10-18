@@ -1,7 +1,9 @@
-import type { LlmProviderOption, LlmStatus } from '@vibe-teacher/shared';
+import type { LlmProviderId, LlmProviderOption, LlmStatus } from '@vibe-teacher/shared';
 import type { AppConfig } from '../config/schema';
 import { AnthropicSdkProvider } from './anthropic-sdk';
 import { ClaudeCliProvider, resolveClaudeBinary } from './claude-cli';
+import type { ModelCatalog } from './models';
+import { OpenAiCompatProvider } from './openai-compat';
 import type { LlmProvider } from './types';
 
 export interface ResolvedLlm {
@@ -9,10 +11,35 @@ export interface ResolvedLlm {
   status: LlmStatus;
 }
 
-export async function resolveLlm(cfg: AppConfig['llm'], llmCwd: string, env: NodeJS.ProcessEnv = process.env): Promise<ResolvedLlm> {
+export interface LlmDeps {
+  env?: NodeJS.ProcessEnv;
+  catalog?: ModelCatalog;
+  fetch?: typeof fetch;
+}
+
+/** 제공자별로 실제 요청에 쓰는 모델 (캐시 키·표시용) */
+export function modelFor(id: LlmProviderId, cfg: AppConfig['llm']): string | null {
+  if (id === 'openrouter') return cfg.openrouterModel;
+  if (id === 'openai') return cfg.openaiModel;
+  return cfg.model;
+}
+
+function providers(cfg: AppConfig['llm'], llmCwd: string, deps: LlmDeps): Record<LlmProviderId, LlmProvider> {
+  const env = deps.env ?? process.env;
+  return {
+    'claude-cli': new ClaudeCliProvider({ binaryPath: cfg.claudeCliPath, cwd: llmCwd, model: cfg.model, maxBudgetUsd: cfg.maxBudgetUsd, env }),
+    'anthropic-sdk': new AnthropicSdkProvider({ model: cfg.model, effort: cfg.effort, env }),
+    openrouter: new OpenAiCompatProvider({ id: 'openrouter', model: cfg.openrouterModel, env, fetch: deps.fetch, structured: deps.catalog ? (m) => deps.catalog!.structured('openrouter', m) : undefined }),
+    openai: new OpenAiCompatProvider({ id: 'openai', model: cfg.openaiModel, env, fetch: deps.fetch }),
+  };
+}
+
+const IDS: LlmProviderId[] = ['claude-cli', 'anthropic-sdk', 'openrouter', 'openai'];
+
+export async function resolveLlm(cfg: AppConfig['llm'], llmCwd: string, deps: LlmDeps = {}): Promise<ResolvedLlm> {
+  const env = deps.env ?? process.env;
   const setting = env.VIBE_TEACHER_LLM_PROVIDER?.trim() || cfg.provider;
-  const cli = new ClaudeCliProvider({ binaryPath: cfg.claudeCliPath, cwd: llmCwd, model: cfg.model, maxBudgetUsd: cfg.maxBudgetUsd, env });
-  const sdk = new AnthropicSdkProvider({ model: cfg.model, effort: cfg.effort, env });
+  const all = providers(cfg, llmCwd, deps);
   const cliPath = resolveClaudeBinary(cfg.claudeCliPath, env) ?? undefined;
 
   const pick = async (p: LlmProvider): Promise<ResolvedLlm> => {
@@ -23,26 +50,26 @@ export async function resolveLlm(cfg: AppConfig['llm'], llmCwd: string, env: Nod
   };
 
   if (setting === 'none') return { provider: null, status: { resolvedProvider: 'none', available: false, reason: '설정에서 AI 분석을 껐습니다', cliPath } };
-  if (setting === 'claude-cli') return pick(cli);
-  if (setting === 'anthropic-sdk') return pick(sdk);
-  // auto
-  if (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) return pick(sdk);
-  const viaCli = await pick(cli);
+  if ((IDS as string[]).includes(setting)) return pick(all[setting as LlmProviderId]);
+  // auto: Anthropic API 키 → Claude Code 로그인 → OpenRouter 키 → OpenAI 키
+  if (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) return pick(all['anthropic-sdk']);
+  const viaCli = await pick(all['claude-cli']);
   if (viaCli.provider) return viaCli;
+  if (env.OPENROUTER_API_KEY) return pick(all.openrouter);
+  if (env.OPENAI_API_KEY) return pick(all.openai);
   return {
     provider: null,
-    status: { resolvedProvider: 'none', available: false, reason: `사용 가능한 AI 제공자가 없습니다 (${viaCli.status.reason ?? 'claude CLI 없음'}; ANTHROPIC_API_KEY 도 없음)`, cliPath },
+    status: { resolvedProvider: 'none', available: false, reason: `사용 가능한 AI 제공자가 없습니다 (${viaCli.status.reason ?? 'claude CLI 없음'}; API 키도 없음)`, cliPath },
   };
 }
 
-/** 선택 UI 용: 두 제공자 각각을 실제로 쓸 수 있는지 확인한다 (설정과 무관) */
-export async function probeProviders(cfg: AppConfig['llm'], llmCwd: string, env: NodeJS.ProcessEnv = process.env): Promise<LlmProviderOption[]> {
-  const cli = new ClaudeCliProvider({ binaryPath: cfg.claudeCliPath, cwd: llmCwd, model: cfg.model, maxBudgetUsd: cfg.maxBudgetUsd, env });
-  const sdk = new AnthropicSdkProvider({ model: cfg.model, effort: cfg.effort, env });
+/** 선택 UI 용: 제공자마다 실제로 쓸 수 있는지 확인한다 (설정과 무관) */
+export async function probeProviders(cfg: AppConfig['llm'], llmCwd: string, deps: LlmDeps = {}): Promise<LlmProviderOption[]> {
+  const all = providers(cfg, llmCwd, deps);
   const out: LlmProviderOption[] = [];
-  for (const p of [cli, sdk]) {
-    const a = await p.availability();
-    out.push({ id: p.id, available: a.ok, ...(a.reason ? { reason: a.reason } : {}), ...((a.version ?? a.detail) ? { detail: a.version ?? a.detail } : {}) });
+  for (const id of IDS) {
+    const a = await all[id].availability();
+    out.push({ id, available: a.ok, ...(a.reason ? { reason: a.reason } : {}), ...((a.version ?? a.detail) ? { detail: a.version ?? a.detail } : {}) });
   }
   return out;
 }

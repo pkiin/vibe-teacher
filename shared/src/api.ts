@@ -31,7 +31,7 @@ export interface ScanSettings {
   homeRoots: string[];
 }
 
-export type LlmProviderId = 'claude-cli' | 'anthropic-sdk';
+export type LlmProviderId = 'claude-cli' | 'anthropic-sdk' | 'openrouter' | 'openai';
 export type LlmProviderSetting = 'auto' | LlmProviderId | 'none';
 /** Anthropic API 요청의 생각 깊이·토큰 사용량 (claude CLI 에는 적용되지 않음) */
 export type LlmEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -43,6 +43,31 @@ export interface LlmSettings {
   maxBudgetUsd: number;
   timeoutMs: number;
   effort: LlmEffort;
+  /** OpenRouter 모델 ID (기본 openrouter/free) */
+  openrouterModel: string;
+  /** OpenAI 모델 ID */
+  openaiModel: string;
+}
+
+/** 모델 선택 목록의 한 줄 (OpenRouter·OpenAI 의 모델 목록 API 에서 가져옴) */
+export interface LlmModelInfo {
+  id: string;
+  name: string;
+  /** 입력·출력 모두 0원 */
+  free: boolean;
+  contextLength?: number;
+  /** JSON 스키마 강제(structured outputs) 지원 — 없으면 JSON 모드나 프롬프트 지시로 대신한다 */
+  structured: boolean;
+  /** 1M 토큰당 달러 (라우터처럼 정해지지 않았으면 없음) */
+  promptPrice?: number;
+  completionPrice?: number;
+  description?: string;
+}
+
+export interface LlmModelsResponse {
+  provider: 'openrouter' | 'openai';
+  models: LlmModelInfo[];
+  fetchedAt: string;
 }
 
 /** 제공자별 사용 가능 여부 (선택 UI 에 함께 보여 줌) */
@@ -106,6 +131,7 @@ export interface SettingsResponse {
   llmEnvOverride?: string;
   /** model 을 비웠을 때 Anthropic API 에 쓰는 모델 */
   llmDefaultModel: string;
+  llmDefaultModels: { openrouter: string; openai: string };
   home: string;
 }
 

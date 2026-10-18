@@ -18,13 +18,15 @@ export const ScanSchema = z.object({
 });
 
 export const LlmSchema = z.object({
-  provider: z.enum(['auto', 'claude-cli', 'anthropic-sdk', 'none']).default('auto'),
+  provider: z.enum(['auto', 'claude-cli', 'anthropic-sdk', 'openrouter', 'openai', 'none']).default('auto'),
   claudeCliPath: z.string().nullable().default(null),
   model: z.string().nullable().default(null),
   maxBudgetUsd: z.number().positive().default(0.5),
   timeoutMs: z.number().int().positive().default(180_000),
   /** Anthropic API 요청의 effort. claude-opus-5-5 의 기본값과 같은 medium 으로 명시한다 */
   effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
+  openrouterModel: z.string().min(1).default('openrouter/free'),
+  openaiModel: z.string().min(1).default('gpt-5-mini'),
 });
 
 export const AuthSchema = z.object({
@@ -60,6 +62,8 @@ export const ConfigSchema = z.object({
     maxBudgetUsd: 0.5,
     timeoutMs: 180_000,
     effort: 'medium',
+    openrouterModel: 'openrouter/free',
+    openaiModel: 'gpt-5-mini',
   }),
   server: ServerSchema.default({ host: '127.0.0.1', port: 8787 }),
   auth: AuthSchema.default({ mode: 'none', admins: [], sessionTtlHours: 24 * 7, enrichFor: 'admins' }),

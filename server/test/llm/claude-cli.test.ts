@@ -1,8 +1,11 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ClaudeCliProvider, buildArgs, childEnv, toCliJsonSchema } from '../../src/llm/claude-cli';
+import { ClaudeCliProvider, buildArgs, childEnv, extensionClaudeBinaries, resolveClaudeBinary, toCliJsonSchema } from '../../src/llm/claude-cli';
 import { EnrichmentSchema } from '@vibe-teacher/shared';
 import { extractJson } from '../../src/llm/types';
 
@@ -85,5 +88,28 @@ describe('claude-cli provider', () => {
   it('extractJson finds the last JSON object in noisy output', () => {
     expect(extractJson('warn\n{"a":1}\n{"b":2}\n')).toEqual({ b: 2 });
     expect(() => extractJson('nothing')).toThrow();
+  });
+});
+
+describe('claude binary discovery', () => {
+  it('finds the CLI bundled in VS Code / Cursor extensions, newest version first, when it is not on PATH', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vt-claude-home-'));
+    const make = (root: string, ver: string) => {
+      const dir = path.join(home, root, `anthropic.claude-code-${ver}-linux-x64`, 'resources', 'native-binary');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'claude'), '#!/bin/sh\n', { mode: 0o755 });
+      return path.join(dir, 'claude');
+    };
+    make('.vscode-server/extensions', '2.1.9');
+    const newest = make('.vscode-server/extensions', '2.1.10');
+    const cursor = make('.cursor-server/extensions', '3.0.0');
+    expect(extensionClaudeBinaries(home)).toEqual([newest, expect.stringContaining('2.1.9'), cursor]);
+    expect(resolveClaudeBinary(null, { PATH: '' }, home)).toBe(newest);
+    const local = path.join(home, '.local', 'bin');
+    fs.mkdirSync(local, { recursive: true });
+    fs.writeFileSync(path.join(local, 'claude'), '#!/bin/sh\n', { mode: 0o755 });
+    expect(resolveClaudeBinary(null, { PATH: '' }, home)).toBe(path.join(local, 'claude'));
+    expect(resolveClaudeBinary(null, { PATH: '' }, path.join(home, 'nobody'))).toBeNull();
+    fs.rmSync(home, { recursive: true, force: true });
   });
 });

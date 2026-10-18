@@ -47,7 +47,7 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
   src/adapters/    도구별 기록 파서. 도구마다 index(어댑터) · paths(기본 경로) · records(원본 레코드 타입) · parse(정규화)
   src/index/       계정 탐색, 소스, 세션 인덱스, 인덱스 디스크 캐시
   src/analyzers/   user-messages(내 메시지) · built/(파일·명령·패키지·커밋·스택) · concepts/(개념 사전 매칭)
-  src/llm/         AI 보강: digest(전송용 요약 + 비밀값 마스킹) · claude-cli · anthropic-sdk · jobs · cache
+  src/llm/         AI 보강: digest(전송용 요약 + 비밀값 마스킹) · claude-cli · anthropic-sdk · openai-compat(OpenRouter·OpenAI, fetch) · models(모델 목록) · select(제공자 선택) · jobs · cache
   src/auth/        홈 디렉터리 토큰 로그인, 쿠키, 미들웨어
   src/config/      설정 스키마(zod)·저장소·환경변수/CLI 인자
   src/routes/      API 라우트. 공통 의존성과 HttpError 는 routes/deps.ts
@@ -156,6 +156,11 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 위키 AI 프롬프트나 출력 스키마(`WikiAiOutputSchema`)를 바꾸면 `shared/src/wiki.ts` 의 `WIKI_AI_PROMPT_VERSION` 을 올린다 (저장된 AI 레이어 무효화).
 - 위키용 개념 필드를 바꾸면 `server/src/wiki/catalog.ts` 의 `CATALOG_VERSION`, 상태 전이 규칙을 바꾸면 `POLICY_VERSION`, 원장 형식을 바꾸면 `shared/src/wiki.ts` 의 `WIKI_SCHEMA_VERSION` 을 올린다.
 
+### AI 제공자 추가
+- `shared/src/api.ts` 의 `LlmProviderId`, `server/src/config/schema.ts` 와 `server/src/routes/settings.ts` 의 provider enum, `server/src/llm/select.ts` 의 `providers()`·`IDS`·auto 순서·`modelFor` 를 함께 고친다.
+- 화면 문구는 `web/src/i18n/ko.ts` 의 `sources.llmChoice`·`llmNoKey`, 키는 `.env.example` 에 주석과 함께 추가한다.
+- 응답은 항상 zod 스키마로 다시 검사한다 (`LlmProvider.complete`). 네트워크는 테스트에서 fetch 를 주입해 막는다.
+
 ### 버전 올리기
 - 루트 `package.json` 의 `version` 과 `server/src/index.ts` 의 `VERSION` 을 함께 바꿉니다.
 
@@ -180,6 +185,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - [x] 웹: 프로젝트 위키 탭, 근거 열람, 설명 깊이 버튼, 이해 확인 카드, 객관식/OX, 내 이해 정보 열람·정정
 - [x] `.env` 읽기와 `.env.example` (AI 키 `ANTHROPIC_API_KEY`)
 - [x] AI 제공자 선택 UI (Claude Code 로그인 / API 키 / 자동 / 끔, 선택지별 사용 가능 여부), API 기본 모델 `claude-opus-5-5` + effort 설정 + 거절 시 서버 대체(fallbacks)
+- [x] OpenRouter·OpenAI 제공자 (fetch, SDK 없음), OpenRouter 모델 목록에서 고르기(기본 `openrouter/free`, 무료만 보기), `.env.example` 에 키 칸
 - [x] 위키 AI 보강 (M3 일부): 항목별 프로젝트 맞춤 설명·새 사실·새 항목·개념 제안, ID 검사·격리, 별도 레이어, 전송 미리 보기
 - [ ] 질문 패널의 AI 경로 (M3 나머지)
 - [ ] 질문 패널(도움) — mock 응답부터, 이후 M3 에서 LLM 연결
