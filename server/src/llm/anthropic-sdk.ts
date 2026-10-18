@@ -1,13 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import type { LlmEffort } from '@vibe-teacher/shared';
 import { LlmError, type LlmAvailability, type LlmProvider, type LlmRequest, type LlmResult } from './types';
 
 export interface AnthropicSdkOptions {
   model?: string | null;
+  effort?: LlmEffort;
   env?: NodeJS.ProcessEnv;
 }
 
-export const DEFAULT_SDK_MODEL = 'claude-opus-5';
+/** 현재 Opus (claude-opus-5 보다 저렴: 입력 $4 / 출력 $20 per 1M 토큰) */
+export const DEFAULT_SDK_MODEL = 'claude-opus-5-5';
+
+/** 서버 측 거절 대체(fallbacks: "default")를 받는 모델. 그 외 모델에는 보내지 않는다 (예: Haiku 는 400) */
+const SERVER_FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-sonnet-5-5']);
 
 export class AnthropicSdkProvider implements LlmProvider {
   readonly id = 'anthropic-sdk' as const;
@@ -28,17 +34,23 @@ export class AnthropicSdkProvider implements LlmProvider {
     const model = this.opts.model ?? DEFAULT_SDK_MODEL;
     const started = Date.now();
     try {
-      const response = await this.client.messages.parse(
+      // claude-opus-5-5 는 생각(adaptive)이 항상 켜져 있으므로 thinking 은 보내지 않고 effort 로만 조절한다.
+      // 안전 분류기가 거절하면 서버가 권장 모델로 다시 실행한다 (fallbacks: "default").
+      const fallback = SERVER_FALLBACK_MODELS.has(model);
+      const response = await this.client.beta.messages.parse(
         {
           model,
           max_tokens: req.maxTokens,
           system: req.system,
           messages: [{ role: 'user', content: req.user }],
-          output_config: { format: zodOutputFormat(req.schema) },
+          output_config: { effort: this.opts.effort ?? 'medium', format: betaZodOutputFormat(req.schema) },
+          ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
         },
         { timeout: req.timeoutMs, signal: req.signal },
       );
+      // 대체 모델까지 모두 거절했을 때만 refusal 로 끝난다
       if (response.stop_reason === 'refusal') throw new LlmError('unknown', '모델이 요청을 거절했습니다', response.stop_details?.explanation ?? undefined);
+      if (response.stop_reason === 'max_tokens') throw new LlmError('parse', '응답이 최대 토큰 수에서 잘렸습니다');
       const parsed = response.parsed_output;
       if (parsed == null) throw new LlmError('parse', 'LLM 응답을 스키마로 해석하지 못했습니다');
       return {

@@ -10,6 +10,8 @@ export const ConceptEntrySchema = z.object({
   name: z.string(),
   category: z.string(),
   level: z.enum(['beginner', 'intermediate']).default('beginner'),
+  /** 위키 규칙에서만 연결하는 개념. 자동 감지 트리거가 없어 개념 탭에는 나오지 않는다 */
+  wikiOnly: z.boolean().default(false),
   triggers: z.object({
     files: RegexList,
     commands: RegexList,
@@ -17,7 +19,15 @@ export const ConceptEntrySchema = z.object({
     text: RegexList,
     stack: RegexList,
   }),
+  /** 위키 설명 깊이 D0 (한 줄). 없으면 explanation 첫 문장 */
+  summary: z.string().optional(),
   explanation: z.string(),
+  /** D2: 적용 예시 */
+  example: z.string().optional(),
+  /** D2: 흔한 혼동 */
+  confusions: z.array(z.string()).default([]),
+  /** D3: 구현 원리 */
+  deep: z.string().optional(),
   whyHereTemplate: z.string().optional(),
   links: z.array(z.object({ title: z.string(), url: z.string() })).default([]),
 });

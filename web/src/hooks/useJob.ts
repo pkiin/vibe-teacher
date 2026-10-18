@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-import type { JobStatus } from '@vibe-teacher/shared';
+import type { BaseJobStatus, EnrichmentRecord } from '@vibe-teacher/shared';
 import { api } from '../api/client';
 
-/** 작업 id 를 1.5초 간격으로 폴링한다 */
-export function useJob(jobId: string | null): { job: JobStatus | null; error: Error | null } {
-  const [job, setJob] = useState<JobStatus | null>(null);
+/** 작업 상태 경로를 1.5초 간격으로 폴링한다 (예: /api/jobs/:id). path 가 null 이면 멈춘다 */
+export function useJob<R = EnrichmentRecord>(path: string | null): { job: BaseJobStatus<R> | null; error: Error | null } {
+  const [job, setJob] = useState<BaseJobStatus<R> | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!jobId) {
+    if (!path) {
       setJob(null);
       setError(null);
       return;
@@ -17,7 +17,7 @@ export function useJob(jobId: string | null): { job: JobStatus | null; error: Er
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
-        const j = await api<JobStatus>(`/api/jobs/${jobId}`);
+        const j = await api<BaseJobStatus<R>>(path);
         if (stopped) return;
         setJob(j);
         if (j.state === 'queued' || j.state === 'running') timer = setTimeout(poll, 1500);
@@ -30,7 +30,7 @@ export function useJob(jobId: string | null): { job: JobStatus | null; error: Er
       stopped = true;
       if (timer) clearTimeout(timer);
     };
-  }, [jobId]);
+  }, [path]);
 
   return { job, error };
 }

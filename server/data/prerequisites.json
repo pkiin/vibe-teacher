@@ -1,0 +1,33 @@
+{
+  "version": "prereq-0.1",
+  "note": "requires: from(목표 개념)을 minDepth 이상으로 설명할 때 to(선행 개념)가 먼저 필요하다. status=proposed 는 하드 제약으로 쓰지 않는다.",
+  "edges": [
+    { "from": "authorization", "to": "auth", "minDepth": "D1", "status": "reviewed" },
+    { "from": "authorization", "to": "client-server-boundary", "minDepth": "D2", "status": "reviewed" },
+    { "from": "auth", "to": "client-server-boundary", "minDepth": "D1", "status": "reviewed" },
+    { "from": "auth", "to": "http-status", "minDepth": "D2", "status": "reviewed" },
+    { "from": "client-server-boundary", "to": "fetch-http", "minDepth": "D2", "status": "reviewed" },
+    { "from": "input-validation", "to": "client-server-boundary", "minDepth": "D1", "status": "reviewed" },
+    { "from": "input-validation", "to": "http-status", "minDepth": "D2", "status": "reviewed" },
+    { "from": "cors", "to": "client-server-boundary", "minDepth": "D1", "status": "reviewed" },
+    { "from": "rest-api", "to": "fetch-http", "minDepth": "D1", "status": "reviewed" },
+    { "from": "error-handling", "to": "http-status", "minDepth": "D2", "status": "reviewed" },
+    { "from": "retry-idempotency", "to": "error-handling", "minDepth": "D1", "status": "reviewed" },
+    { "from": "rate-limit", "to": "fetch-http", "minDepth": "D2", "status": "proposed" },
+    { "from": "test-scope", "to": "testing", "minDepth": "D1", "status": "reviewed" },
+    { "from": "change-impact", "to": "test-scope", "minDepth": "D2", "status": "reviewed" },
+    { "from": "persistence", "to": "client-state", "minDepth": "D1", "status": "reviewed" },
+    { "from": "atomic-change", "to": "persistence", "minDepth": "D1", "status": "reviewed" },
+    { "from": "database-sql", "to": "persistence", "minDepth": "D1", "status": "reviewed" },
+    { "from": "supabase", "to": "database-sql", "minDepth": "D1", "status": "reviewed" },
+    { "from": "supabase", "to": "authorization", "minDepth": "D2", "status": "reviewed" },
+    { "from": "secrets", "to": "env-variables", "minDepth": "D1", "status": "reviewed" },
+    { "from": "secrets", "to": "gitignore", "minDepth": "D2", "status": "reviewed" },
+    { "from": "gitignore", "to": "git-basics", "minDepth": "D1", "status": "reviewed" },
+    { "from": "rollback", "to": "git-basics", "minDepth": "D1", "status": "reviewed" },
+    { "from": "llm-api", "to": "secrets", "minDepth": "D1", "status": "reviewed" },
+    { "from": "llm-api", "to": "rate-limit", "minDepth": "D2", "status": "proposed" },
+    { "from": "dev-vs-build", "to": "npm-package-json", "minDepth": "D2", "status": "reviewed" },
+    { "from": "npm-package-json", "to": "terminal-basics", "minDepth": "D2", "status": "reviewed" }
+  ]
+}

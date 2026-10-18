@@ -181,3 +181,82 @@ textarea { font-family: var(--mono); font-size: 12.5px; }
 .login-help li { margin: 8px 0; }
 .cmd-box { display: flex; gap: 8px; align-items: flex-start; margin-top: 6px; }
 .cmd-box code { flex: 1; white-space: pre-wrap; word-break: break-all; padding: 8px; display: block; }
+
+/* ---- 프로젝트 위키 ---- */
+.wiki h2 { margin-top: 22px; }
+.wiki-head p { margin: 6px 0; }
+.wiki-alert, .wiki-item { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
+.wiki-alert { border-left: 4px solid var(--border); }
+.wiki-alert.impact-high { border-left-color: var(--red); }
+.wiki-alert.impact-medium { border-left-color: var(--yellow); }
+.wiki-alert.impact-undetermined { border-left-color: var(--accent); }
+.wiki-alert p { margin: 6px 0; }
+.wiki-alert h3, .wiki-item h3 { margin: 0 4px 0 0; }
+.wiki-checks ul, .wiki-confusions ul { margin: 4px 0; padding-left: 20px; }
+.wiki-item section { margin-top: 10px; }
+.wiki-item h4 { margin: 8px 0 4px; font-size: 13px; color: #374151; }
+.wiki-item ul { margin: 2px 0; padding-left: 20px; }
+.wiki-explain { background: #fafbff; border: 1px solid #e0e7ff; border-radius: 8px; padding: 8px 10px; }
+.wiki-explain-head { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.wiki-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.wiki-glossary { margin: 8px 0 0; font-size: 13px; }
+.wiki-glossary dt { font-weight: 600; }
+.wiki-glossary dd { margin: 0 0 6px; color: #374151; }
+.wiki-deep p { margin: 4px 0; }
+.wiki-prereqs li { padding: 2px 0; }
+.wiki-related { margin-top: 8px; }
+.wiki-related .pill:first-child { margin-left: 0; }
+.claims { list-style: none; padding-left: 0 !important; }
+.claims > li { padding: 4px 0; border-bottom: 1px dashed var(--border); }
+.claims > li:last-child { border-bottom: none; }
+.claim-kind { margin-left: 0; }
+.understanding-check { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.understanding-badge .pill:first-child { margin-left: 4px; }
+.wiki-coverage { display: flex; flex-wrap: wrap; gap: 4px; }
+.wiki-coverage .pill { margin-left: 0; }
+.wiki-deferred, .wiki-quiz-suggest, .understanding-panel { margin: 12px 0; }
+.wiki-quiz-suggest summary, .understanding-panel summary { cursor: pointer; }
+.understanding-list { list-style: none; padding-left: 0; }
+.understanding-list li { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.understanding-correct { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; }
+.understanding-correct textarea, .quiz-reason textarea { flex: 1; width: 100%; font: inherit; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
+.quiz { margin: 10px 0; }
+.quiz-prompt { font-weight: 500; margin: 8px 0; }
+.quiz-options { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.quiz-option { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.quiz-option:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.quiz-option.is-answer { border-color: var(--green); background: var(--green-soft); }
+.quiz-option.is-wrong { border-color: var(--red); background: var(--red-soft); }
+.quiz-reason { display: block; margin-top: 8px; }
+.quiz-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.quiz-result { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.quiz-result p { margin: 6px 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+
+/* ---- AI 제공자 선택 ---- */
+.llm-choice { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.llm-choice-item { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: #fff; }
+.llm-choice-item.selected { border-color: var(--accent); background: #f8fbff; }
+.llm-choice-item:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.llm-choice-item input { margin-top: 3px; }
+.llm-choice-desc, .llm-choice-reason { display: block; }
+.llm-choice-reason { color: var(--yellow); }
+.llm-quick { margin: 6px 0; }
+.llm-quick summary { cursor: pointer; }
+
+/* ---- 위키 AI 보강 ---- */
+.wiki-ai { margin: 12px 0; }
+.wiki-ai p { margin: 6px 0; }
+.wiki-ai-preview { max-height: 320px; overflow: auto; white-space: pre-wrap; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 8px; font-size: 12px; }
+.wiki-ai-result { margin-top: 8px; }
+.wiki-ai-result ul { margin: 4px 0; padding-left: 18px; }
+.wiki-narrative { background: #f5f9ff; border: 1px solid #dbeafe; border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
+.wiki-narrative p { margin: 4px 0; }
+.llm-choice-item { flex-direction: column; align-items: stretch; }
+.llm-choice-label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.llm-choice-label input { margin-top: 3px; }
+.llm-models { margin: 8px 0 2px 24px; display: flex; flex-direction: column; gap: 6px; }
+.llm-models-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.llm-models-row input[type="search"] { flex: 1; min-width: 180px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.llm-models-select { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.llm-model-info .pill:first-child { margin-left: 0; }

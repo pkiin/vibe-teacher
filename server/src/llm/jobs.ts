@@ -1,24 +1,24 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import type { EnrichmentRecord, JobStatus } from '@vibe-teacher/shared';
+import type { BaseJobStatus, EnrichmentRecord } from '@vibe-teacher/shared';
 
-interface JobInternal {
-  status: JobStatus;
-  run: (signal: AbortSignal) => Promise<EnrichmentRecord>;
+interface JobInternal<R> {
+  status: BaseJobStatus<R>;
+  run: (signal: AbortSignal) => Promise<R>;
   controller: AbortController;
 }
 
-/** 동시성 1 짜리 작업 큐. 이후 SSE 를 붙일 수 있도록 EventEmitter 를 노출한다. */
-export class JobQueue extends EventEmitter {
-  private jobs = new Map<string, JobInternal>();
+/** 동시성 1 짜리 작업 큐 (작업 종류마다 하나씩). 이후 SSE 를 붙일 수 있도록 EventEmitter 를 노출한다. */
+export class JobQueue<R = EnrichmentRecord> extends EventEmitter {
+  private jobs = new Map<string, JobInternal<R>>();
   private queue: string[] = [];
   private running: string | null = null;
 
-  enqueue(sessionKey: string, run: (signal: AbortSignal) => Promise<EnrichmentRecord>): JobStatus {
+  enqueue(sessionKey: string, run: (signal: AbortSignal) => Promise<R>): BaseJobStatus<R> {
     const existing = this.findActive(sessionKey);
     if (existing) return existing;
     const id = randomUUID();
-    const status: JobStatus = { id, sessionKey, state: 'queued', createdAt: new Date().toISOString() };
+    const status: BaseJobStatus<R> = { id, sessionKey, state: 'queued', createdAt: new Date().toISOString() };
     this.jobs.set(id, { status, run, controller: new AbortController() });
     this.queue.push(id);
     this.prune();
@@ -26,18 +26,18 @@ export class JobQueue extends EventEmitter {
     return status;
   }
 
-  findActive(sessionKey: string): JobStatus | undefined {
+  findActive(sessionKey: string): BaseJobStatus<R> | undefined {
     for (const j of this.jobs.values()) {
       if (j.status.sessionKey === sessionKey && (j.status.state === 'queued' || j.status.state === 'running')) return j.status;
     }
     return undefined;
   }
 
-  get(id: string): JobStatus | undefined {
+  get(id: string): BaseJobStatus<R> | undefined {
     return this.jobs.get(id)?.status;
   }
 
-  cancel(id: string): JobStatus | undefined {
+  cancel(id: string): BaseJobStatus<R> | undefined {
     const j = this.jobs.get(id);
     if (!j) return undefined;
     if (j.status.state === 'queued') {

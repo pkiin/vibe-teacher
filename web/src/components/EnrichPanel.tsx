@@ -3,6 +3,7 @@ import type { EnrichStartResponse, EnrichmentRecord, LlmStatus } from '@vibe-tea
 import { apiDelete, apiPost } from '../api/client';
 import { useJob } from '../hooks/useJob';
 import { ko } from '../i18n/ko';
+import { LlmQuickSwitch } from './LlmProviderPicker';
 import { Notice } from './Notice';
 
 function renderInline(text: string): ReactNode[] {
@@ -76,18 +77,20 @@ export function EnrichPanel({
   enrichReason,
   cached,
   onResult,
+  isAdmin = false,
 }: {
   sessionKey: string;
   llmStatus: LlmStatus | null;
   canEnrich?: boolean;
   enrichReason?: string;
+  isAdmin?: boolean;
   cached: EnrichmentRecord | null;
   onResult: (r: EnrichmentRecord) => void;
 }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { job } = useJob(jobId);
+  const { job } = useJob(jobId ? `/api/jobs/${jobId}` : null);
   const result = job?.state === 'done' && job.result ? job.result : cached;
 
   useEffect(() => {
@@ -138,6 +141,7 @@ export function EnrichPanel({
           )}
         </div>
       </div>
+      {isAdmin && !busy && <LlmQuickSwitch />}
       {!available && !result && (
         <Notice kind="warn">
           {ko.enrich.unavailable}: {unavailableReason ?? '…'}
