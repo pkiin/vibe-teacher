@@ -5,6 +5,7 @@ import { getToken, onUnauthorized, setToken } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { ko } from '../i18n/ko';
+import { ReaderLevelSetup, ReaderLevelSwitch } from './ReaderLevelPicker';
 
 export function Layout({ children }: { children: ReactNode }) {
   const { me, logout } = useAuth();
@@ -42,11 +43,15 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
             {ko.nav.accounts}
           </NavLink>
+          <NavLink to="/knowledge" className={({ isActive }) => (isActive ? 'active' : '')}>
+            {ko.knowledge.nav}
+          </NavLink>
           {isAdmin && (
             <NavLink to="/sources" className={({ isActive }) => (isActive ? 'active' : '')}>
               {ko.nav.sources}
             </NavLink>
           )}
+          {canQuery && me?.reader && <ReaderLevelSwitch />}
           {me?.mode === 'home-token' && me.authenticated && (
             <span className="user-chip">
               <span className="mono">{me.username}</span>
@@ -74,7 +79,10 @@ export function Layout({ children }: { children: ReactNode }) {
           </form>
         </div>
       )}
-      <main className="content">{children}</main>
+      <main className="content">
+        {canQuery && me?.reader && !me.reader.chosen && <ReaderLevelSetup />}
+        {children}
+      </main>
     </div>
   );
 }

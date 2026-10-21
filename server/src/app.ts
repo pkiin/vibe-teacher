@@ -7,7 +7,10 @@ import { accountsRoutes } from './routes/accounts';
 import { authRoutes } from './routes/auth';
 import { HttpError, type AppDeps, type AppEnv } from './routes/deps';
 import { jobsRoutes } from './routes/jobs';
+import { helpRoutes } from './routes/help';
 import { learnerRoutes } from './routes/learner';
+import { meRoutes } from './routes/me';
+import { repoRoutes } from './routes/repo';
 import { projectsRoutes } from './routes/projects';
 import { sessionsRoutes } from './routes/sessions';
 import { settingsRoutes } from './routes/settings';
@@ -47,10 +50,15 @@ export function createApp({ deps, distDir, quiet = false }: CreateAppOptions): H
   api.route('/rescan', rescanRoute(deps));
   api.route('/projects', projectsRoutes(deps));
   api.route('/projects', learnerRoutes(deps));
+  api.route('/projects', helpRoutes(deps));
+  api.route('/me', meRoutes(deps));
+  api.route('/projects', repoRoutes(deps));
   api.route('/sessions', sessionsRoutes(deps));
   api.route('/sessions', wikiRoutes(deps));
   api.route('/settings', settingsRoutes(deps));
   api.route('/jobs', jobsRoutes(deps));
+  // 개념 카탈로그 (일반 배경 지식 — 도움 패널의 설명에 쓴다)
+  api.get('/catalog/concepts', (c) => c.json([...deps.wiki.catalog().concepts.values()]));
   app.route('/api', api);
   app.notFound((c) => (c.req.path.startsWith('/api/') ? c.json({ error: { code: 'not_found', message: '없는 API 경로입니다' } }, 404) : c.text('Not Found', 404)));
 

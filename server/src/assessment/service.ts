@@ -15,8 +15,9 @@ interface Pending {
   assessmentId: string;
   attemptId: string;
   learnerId: string;
-  projectId: string;
-  sessionKey: string;
+  /** 전체 지식 위키에서 풀면 없음 */
+  projectId?: string;
+  sessionKey?: string;
   questionId: string;
   questionVersion: number;
   firstAttempt: boolean;
@@ -51,7 +52,7 @@ export class AssessmentService {
     return events.some((e) => e.kind === 'response' && e.questionId === questionId && (e.status === 'answered' || e.status === 'dont_know'));
   }
 
-  async start(learnerId: string, projectId: string, req: AssessmentRequest, snapshot: WikiSnapshot | null): Promise<AssessmentStartResponse> {
+  async start(learnerId: string, projectId: string | undefined, req: AssessmentRequest, snapshot: WikiSnapshot | null): Promise<AssessmentStartResponse> {
     this.prune();
     const requested = req.questionId ? this.bank().questions.get(req.questionId) : undefined;
     if (req.questionId && (!requested || requested.target !== 'concept_knowledge')) throw Object.assign(new Error('문항을 찾을 수 없습니다'), { status: 404, code: 'not_found' });
@@ -62,7 +63,7 @@ export class AssessmentService {
       conceptId = item.conceptIds[0];
     }
     const exclude = new Set(req.excludeQuestionIds ?? []);
-    const events = await this.learner.events(learnerId, projectId);
+    const events = await this.learner.events(learnerId);
     const all = [...this.bank().questions.values()].filter((q) => q.target === 'concept_knowledge' && !exclude.has(q.questionId));
     const pool = all.filter((q) => q.conceptIds[0] === conceptId);
     const candidates = requested ? [requested] : pool.length ? pool : all.filter((q) => conceptId !== undefined && q.conceptIds.includes(conceptId));
@@ -76,13 +77,13 @@ export class AssessmentService {
         a.questionId.localeCompare(b.questionId),
     );
     const q = candidates[0]!;
-    const profile = await this.learner.profile(learnerId, projectId);
+    const profile = await this.learner.profile(learnerId);
     const p: Pending = {
       assessmentId: `as_${randomUUID()}`,
       attemptId: `at_${randomUUID()}`,
       learnerId,
-      projectId,
-      sessionKey: req.sessionKey,
+      ...(projectId ? { projectId } : {}),
+      ...(req.sessionKey ? { sessionKey: req.sessionKey } : {}),
       questionId: q.questionId,
       questionVersion: q.version,
       firstAttempt: !this.seenExplanation(events, q.questionId),
@@ -92,10 +93,11 @@ export class AssessmentService {
     return { assessmentId: p.assessmentId, attemptId: p.attemptId, question: toPublicQuestion(q), firstAttempt: p.firstAttempt, profileRevision: profile.revision };
   }
 
-  async respond(learnerId: string, projectId: string, assessmentId: string, body: AssessmentResponseRequest): Promise<AssessmentResult> {
+  /** projectId 를 주면 그 프로젝트에서 낸 문항인지도 확인한다 (/api/me 에서는 학습자만 확인) */
+  async respond(learnerId: string, projectId: string | undefined, assessmentId: string, body: AssessmentResponseRequest): Promise<AssessmentResult> {
     const p = this.pending.get(assessmentId);
     // 다른 학습자·프로젝트의 문항이면 존재 자체를 숨긴다
-    if (!p || p.learnerId !== learnerId || p.projectId !== projectId) throw Object.assign(new Error('문항을 찾을 수 없습니다. 새 문항을 받아 주세요.'), { status: 404, code: 'not_found' });
+    if (!p || p.learnerId !== learnerId || (projectId !== undefined && p.projectId !== projectId)) throw Object.assign(new Error('문항을 찾을 수 없습니다. 새 문항을 받아 주세요.'), { status: 404, code: 'not_found' });
     if (p.result) return p.result;
 
     const current = this.bank().questions.get(p.questionId);
@@ -103,13 +105,13 @@ export class AssessmentService {
     const graded = q ? gradeChoice(q, body.status, body.selectedOptionId) : { grade: 'unscorable' as const, note: '문항이 바뀌었거나 없어져 채점할 수 없습니다' };
 
     let before: LearnerProfile | null = null;
-    const { profile } = await this.learner.record(learnerId, projectId, body.baseRevision, (cur) => {
+    const { profile } = await this.learner.record(learnerId, body.baseRevision, (cur) => {
       before = cur;
       const event: Omit<ResponseEvent, 'profileRevision'> = {
         id: `r_${p.attemptId}`,
         at: new Date().toISOString(),
-        projectId,
-        sessionKey: p.sessionKey,
+        ...(p.projectId ? { projectId: p.projectId } : {}),
+        ...(p.sessionKey ? { sessionKey: p.sessionKey } : {}),
         kind: 'response',
         responseId: `rs_${p.attemptId}`,
         attemptId: p.attemptId,

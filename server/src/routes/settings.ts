@@ -23,6 +23,7 @@ const UpdateSchema = z.object({
       effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
       openrouterModel: z.string().min(1).max(200).optional(),
       openaiModel: z.string().min(1).max(200).optional(),
+      autoText: z.boolean().optional(),
     })
     .optional(),
   auth: z

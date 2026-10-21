@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { NormalizedSession } from '@vibe-teacher/shared';
 import { extractUserMessages } from '../analyzers/user-messages';
+import { learnerIdFor } from '../learner/service';
 import { HttpError, assertAccount, currentUser, notFound, type AppDeps, type AppEnv } from './deps';
 
 function slim(session: NormalizedSession): NormalizedSession {
@@ -25,6 +26,9 @@ export function sessionsRoutes(deps: AppDeps): Hono<AppEnv> {
     return session;
   };
 
+  /** 지금 사용자의 읽는 사람 수준 — AI 문장은 수준별로 따로 쓰고 저장한다 */
+  const level = (c: Context<AppEnv>) => deps.prefs.level(learnerIdFor(currentUser(c).username));
+
   app.get('/:key', async (c) => {
     const session = await load(c);
     return c.json(c.req.query('full') === '1' ? session : slim(session));
@@ -37,14 +41,20 @@ export function sessionsRoutes(deps: AppDeps): Hono<AppEnv> {
   app.get('/:key/concepts', async (c) => {
     const session = await load(c);
     const { concepts } = await deps.analysis.analyze(session);
-    const cached = await deps.enrich.getCached(session);
+    const cached = await deps.enrich.getCached(session, await level(c));
     return c.json(cached ? deps.enrich.mergeConcepts(concepts, cached) : concepts);
   });
 
   app.get('/:key/enrichment', async (c) => {
-    const cached = await deps.enrich.getCached(await load(c));
+    const cached = await deps.enrich.getCached(await load(c), await level(c));
     if (!cached) throw notFound('AI 분석 결과');
     return c.json(cached);
+  });
+
+  app.get('/:key/enrich/preview', async (c) => {
+    const session = await load(c);
+    const { concepts } = await deps.analysis.analyze(session);
+    return c.json(deps.enrich.preview(session, concepts, await level(c)));
   });
 
   app.post('/:key/enrich', async (c) => {
@@ -53,7 +63,7 @@ export function sessionsRoutes(deps: AppDeps): Hono<AppEnv> {
     if (!allowed.ok) throw new HttpError(403, 'forbidden', allowed.reason ?? 'AI 분석 권한이 없습니다');
     const force = c.req.query('force') === '1';
     const { concepts } = await deps.analysis.analyze(session);
-    const res = await deps.enrich.start(session, concepts, force);
+    const res = await deps.enrich.start(session, concepts, force, await level(c));
     return c.json(res, res.status === 'done' ? 200 : 202);
   });
 

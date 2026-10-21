@@ -15,18 +15,20 @@ export interface QuizTarget {
  * 건너뛰기·모르겠어요는 오답이 아니며, 풀지 않아도 위키 이용에 제한이 없다.
  */
 export function QuizCard({
-  projectId,
   sessionKey,
   target,
   learner,
   explanationSeen,
+  helpUsed = false,
   onClose,
 }: {
-  projectId: string;
-  sessionKey: string;
+  /** 세션 화면에서 풀면 그 세션 (전체 지식 위키에서는 없음) */
+  sessionKey?: string;
   target: QuizTarget;
   learner: LearnerActions;
   explanationSeen: boolean;
+  /** 이 개념을 도움 패널로 물어본 뒤의 응답이면 true — 보조(assisted)로 기록되어 이해 상태 추정에 쓰지 않는다 */
+  helpUsed?: boolean;
   onClose?: () => void;
 }) {
   const [start, setStart] = useState<AssessmentStartResponse | null>(null);
@@ -44,8 +46,9 @@ export function QuizCard({
     setSelected(null);
     setReason('');
     setError(null);
-    const body = exclude.length ? { sessionKey, conceptId: target.conceptId ?? conceptId, excludeQuestionIds: exclude } : { sessionKey, ...target };
-    apiPost<AssessmentStartResponse>(`/api/projects/${projectId}/assessments`, body)
+    const ctx = sessionKey ? { sessionKey } : {};
+    const body = exclude.length ? { ...ctx, conceptId: target.conceptId ?? conceptId, excludeQuestionIds: exclude } : { ...ctx, ...target };
+    apiPost<AssessmentStartResponse>('/api/me/assessments', body)
       .then((s) => {
         setStart(s);
         setSeen((xs) => [...new Set([...xs, s.question.questionId])]);
@@ -56,7 +59,7 @@ export function QuizCard({
   useEffect(() => {
     load([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, sessionKey, target.conceptId, target.questionId]);
+  }, [sessionKey, target.conceptId, target.questionId]);
 
   const submit = async (status: ResponseStatus) => {
     if (!start) return;
@@ -64,13 +67,13 @@ export function QuizCard({
     setError(null);
     try {
       const r = await learner.withRevision((baseRevision) =>
-        apiPost<AssessmentResult>(`/api/projects/${projectId}/assessments/${start.assessmentId}/responses`, {
+        apiPost<AssessmentResult>(`/api/me/assessments/${start.assessmentId}/responses`, {
           baseRevision,
           status,
           ...(status === 'answered' && selected ? { selectedOptionId: selected } : {}),
           ...(reason.trim() ? { reason: reason.trim() } : {}),
           explanationSeen,
-          helpUsed: false,
+          helpUsed,
         }),
       );
       setResult(r);

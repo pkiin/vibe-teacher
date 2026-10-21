@@ -134,26 +134,40 @@ describe('learner service', () => {
 
   it('rejects writes based on a stale profile revision without touching the ledger (T25)', async () => {
     const s = service();
-    const first = await s.record('l_1', 'p', 0, selfReport('s1'));
+    const first = await s.record('l_1', 0, selfReport('s1'));
     expect(first.profile.revision).toBe(1);
-    await expect(s.record('l_1', 'p', 0, selfReport('s2'))).rejects.toBeInstanceOf(RevisionConflictError);
-    expect(await s.events('l_1', 'p')).toHaveLength(1);
+    await expect(s.record('l_1', 0, selfReport('s2'))).rejects.toBeInstanceOf(RevisionConflictError);
+    expect(await s.events('l_1')).toHaveLength(1);
   });
 
   it('accepts exposure events regardless of revision and dedupes retried event ids', async () => {
     const s = service();
-    await s.record('l_1', 'p', null, { id: 'x1', at: at(), projectId: 'p', kind: 'exposure', action: 'open_item' });
-    const again = await s.record('l_1', 'p', 0, selfReport('s1'));
-    const retry = await s.record('l_1', 'p', 0, selfReport('s1'));
+    await s.record('l_1', null, { id: 'x1', at: at(), projectId: 'p', kind: 'exposure', action: 'open_item' });
+    const again = await s.record('l_1', 0, selfReport('s1'));
+    const retry = await s.record('l_1', 0, selfReport('s1'));
     expect(retry.duplicate).toBe(true);
     expect(retry.profile.revision).toBe(again.profile.revision);
-    expect(await s.events('l_1', 'p')).toHaveLength(2);
+    expect(await s.events('l_1')).toHaveLength(2);
   });
 
-  it('isolates learners and projects from each other', async () => {
+  it('keeps one profile per learner across projects, separate from other learners', async () => {
     const s = service();
-    await s.record('l_1', 'p', 0, selfReport('s1'));
-    expect((await s.profile('l_2', 'p')).revision).toBe(0);
-    expect((await s.profile('l_1', 'other')).revision).toBe(0);
+    await s.record('l_1', 0, selfReport('s1'));
+    await s.record('l_1', 1, { ...selfReport('s2'), projectId: 'other', conceptId: 'testing' });
+    const p = await s.profile('l_1');
+    expect(p.revision).toBe(2);
+    expect(Object.keys(p.concepts).sort()).toEqual(['auth', 'testing']);
+    expect((await s.profile('l_2')).revision).toBe(0);
+  });
+
+  it('merges events written by the older per-project ledger', async () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'vt-learner-legacy-'));
+    dirs.push(d);
+    const storage = new WikiStorage(d);
+    await storage.appendJsonl(path.join(storage.learnerProjectDir('l_1', 'p'), 'events.jsonl'), { ...selfReport('old1'), profileRevision: 0 });
+    const s = new LearnerService(storage);
+    expect((await s.events('l_1')).map((e) => e.id)).toEqual(['old1']);
+    const next = await s.record('l_1', 1, selfReport('new1'));
+    expect(next.profile.revision).toBe(2);
   });
 });

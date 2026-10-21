@@ -1,17 +1,22 @@
 import type { ConceptHit } from '@vibe-teacher/shared';
 import { ko } from '../i18n/ko';
+import { FocusChip } from './FocusChip';
 
-export function ConceptList({ concepts, onJump }: { concepts: ConceptHit[]; onJump?: (i: number) => void }) {
+/** coveredIds: 위키 항목에서 이미 다룬 개념 (표시만 하고 숨기지 않음) */
+export function ConceptList({ concepts, onJump, coveredIds }: { concepts: ConceptHit[]; onJump?: (i: number) => void; coveredIds?: ReadonlySet<string> }) {
   if (!concepts.length) return <div className="muted">{ko.concepts.empty}</div>;
   return (
     <div className="concepts">
       {concepts.map((c) => (
         <article key={c.id} className="concept">
           <div className="concept-head">
-            <h3>{c.name}</h3>
+            <h3>
+              <FocusChip focus={{ kind: 'concept', id: c.id }} label={c.name} className="concept-name" />
+            </h3>
             <span className="pill pill-outline">{c.category}</span>
             <span className={`pill ${c.level === 'beginner' ? 'pill-green' : 'pill-yellow'}`}>{ko.concepts.level[c.level]}</span>
             {c.llm && <span className="pill pill-blue">AI</span>}
+            {coveredIds?.has(c.id) && <span className="pill pill-gray">{ko.understand.covered}</span>}
           </div>
           <p className="concept-exp">{c.llm?.explanation ?? c.explanation}</p>
           <div className="concept-why">

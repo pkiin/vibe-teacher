@@ -1,10 +1,11 @@
-import { ENRICH_PROMPT_VERSION, EnrichmentSchema, type BuiltSummary, type ConceptHit, type EnrichStartResponse, type EnrichmentRecord, type LlmProviderId, type LlmProviderOption, type LlmStatus, type NormalizedSession } from '@vibe-teacher/shared';
+import { DEFAULT_READER_LEVEL, ENRICH_PROMPT_VERSION, EnrichmentSchema, READER_LEVELS, type BuiltSummary, type ConceptHit, type EnrichStartResponse, type EnrichmentRecord, type LlmProviderId, type LlmProviderOption, type LlmStatus, type NormalizedSession, type ReaderLevel } from '@vibe-teacher/shared';
 import { summarizeBuilt } from '../analyzers/built/index';
 import type { ConfigStore, Paths } from '../config/store';
 import { enrichCacheKey, readEnrichment, writeEnrichment } from './cache';
 import { buildDigest } from './digest';
 import { JobQueue } from './jobs';
 import { SYSTEM_PROMPT, buildUserPrompt } from './prompts';
+import { withReader } from './reader';
 import { ModelCatalog } from './models';
 import { modelFor, probeProviders, resolveLlm, type ResolvedLlm } from './select';
 import type { LlmProvider } from './types';
@@ -66,17 +67,21 @@ export class EnrichService {
     return (await this.resolve()).status;
   }
 
-  private candidateKeys(session: NormalizedSession, providerId: LlmProviderId | 'none'): string[] {
+  private candidateKeys(session: NormalizedSession, providerId: LlmProviderId | 'none', levels: readonly ReaderLevel[]): string[] {
     const cfg = this.opts.store.get().llm;
     const all: LlmProviderId[] = ['claude-cli', 'anthropic-sdk', 'openrouter', 'openai'];
     const ids = providerId === 'none' ? all : [providerId, ...all.filter((x) => x !== providerId)];
-    return ids.map((id) => enrichCacheKey(session, id, modelFor(id, cfg), ENRICH_PROMPT_VERSION));
+    return levels.flatMap((level) => ids.map((id) => enrichCacheKey(session, id, modelFor(id, cfg), ENRICH_PROMPT_VERSION, level)));
   }
 
-  /** 어느 제공자로든 만들어 둔 결과가 있으면 돌려준다 */
-  async getCached(session: NormalizedSession): Promise<EnrichmentRecord | null> {
+  /**
+   * 어느 제공자로든 만들어 둔 결과가 있으면 돌려준다.
+   * level 을 주면 그 읽는 사람 수준으로 쓴 것만, 'any' 면 어느 수준이든 (레포 위키 재료처럼 사실만 쓸 때).
+   */
+  async getCached(session: NormalizedSession, level: ReaderLevel | 'any' = DEFAULT_READER_LEVEL): Promise<EnrichmentRecord | null> {
     const { status } = await this.resolve();
-    for (const k of this.candidateKeys(session, status.resolvedProvider)) {
+    const levels = level === 'any' ? READER_LEVELS : [level];
+    for (const k of this.candidateKeys(session, status.resolvedProvider, levels)) {
       const rec = await readEnrichment(this.opts.paths.enrichCacheDir, k);
       if (rec) return rec;
     }
@@ -107,10 +112,18 @@ export class EnrichService {
     return out;
   }
 
-  async start(session: NormalizedSession, concepts: ConceptHit[], force = false): Promise<EnrichStartResponse> {
+  /** 보내기 전에 확인할 수 있도록 세션 분석에 보낼 내용을 그대로 돌려준다 */
+  preview(session: NormalizedSession, concepts: ConceptHit[], level: ReaderLevel = DEFAULT_READER_LEVEL): { system: string; user: string; chars: number } {
+    const digest = buildDigest(session, (this.opts.buildBuilt ?? summarizeBuilt)(session), concepts);
+    const user = buildUserPrompt(digest);
+    const system = withReader(SYSTEM_PROMPT, level);
+    return { system, user, chars: system.length + user.length };
+  }
+
+  async start(session: NormalizedSession, concepts: ConceptHit[], force = false, level: ReaderLevel = DEFAULT_READER_LEVEL): Promise<EnrichStartResponse> {
     const { provider, status } = await this.resolve();
     if (!provider) throw new EnrichUnavailable(status.reason ?? 'AI 제공자를 사용할 수 없습니다');
-    const key = enrichCacheKey(session, provider.id, modelFor(provider.id, this.opts.store.get().llm), ENRICH_PROMPT_VERSION);
+    const key = enrichCacheKey(session, provider.id, modelFor(provider.id, this.opts.store.get().llm), ENRICH_PROMPT_VERSION, level);
     if (!force) {
       const cached = await readEnrichment(this.opts.paths.enrichCacheDir, key);
       if (cached) return { status: 'done', result: cached, cached: true };
@@ -118,9 +131,9 @@ export class EnrichService {
     const built = (this.opts.buildBuilt ?? summarizeBuilt)(session);
     const digest = buildDigest(session, built, concepts);
     const cfg = this.opts.store.get().llm;
-    const job = this.jobs.enqueue(session.key, async (signal) => {
+    const job = this.jobs.enqueue(`${session.key}|${level}`, async (signal) => {
       const res = await provider.complete({
-        system: SYSTEM_PROMPT,
+        system: withReader(SYSTEM_PROMPT, level),
         user: buildUserPrompt(digest),
         schema: EnrichmentSchema,
         schemaName: 'session_enrichment',
@@ -134,6 +147,7 @@ export class EnrichService {
         provider: res.provider,
         model: res.model,
         promptVersion: ENRICH_PROMPT_VERSION,
+        readerLevel: level,
         createdAt: new Date().toISOString(),
         durationMs: res.durationMs,
         costUsd: res.costUsd,

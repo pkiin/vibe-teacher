@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AuthMeResponse, LoginRequest, LoginResponse } from '@vibe-teacher/shared';
 import { tokenSetupCommand } from '../auth/token-file';
+import { learnerIdFor } from '../learner/service';
 import { HttpError, type AppDeps, type AppEnv } from './deps';
 
 const LoginSchema = z.object({ username: z.string().min(1).max(64), token: z.string().min(1).max(512) });
@@ -23,6 +24,8 @@ export function authRoutes(deps: AppDeps): Hono<AppEnv> {
       tokenRequired: deps.auth.tokenRequired(),
       serviceUser: deps.auth.serviceUser,
       llmStatus: user ? await deps.enrich.status() : null,
+      autoText: deps.store.get().llm.autoText,
+      reader: user ? await deps.prefs.get(learnerIdFor(user.username)) : null,
     };
     return c.json(body);
   });

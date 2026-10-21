@@ -4,6 +4,7 @@
  * 개인 이해 상태는 learner.ts, 출제·채점은 assessment.ts 에 따로 둔다.
  */
 import type { BaseJobStatus, LlmProviderId, LlmStatus } from './api';
+import type { ReaderLevel } from './reader';
 import type { ConceptLink } from './domain';
 
 export const WIKI_SCHEMA_VERSION = 1;
@@ -187,7 +188,8 @@ export interface WikiResponse {
 
 // ---- AI 보강 레이어 (규칙 기반 원장과 따로 저장) ----
 
-export const WIKI_AI_PROMPT_VERSION = 1;
+/** 2: 읽는 사람 수준별 문체, 레이어도 수준별로 저장 */
+export const WIKI_AI_PROMPT_VERSION = 2;
 
 /** 기존 지식 항목을 이 프로젝트에 맞춰 풀어 쓴 설명. 근거 주장이 없으면 싣지 않는다 */
 export interface WikiNarrative {
@@ -207,6 +209,8 @@ export interface WikiAiLayer {
   snapshotRevision: string;
   rulesVersion: string;
   promptVersion: number;
+  /** 어느 읽는 사람 수준으로 썼는지 */
+  readerLevel?: ReaderLevel;
   provider: LlmProviderId;
   model?: string;
   createdAt: string;

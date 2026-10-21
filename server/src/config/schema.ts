@@ -27,6 +27,8 @@ export const LlmSchema = z.object({
   effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
   openrouterModel: z.string().min(1).default('openrouter/free'),
   openaiModel: z.string().min(1).default('gpt-5-mini'),
+  /** AI 를 쓸 수 있으면 위키 문장(레포 위키·내 지식 설명·세션 위키 설명)을 AI 로 만든다. 끄면 규칙 기반 문장만 쓴다 */
+  autoText: z.boolean().default(true),
 });
 
 export const AuthSchema = z.object({
@@ -64,6 +66,7 @@ export const ConfigSchema = z.object({
     effort: 'medium',
     openrouterModel: 'openrouter/free',
     openaiModel: 'gpt-5-mini',
+    autoText: true,
   }),
   server: ServerSchema.default({ host: '127.0.0.1', port: 8787 }),
   auth: AuthSchema.default({ mode: 'none', admins: [], sessionTtlHours: 24 * 7, enrichFor: 'admins' }),

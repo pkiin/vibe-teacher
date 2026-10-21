@@ -1,3 +1,4 @@
+import type { ReaderLevel, ReaderPrefs } from './reader';
 import type {
   Account,
   BuiltSummary,
@@ -47,6 +48,16 @@ export interface LlmSettings {
   openrouterModel: string;
   /** OpenAI 모델 ID */
   openaiModel: string;
+  /** AI 를 쓸 수 있으면 위키 문장을 AI 로 만든다 (기본 켬) */
+  autoText: boolean;
+}
+
+/** 문장을 누가 썼는지. rule 이면 reason 에 AI 를 쓰지 못한 사유 */
+export interface TextGenerator {
+  kind: 'llm' | 'rule';
+  provider?: LlmProviderId;
+  model?: string;
+  reason?: string;
 }
 
 /** 모델 선택 목록의 한 줄 (OpenRouter·OpenAI 의 모델 목록 API 에서 가져옴) */
@@ -109,6 +120,10 @@ export interface AuthMeResponse {
   /** 앱을 실행 중인 OS 계정 (토큰 파일 ACL 안내에 사용) */
   serviceUser: string;
   llmStatus: LlmStatus | null;
+  /** 설정 llm.autoText — 켜져 있으면 사람이 읽는 문장을 AI 가 자동으로 쓴다 */
+  autoText: boolean;
+  /** 로그인한 사용자의 읽는 사람 수준 (AI 문장의 단어·설명 깊이) */
+  reader: ReaderPrefs | null;
 }
 
 export interface LoginRequest {
@@ -219,6 +234,8 @@ export interface EnrichmentRecord {
   provider: LlmProviderId;
   model?: string;
   promptVersion: number;
+  /** 어느 읽는 사람 수준으로 썼는지 */
+  readerLevel?: ReaderLevel;
   createdAt: string;
   durationMs: number;
   costUsd?: number;
