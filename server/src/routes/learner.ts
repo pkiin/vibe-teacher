@@ -31,7 +31,7 @@ export function learnerRoutes(deps: AppDeps): Hono<AppEnv> {
   app.get('/:id/understanding', async (c) => {
     const p = await project(c);
     const learnerId = me(c);
-    const [profile, events] = await Promise.all([deps.learner.profile(learnerId, p.id), deps.learner.events(learnerId, p.id)]);
+    const [profile, events] = await Promise.all([deps.learner.profile(learnerId), deps.learner.events(learnerId)]);
     const catalog = deps.wiki.catalog();
     const conceptNames: Record<string, string> = {};
     for (const id of Object.keys(profile.concepts)) conceptNames[id] = catalog.concepts.get(id)?.name ?? id;
@@ -53,16 +53,19 @@ export function learnerRoutes(deps: AppDeps): Hono<AppEnv> {
       projectId: p.id,
       ...(req.sessionKey ? { sessionKey: req.sessionKey } : {}),
     } as EventDraft;
-    const { profile, event } = await deps.learner.record(me(c), p.id, req.baseRevision, draft);
+    const { profile, event } = await deps.learner.record(me(c), req.baseRevision, draft);
     return c.json({ profile, event: event as LearnerEvent });
   });
 
   app.post('/:id/assessments', requireJson, async (c) => {
     const p = await project(c);
     const req = await parseBody(c, AssessmentRequestSchema);
-    const s = await sessionSummaryFor(c, deps, req.sessionKey);
-    if (s.projectId !== p.id) throw notFound('세션');
-    const snapshot = await deps.wiki.current(p.id, s.key);
+    let snapshot = null;
+    if (req.sessionKey) {
+      const s = await sessionSummaryFor(c, deps, req.sessionKey);
+      if (s.projectId !== p.id) throw notFound('세션');
+      snapshot = await deps.wiki.current(p.id, s.key);
+    }
     return c.json(await deps.assessments.start(me(c), p.id, req, snapshot));
   });
 

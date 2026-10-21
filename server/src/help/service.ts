@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { BuiltSummary, ConceptHit, HelpJobStatus, HelpMessage, HelpRequest, NormalizedSession, WikiSnapshot } from '@vibe-teacher/shared';
+import { DEFAULT_READER_LEVEL, type BuiltSummary, type ConceptHit, type HelpJobStatus, type HelpMessage, type HelpRequest, type NormalizedSession, type ReaderLevel, type WikiSnapshot } from '@vibe-teacher/shared';
 import { JobQueue } from '../llm/jobs';
+import { withReader } from '../llm/reader';
 import type { ResolvedLlm } from '../llm/select';
 import { LlmError } from '../llm/types';
 import type { ConfigStore } from '../config/store';
@@ -66,10 +67,10 @@ export class HelpService {
     return provider ? { available: true, provider: provider.id } : { available: false, reason: status.reason };
   }
 
-  private async snapshot(projectId: string, sessionKey: string): Promise<WikiSnapshot | null> {
+  private async snapshot(projectId: string, sessionKey: string, level: ReaderLevel): Promise<WikiSnapshot | null> {
     const base = await this.opts.wiki.current(projectId, sessionKey);
     if (!base) return null;
-    const layer = await this.opts.wikiAi.layer(projectId, base.revision);
+    const layer = await this.opts.wikiAi.layer(projectId, base.revision, level);
     return mergeWikiAi(base, layer, new Set(this.opts.wiki.catalog().concepts.keys())).snapshot;
   }
 
@@ -82,13 +83,16 @@ export class HelpService {
     req: HelpRequest;
     /** AI 사용 권한 (관리자만 등) */
     allowed: { ok: boolean; reason?: string };
+    /** 읽는 사람 수준 (답의 단어·설명 깊이) */
+    level?: ReaderLevel;
   }): Promise<HelpMessage> {
     const { learnerId, projectId, session, req } = input;
+    const level = input.level ?? DEFAULT_READER_LEVEL;
     return this.opts.storage.lock(`help:${learnerId}:${projectId}`, async () => {
       const existing = (await this.all(learnerId, projectId)).find((m) => m.requestId === req.requestId);
       if (existing) return existing;
 
-      const snapshot = await this.snapshot(projectId, session.key);
+      const snapshot = await this.snapshot(projectId, session.key, level);
       const catalog = this.opts.wiki.catalog();
       const ctx = buildHelpContext({ focus: req.focus, snapshot, built: input.built, hits: input.hits, catalog });
       const base: HelpMessage = {
@@ -123,7 +127,7 @@ export class HelpService {
       await this.append(learnerId, projectId, base);
       const job = this.jobs.enqueue(`${session.key}:${base.id}`, async (signal) => {
         try {
-          const res = await provider.complete({ system: HELP_SYSTEM_PROMPT, user, schema: HelpOutputSchema, schemaName: 'help_answer', maxTokens: 8000, timeoutMs: cfg.timeoutMs, signal });
+          const res = await provider.complete({ system: withReader(HELP_SYSTEM_PROMPT, level), user, schema: HelpOutputSchema, schemaName: 'help_answer', maxTokens: 8000, timeoutMs: cfg.timeoutMs, signal });
           const { answer, notices } = acceptHelpOutput(res.data, claimIds, conceptIds);
           const done: HelpMessage = {
             ...base,

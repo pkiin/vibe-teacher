@@ -38,7 +38,7 @@ export function helpRoutes(deps: AppDeps): Hono<AppEnv> {
     const session = await deps.index.loadSession(s.key);
     if (!session) throw notFound('세션');
     const { built, concepts } = await deps.analysis.analyze(session);
-    const message = await deps.help.ask({ learnerId: me(c), projectId: p.id, session, built, hits: concepts, req, allowed: deps.auth.canEnrich(currentUser(c)) });
+    const message = await deps.help.ask({ learnerId: me(c), projectId: p.id, session, built, hits: concepts, req, allowed: deps.auth.canEnrich(currentUser(c)), level: await deps.prefs.level(me(c)) });
     return c.json({ message }, message.status === 'pending' ? 202 : 200);
   });
 

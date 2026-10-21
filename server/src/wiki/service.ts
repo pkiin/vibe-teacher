@@ -3,6 +3,7 @@ import type { BuiltSummary, ConceptHit, LearnerProfile, NormalizedSession, Sessi
 import { loadQuestionBank } from '../assessment/bank';
 import { AssessmentService } from '../assessment/service';
 import { LearnerService } from '../learner/service';
+import { PrefsService } from '../learner/prefs';
 import type { ConfigStore } from '../config/store';
 import type { ResolvedLlm } from '../llm/select';
 import { mergeWikiAi } from './ai';
@@ -107,10 +108,10 @@ export function createWikiServices(
   home: string,
   store: ConfigStore,
   resolveProvider: () => Promise<ResolvedLlm>,
-): { wiki: WikiService; learner: LearnerService; assessments: AssessmentService; wikiAi: WikiAiService; help: HelpService } {
+): { wiki: WikiService; learner: LearnerService; assessments: AssessmentService; wikiAi: WikiAiService; help: HelpService; prefs: PrefsService } {
   const storage = new WikiStorage(home);
   const learner = new LearnerService(storage);
   const wiki = new WikiService(storage, store);
   const wikiAi = new WikiAiService({ storage, store, wiki, resolveProvider });
-  return { wiki, learner, assessments: new AssessmentService(learner, () => wiki.bank()), wikiAi, help: new HelpService({ storage, store, wiki, wikiAi, resolveProvider }) };
+  return { wiki, learner, assessments: new AssessmentService(learner, () => wiki.bank()), wikiAi, help: new HelpService({ storage, store, wiki, wikiAi, resolveProvider }), prefs: new PrefsService(storage) };
 }

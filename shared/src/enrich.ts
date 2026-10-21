@@ -28,7 +28,7 @@ export const EnrichmentSchema = z.object({
           .nullable()
           .describe('제공된 규칙 기반 개념 후보의 id를 다듬는 경우 그 id, 새 개념이면 null'),
         name: z.string().describe('개념 이름 (한국어, 영어 용어는 괄호로)'),
-        explanation: z.string().describe('초보자를 위한 설명 2~4문장 (한국어 존댓말)'),
+        explanation: z.string().describe('읽는 사람 수준에 맞춘 설명 2~4문장 (한국어 존댓말)'),
         whyHere: z.string().describe('이 세션에서 왜 이 개념이 중요했는지, 근거를 들어 1~3문장'),
         example: z.string().nullable().describe('이 세션의 실제 파일/명령을 활용한 짧은 예시, 없으면 null'),
         level: z.enum(['beginner', 'intermediate']),
@@ -39,4 +39,5 @@ export const EnrichmentSchema = z.object({
 
 export type Enrichment = z.infer<typeof EnrichmentSchema>;
 
-export const ENRICH_PROMPT_VERSION = 1;
+/** 2: 읽는 사람 수준(ReaderLevel)별로 문체를 맞추고 수준별로 캐시 */
+export const ENRICH_PROMPT_VERSION = 2;

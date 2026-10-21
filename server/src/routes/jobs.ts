@@ -3,8 +3,9 @@ import { assertAccount, notFound, type AppDeps, type AppEnv } from './deps';
 
 export function jobsRoutes(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
-  const guard = (c: Context<AppEnv>, sessionKey: string) => {
-    const summary = deps.index.getSummary(sessionKey);
+  // 작업 키는 "<세션 키>|<읽는 사람 수준>" (세션 키에는 | 가 없다)
+  const guard = (c: Context<AppEnv>, jobKey: string) => {
+    const summary = deps.index.getSummary(jobKey.split('|')[0] ?? '');
     if (!summary) throw notFound('작업');
     assertAccount(c, deps, summary.accountId, '작업');
   };

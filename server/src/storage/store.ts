@@ -50,6 +50,10 @@ export class WikiStorage {
     return path.join(this.root, 'projects', safeSegment(projectId, '프로젝트 ID'));
   }
 
+  learnerDir(learnerId: string): string {
+    return path.join(this.root, 'learners', safeSegment(learnerId, '학습자 ID'));
+  }
+
   learnerProjectDir(learnerId: string, projectId: string): string {
     return path.join(this.root, 'learners', safeSegment(learnerId, '학습자 ID'), 'projects', safeSegment(projectId, '프로젝트 ID'));
   }

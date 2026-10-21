@@ -9,6 +9,7 @@ import { AnalysisService } from '../../src/analyzers/index';
 import { summarizeBuilt } from '../../src/analyzers/built/index';
 import { detectConcepts } from '../../src/analyzers/concepts/index';
 import { createApp } from '../../src/app';
+import { withReader } from '../../src/llm/reader';
 import { AuthService } from '../../src/auth/service';
 import { ConfigStore, resolvePaths } from '../../src/config/store';
 import { HELP_SYSTEM_PROMPT, acceptHelpOutput, buildFallbackAnswer, buildHelpContext, type HelpOutput } from '../../src/help/answer';
@@ -153,7 +154,9 @@ describe('help API', () => {
     }
     expect(job?.state).toBe('done');
     expect(job?.result).toMatchObject({ status: 'done', mode: 'llm', answer: { answer: '권한 검사는 서버에서 해야 합니다.' } });
-    expect(calls[0]?.system).toBe(HELP_SYSTEM_PROMPT);
+    // 읽는 사람 수준을 고르지 않았으면 기본(비개발자) 지침이 붙는다
+    expect(calls[0]?.system).toBe(withReader(HELP_SYSTEM_PROMPT, 'non-dev'));
+    expect(calls[0]?.system).toContain('읽는 사람: 개발을 전혀 모르는 사람');
     expect(calls[0]?.user).toContain('=== 질문 대상 ===\n개념: 권한 검사 (인가)');
 
     const again = (await (await app.request(`/api/projects/${project.id}/help`, { method: 'POST', headers: json, body: JSON.stringify(body) })).json()) as { message: HelpMessage };

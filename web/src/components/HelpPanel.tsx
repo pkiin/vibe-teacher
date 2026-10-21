@@ -446,7 +446,7 @@ function QuizView({ data }: { data: UnderstandData }) {
   const f = useFocus()!;
   const concept = conceptOf(f.focus, data);
   if (concept) {
-    return <QuizCard key={concept} projectId={data.projectId} sessionKey={data.sessionKey} target={{ conceptId: concept }} learner={data.learner} explanationSeen={f.focus.kind !== 'session'} helpUsed={f.helped.has(concept)} />;
+    return <QuizCard key={concept} sessionKey={data.sessionKey} target={{ conceptId: concept }} learner={data.learner} explanationSeen={f.focus.kind !== 'session'} helpUsed={f.helped.has(concept)} />;
   }
   const suggested = data.wiki?.plan.optionalQuestionIds ?? [];
   return (
@@ -456,7 +456,7 @@ function QuizView({ data }: { data: UnderstandData }) {
         <>
           <h4>{ko.help.quizSuggested}</h4>
           {suggested.map((qid) => (
-            <QuizCard key={qid} projectId={data.projectId} sessionKey={data.sessionKey} target={{ questionId: qid }} learner={data.learner} explanationSeen={false} />
+            <QuizCard key={qid} sessionKey={data.sessionKey} target={{ questionId: qid }} learner={data.learner} explanationSeen={false} />
           ))}
         </>
       )}

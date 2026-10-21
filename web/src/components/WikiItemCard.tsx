@@ -65,6 +65,7 @@ export function WikiItemCard({
   projectId,
   sessionKey,
   onJump,
+  aiWriting = false,
 }: {
   item: KnowledgeItem;
   bundle: RenderBundle | null;
@@ -74,6 +75,7 @@ export function WikiItemCard({
   projectId: string;
   sessionKey: string;
   onJump?: (i: number) => void;
+  aiWriting?: boolean;
 }) {
   const planned = bundle?.depth ?? 'D1';
   const [depth, setDepth] = useState<ExplanationDepth>(planned);
@@ -127,9 +129,11 @@ export function WikiItemCard({
           </a>
         ))}
       </div>
-      {item.why && (
+      {/* AI 설명이 있으면 그것을, 쓰는 중이면 그 표시를, AI 를 쓸 수 없을 때만 규칙 문장을 보여 준다 */}
+      {!narrative && aiWriting && <div className="concept-why muted knowledge-reason-pending">{ko.wikiAi.writing}</div>}
+      {!narrative && !aiWriting && item.why && (
         <div className="concept-why">
-          <strong>{ko.wiki.why}:</strong> <InlineText text={item.why} />
+          <strong>{ko.wiki.why}:</strong> <InlineText text={item.why} /> {item.origin !== 'llm' && <span className="pill pill-outline small">{ko.wikiAi.ruleWhy}</span>}
         </div>
       )}
 
@@ -308,7 +312,7 @@ export function WikiItemCard({
           </button>
         </div>
       )}
-      {quiz && primaryId && <QuizCard projectId={projectId} sessionKey={sessionKey} target={{ conceptId: primaryId }} learner={learner} explanationSeen onClose={() => setQuiz(false)} />}
+      {quiz && primaryId && <QuizCard sessionKey={sessionKey} target={{ conceptId: primaryId }} learner={learner} explanationSeen onClose={() => setQuiz(false)} />}
     </article>
   );
 }

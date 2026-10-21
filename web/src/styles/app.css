@@ -298,3 +298,54 @@ textarea { font-family: var(--mono); font-size: 12.5px; }
   .help-panel:not(.open) .help-body { display: none; }
   .help-toggle { cursor: pointer; }
 }
+
+/* ---- 만들어진 것: 폴더 트리 ---- */
+.tree { list-style: none; margin: 0; padding-left: 18px; }
+.tree-root { padding-left: 0; }
+.tree-dir > details > summary { cursor: pointer; padding: 3px 0; }
+.tree-dir-name { font-weight: 600; }
+.tree-file { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 0; border-bottom: 1px dashed var(--border); }
+.tree-file .pill { margin-left: 0; }
+.tree-counts { margin-left: 6px; }
+.tree-outside { margin-top: 8px; }
+
+/* ---- 사용자 지식 위키 ---- */
+.knowledge-group { margin: 10px 0; }
+.knowledge-group > summary { cursor: pointer; padding: 4px 0; }
+.knowledge-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 8px 0; }
+.knowledge-card h3 { margin: 0 4px 0 0; font-size: 15px; }
+.knowledge-state { font-weight: 500; }
+.knowledge-reason { margin: 6px 0; }
+.knowledge-sources { margin-bottom: 4px; }
+.knowledge-explain { margin-top: 8px; padding: 8px 10px; background: #fafbff; border: 1px solid #e0e7ff; border-radius: 8px; }
+
+/* ---- 레포 위키 ---- */
+.repo-wiki .card { margin: 10px 0; }
+.repo-section h3 { margin-top: 0; }
+.repo-list { padding-left: 18px; margin: 6px 0; }
+.repo-list li { padding: 3px 0; }
+.repo-list .markdown p { margin: 0; }
+.repo-sources { display: inline-flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.repo-source.pill { margin-left: 0; }
+.repo-code { background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 8px; overflow: auto; font-size: 12.5px; }
+.repo-table-wrap { overflow-x: auto; }
+.repo-table { margin-top: 6px; font-size: 12.5px; }
+.repo-note { margin-top: 6px; }
+.repo-toc { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
+.repo-history ul ul { margin: 2px 0 6px; }
+.repo-origin { margin-left: 8px; font-weight: normal; vertical-align: middle; }
+.knowledge-reason-pending { font-style: italic; }
+.knowledge-rule-tag { margin-left: 8px; vertical-align: middle; }
+.checkbox { display: flex; align-items: flex-start; gap: 8px; }
+
+/* 읽는 사람 수준 */
+.reader-options { display: grid; gap: 8px; margin: 10px 0; }
+.reader-option { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; cursor: pointer; }
+.reader-option.selected { border-color: var(--accent, #2563eb); background: var(--accent-soft, rgba(37, 99, 235, 0.06)); }
+.reader-option input { margin-top: 4px; }
+.reader-example { margin-top: 4px; }
+.reader-default { margin-left: 6px; }
+.reader-setup { margin-bottom: 16px; }
+.reader-switch { position: relative; }
+.reader-popover { position: absolute; right: 0; top: calc(100% + 6px); width: min(460px, 90vw); z-index: 20; text-align: left; }
+.reader-line { margin: 6px 0; }

@@ -9,6 +9,7 @@ import { AnalysisService } from '../../src/analyzers/index';
 import { summarizeBuilt } from '../../src/analyzers/built/index';
 import { detectConcepts } from '../../src/analyzers/concepts/index';
 import { createApp } from '../../src/app';
+import { withReader } from '../../src/llm/reader';
 import { AuthService } from '../../src/auth/service';
 import { defaultConfig } from '../../src/config/schema';
 import { ConfigStore, resolvePaths } from '../../src/config/store';
@@ -210,7 +211,7 @@ describe('wiki AI API flow (fake provider)', () => {
     }
     expect(job?.state).toBe('done');
     expect(job?.result).toMatchObject({ accepted: 3, rejected: 1 });
-    expect(calls[0]?.system).toBe(WIKI_AI_SYSTEM_PROMPT);
+    expect(calls[0]?.system).toBe(withReader(WIKI_AI_SYSTEM_PROMPT, 'non-dev'));
 
     const after = (await (await app.request(`/api/sessions/${k}/wiki`)).json()) as WikiResponse;
     expect(after.ai?.narratives).toHaveLength(1);

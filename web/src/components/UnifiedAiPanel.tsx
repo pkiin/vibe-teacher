@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { EnrichStartResponse, EnrichmentRecord, WikiAiJobResult, WikiAiPreview, WikiAiStartResponse, WikiResponse } from '@vibe-teacher/shared';
 import { api, apiDelete, apiPost } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useJob } from '../hooks/useJob';
+import { useReader } from '../hooks/useReader';
 import { ko } from '../i18n/ko';
 import { LlmQuickSwitch } from './LlmProviderPicker';
 import { Notice } from './Notice';
+import { ReaderLevelLine } from './ReaderLevelPicker';
 
 interface Preview {
   session?: { chars: number; user: string };
@@ -23,15 +25,19 @@ export function UnifiedAiPanel({
   enrichment,
   onEnrichment,
   onWikiUpdated,
+  onWikiWriting,
 }: {
   sessionKey: string;
   wiki: WikiResponse | null;
   enrichment: EnrichmentRecord | null;
   onEnrichment: (r: EnrichmentRecord) => void;
   onWikiUpdated: () => void;
+  /** 위키 항목 설명을 쓰는 중인지 (항목 카드가 규칙 문장 대신 "쓰는 중"을 보여 준다) */
+  onWikiWriting?: (writing: boolean) => void;
 }) {
   const enc = encodeURIComponent(sessionKey);
   const { me } = useAuth();
+  const reader = useReader();
   const [enrichJobId, setEnrichJobId] = useState<string | null>(null);
   const [wikiJobId, setWikiJobId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -80,6 +86,22 @@ export function UnifiedAiPanel({
     setErrors(errs);
     setStarting(false);
   };
+  // 위키가 있고 AI 결과가 없으면 자동으로 쓴다. 같은 판(revision)에는 한 번만 시도하고, 결과가 저장돼 있으면 서버가 바로 돌려준다
+  const autoTried = useRef<string | null>(null);
+  // 읽는 사람 수준을 고르기 전에는 시작하지 않는다 (상단에서 먼저 묻는다). 수준이 바뀌면 그 수준으로 다시 시도
+  const autoKey = wikiReady && wiki ? `${sessionKey}|${wiki.snapshot.revision}|${reader.level}` : null;
+  const needsAi = wikiReady && (!enrichment || !wiki?.ai);
+  useEffect(() => {
+    if (!available || !me?.autoText || !reader.chosen || busy || !autoKey || !needsAi || autoTried.current === autoKey) return;
+    autoTried.current = autoKey;
+    void start(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [available, me?.autoText, reader.chosen, busy, autoKey, needsAi]);
+  const wikiWriting = !!wikiJobId || (starting && wikiReady);
+  useEffect(() => {
+    onWikiWriting?.(wikiWriting);
+  }, [wikiWriting, onWikiWriting]);
+
   const cancel = () => {
     if (enrichJobId) void apiDelete(`/api/jobs/${enrichJobId}`).catch(() => {});
     if (wikiJobId) void apiDelete(`/api/sessions/${enc}/wiki/ai/jobs/${wikiJobId}`).catch(() => {});
@@ -113,12 +135,10 @@ export function UnifiedAiPanel({
         )}
       </div>
       <p className="small">{ko.aiUnified.intro}</p>
+      {reader.available && <ReaderLevelLine />}
       {me?.isAdmin && !busy && <LlmQuickSwitch />}
-      {!available && (
-        <Notice kind="warn">
-          {ko.enrich.unavailable}: {reason ?? '…'}
-        </Notice>
-      )}
+      {!available && <Notice kind="warn">{ko.aiUnified.ruleFallback(reason ?? '…')}</Notice>}
+      {available && me && !me.autoText && !hasResult && <div className="small muted">{ko.aiUnified.autoOff}</div>}
       {available && !wiki && <div className="small muted">{ko.aiUnified.wikiSkipped}</div>}
       {available && wiki?.stale && <div className="small muted">{ko.aiUnified.wikiStale}</div>}
       {available && !busy && <div className="small muted">{ko.aiUnified.notice}</div>}

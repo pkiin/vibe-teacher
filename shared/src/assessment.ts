@@ -60,7 +60,8 @@ export interface AssessmentResult {
 
 export const AssessmentRequestSchema = z
   .object({
-    sessionKey: z.string().max(2048),
+    /** 세션 화면에서 풀면 그 세션 (전체 지식 위키에서는 없음) */
+    sessionKey: z.string().max(2048).optional(),
     conceptId: z.string().regex(/^[a-z0-9-]+$/).max(64).optional(),
     itemId: z.string().max(80).optional(),
     /** 계획기가 제안한 특정 문항 */

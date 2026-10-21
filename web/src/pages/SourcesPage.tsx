@@ -32,6 +32,7 @@ export function SourcesPage() {
   const [llmBudget, setLlmBudget] = useState('0.5');
   const [llmCliPath, setLlmCliPath] = useState('');
   const [llmEffort, setLlmEffort] = useState<LlmEffort>('medium');
+  const [autoText, setAutoText] = useState(true);
 
   const [authMode, setAuthMode] = useState<'none' | 'home-token'>('none');
   const [admins, setAdmins] = useState('');
@@ -52,6 +53,7 @@ export function SourcesPage() {
     setLlmBudget(String(settings.data.llm.maxBudgetUsd));
     setLlmCliPath(settings.data.llm.claudeCliPath ?? '');
     setLlmEffort(settings.data.llm.effort ?? 'medium');
+    setAutoText(settings.data.llm.autoText ?? true);
     setOpenrouterModel(settings.data.llm.openrouterModel);
     setOpenaiModel(settings.data.llm.openaiModel);
     setAuthMode(settings.data.auth.mode);
@@ -100,6 +102,7 @@ export function SourcesPage() {
           maxBudgetUsd: Number(llmBudget) || 0.5,
           claudeCliPath: llmCliPath.trim() || null,
           effort: llmEffort,
+          autoText,
           openrouterModel,
           openaiModel,
         },
@@ -272,6 +275,13 @@ export function SourcesPage() {
           <label className="field">
             {ko.sources.llmBudget}
             <input value={llmBudget} onChange={(e) => setLlmBudget(e.target.value)} />
+          </label>
+          <label className="checkbox">
+            <input type="checkbox" checked={autoText} onChange={(e) => setAutoText(e.target.checked)} />
+            <span>
+              {ko.sources.autoText}
+              <div className="small muted">{ko.sources.autoTextHelp}</div>
+            </span>
           </label>
           <label className="field">
             {ko.sources.llmCliPath}

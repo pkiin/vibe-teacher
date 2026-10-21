@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import type { ReactNode } from 'react';
-import type { BuiltSummary as Built, CommandFact, Evidence, FileFact } from '@vibe-teacher/shared';
-import { FocusChip } from './FocusChip';
+import type { BuiltSummary as Built, CommandFact, Evidence } from '@vibe-teacher/shared';
+import { FileTree } from './FileTree';
 import { ko } from '../i18n/ko';
 
 function EvidenceList({ evidence, onJump }: { evidence: Evidence[]; onJump?: (i: number) => void }) {
@@ -24,29 +23,6 @@ function EvidenceList({ evidence, onJump }: { evidence: Evidence[]; onJump?: (i:
         ))}
       </ul>
     </details>
-  );
-}
-
-function FileTable({ title, files, onJump, fileExtra }: { title: string; files: FileFact[]; onJump?: (i: number) => void; fileExtra?: (f: FileFact) => ReactNode }) {
-  if (!files.length) return null;
-  return (
-    <section className="section">
-      <h3>
-        {title} <span className="badge">{files.length}</span>
-      </h3>
-      <ul className="file-list">
-        {files.map((f) => (
-          <li key={f.path}>
-            <FocusChip focus={{ kind: 'file', id: f.path }} label={f.relPath ?? f.path} className="mono file-name" />
-            {f.language && <span className="pill pill-outline">{f.language}</span>}
-            {f.via === 'shell' && <span className="pill pill-gray">{ko.built.viaShell}</span>}
-            {f.count > 1 && <span className="muted small">×{f.count}</span>}
-            {fileExtra?.(f)}
-            <EvidenceList evidence={f.evidence} onJump={onJump} />
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
 
@@ -93,8 +69,9 @@ function CommandGroups({ commands, onJump }: { commands: CommandFact[]; onJump?:
   );
 }
 
-/** fileExtra: 파일 줄마다 덧붙일 내용 (통합 화면에서 관련 위키 항목·개념) */
-export function BuiltSummaryView({ built, onJump, fileExtra }: { built: Built; onJump?: (i: number) => void; fileExtra?: (f: FileFact) => ReactNode }) {
+/** 만들어진 것: 지시 → 결과 타임라인, 바뀐 파일의 폴더 구조, 명령·패키지·커밋 */
+export function BuiltSummaryView({ built, onJump }: { built: Built; onJump?: (i: number) => void }) {
+  const rel = new Map([...built.filesCreated, ...built.filesModified, ...built.filesDeleted].map((f) => [f.path, f.relPath ?? f.path]));
   const empty = !built.filesCreated.length && !built.filesModified.length && !built.filesDeleted.length && !built.commandsRun.length && !built.packagesInstalled.length;
   return (
     <div className="built">
@@ -128,22 +105,45 @@ export function BuiltSummaryView({ built, onJump, fileExtra }: { built: Built; o
       </div>
       {empty && <div className="muted">{ko.built.nothing}</div>}
 
-      {built.stack.length > 0 && (
+      {built.timeline.length > 0 && (
         <section className="section">
-          <h3>{ko.built.stack}</h3>
-          <div className="chips">
-            {built.stack.map((s) => (
-              <span key={s.id} className="chip" title={s.evidence.map((e) => e.snippet).join('\n')}>
-                <span className="muted small">{ko.built.kind[s.kind]}</span> {s.name}
-              </span>
+          <h3>{ko.built.timeline}</h3>
+          <ol className="timeline">
+            {built.timeline.map((g) => (
+              <li key={g.promptIndex}>
+                <div className="tl-prompt">
+                  {onJump ? (
+                    <button className="link" onClick={() => onJump(g.promptIndex)}>
+                      “{g.promptText.length > 140 ? g.promptText.slice(0, 140) + '…' : g.promptText}”
+                    </button>
+                  ) : (
+                    <span>“{g.promptText}”</span>
+                  )}
+                  {g.interrupted && <span className="pill pill-red">{ko.session.interrupted}</span>}
+                </div>
+                <div className="tl-meta muted small">
+                  {ko.common.toolCalls} {g.toolCallIds.length} · 파일 {g.filesTouched.length}
+                </div>
+                {g.filesTouched.length > 0 && (
+                  <div className="chips">
+                    {g.filesTouched.slice(0, 8).map((p) => (
+                      <span key={p} className="chip mono">
+                        {rel.get(p) ?? p}
+                      </span>
+                    ))}
+                    {g.filesTouched.length > 8 && <span className="muted small">외 {g.filesTouched.length - 8}개</span>}
+                  </div>
+                )}
+                {g.finalAssistantText && <div className="tl-answer">{g.finalAssistantText}</div>}
+              </li>
             ))}
-          </div>
+          </ol>
         </section>
       )}
 
-      <FileTable title={ko.built.filesCreated} files={built.filesCreated} onJump={onJump} fileExtra={fileExtra} />
-      <FileTable title={ko.built.filesModified} files={built.filesModified} onJump={onJump} fileExtra={fileExtra} />
-      <FileTable title={ko.built.filesDeleted} files={built.filesDeleted} onJump={onJump} fileExtra={fileExtra} />
+      <FileTree created={built.filesCreated} modified={built.filesModified} deleted={built.filesDeleted} onJump={onJump} />
+
+
       {built.dirsCreated.length > 0 && (
         <section className="section">
           <h3>{ko.built.dirsCreated}</h3>
@@ -208,29 +208,16 @@ export function BuiltSummaryView({ built, onJump, fileExtra }: { built: Built; o
 
       {built.commandsRun.length > 0 && <CommandGroups commands={built.commandsRun} onJump={onJump} />}
 
-      {built.timeline.length > 0 && (
+      {built.stack.length > 0 && (
         <section className="section">
-          <h3>{ko.built.timeline}</h3>
-          <ol className="timeline">
-            {built.timeline.map((g) => (
-              <li key={g.promptIndex}>
-                <div className="tl-prompt">
-                  {onJump ? (
-                    <button className="link" onClick={() => onJump(g.promptIndex)}>
-                      “{g.promptText.length > 140 ? g.promptText.slice(0, 140) + '…' : g.promptText}”
-                    </button>
-                  ) : (
-                    <span>“{g.promptText}”</span>
-                  )}
-                  {g.interrupted && <span className="pill pill-red">{ko.session.interrupted}</span>}
-                </div>
-                <div className="tl-meta muted small">
-                  {ko.common.toolCalls} {g.toolCallIds.length} · 파일 {g.filesTouched.length}
-                </div>
-                {g.finalAssistantText && <div className="tl-answer">{g.finalAssistantText}</div>}
-              </li>
+          <h3>{ko.built.stack}</h3>
+          <div className="chips">
+            {built.stack.map((s) => (
+              <span key={s.id} className="chip" title={s.evidence.map((e) => e.snippet).join('\n')}>
+                <span className="muted small">{ko.built.kind[s.kind]}</span> {s.name}
+              </span>
             ))}
-          </ol>
+          </div>
         </section>
       )}
     </div>

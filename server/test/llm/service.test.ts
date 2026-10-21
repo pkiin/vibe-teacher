@@ -64,5 +64,12 @@ describe('EnrichService', () => {
     expect(merged[1]?.name).toBe('새 개념');
     const files = await fs.readdir(paths.enrichCacheDir);
     expect(files).toHaveLength(1);
+
+    // 읽는 사람 수준별로 따로 쓰고 저장한다. 다른 수준의 결과는 그 수준 화면에 쓰지 않는다 (사실만 쓰는 곳은 'any')
+    expect(cached?.readerLevel).toBe('non-dev');
+    expect(await svc.getCached(session, 'senior')).toBeNull();
+    expect((await svc.getCached(session, 'any'))?.data.summary.title).toBe('t');
+    expect(svc.preview(session, [], 'senior').system).toContain('읽는 사람: 숙련 개발자');
+    expect(svc.preview(session, []).system).toContain('읽는 사람: 개발을 전혀 모르는 사람');
   });
 });

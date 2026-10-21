@@ -50,7 +50,7 @@ function later(a: string | undefined, b: string): string {
   return a && a > b ? a : b;
 }
 
-export function reduceProfile(events: LearnerEvent[], learnerId: string, projectId: string): LearnerProfile {
+export function reduceProfile(events: LearnerEvent[], learnerId: string, projectId?: string): LearnerProfile {
   const seen = new Set<string>();
   const unique = events.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
   const acc = new Map<string, ConceptAcc>();
@@ -113,7 +113,7 @@ export function reduceProfile(events: LearnerEvent[], learnerId: string, project
   return {
     schemaVersion: LEARNER_SCHEMA_VERSION,
     learnerId,
-    projectId,
+    ...(projectId ? { projectId } : {}),
     revision,
     ...(updatedAt ? { updatedAt } : {}),
     policyVersion: POLICY_VERSION,

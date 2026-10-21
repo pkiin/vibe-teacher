@@ -1,9 +1,11 @@
 /**
- * 개인 평면 — 사용자 이해 증거와 개념별 상태 추정.
+ * 개인 평면 — 사용자 이해 증거와 개념별 상태 추정. 사용자 한 명에 하나(프로젝트를 가리지 않음)이며,
+ * 이벤트마다 어느 프로젝트·세션에서 생겼는지를 남긴다.
  * 프로젝트 사실·위험(wiki.ts)을 바꾸지 않고 설명 계획에만 반영한다.
  * 자기보고·노출·정답은 서로 다른 증거로 기록하며, 노출이나 건너뛰기를 이해/오답으로 바꾸지 않는다.
  */
 import { z } from 'zod';
+import type { TextGenerator } from './api';
 
 export const LEARNER_SCHEMA_VERSION = 1;
 
@@ -21,7 +23,8 @@ export type Grade = 'correct' | 'incorrect' | 'unscorable';
 interface LearnerEventBase {
   id: string;
   at: string;
-  projectId: string;
+  /** 이벤트가 생긴 프로젝트 (전체 지식 위키에서 했으면 없음) */
+  projectId?: string;
   sessionKey?: string;
   /** 이 이벤트를 쓰기 직전 profile revision */
   profileRevision: number;
@@ -102,7 +105,8 @@ export interface LearnerProfile {
   schemaVersion: number;
   /** 인증된 사용자에서 만든 불투명 ID (사용자명 그대로가 아님) */
   learnerId: string;
-  projectId: string;
+  /** 예전 프로젝트별 프로필과의 호환용. 지금은 사용자 전체 프로필이라 비어 있다 */
+  projectId?: string;
   revision: number;
   updatedAt?: string;
   policyVersion: string;
@@ -141,3 +145,58 @@ export const FeedbackRequestSchema = z.object({
 });
 
 export type FeedbackRequest = z.infer<typeof FeedbackRequestSchema>;
+
+// ---- 사용자 지식 위키 ----
+
+/** 이 개념이 어느 세션에서 왜 나왔는지 */
+export interface KnowledgeSource {
+  sessionKey: string;
+  sessionTitle: string;
+  projectId: string;
+  projectName: string;
+  at?: string;
+  /** finding: 먼저 확인할 것, item: 위키 항목, concept_hit: 개념 자동 감지 */
+  via: 'finding' | 'item' | 'concept_hit';
+  /** 연결된 위키 항목·위험 항목 제목 */
+  refTitle?: string;
+  /** 그 세션의 첫 요청 (짧게) */
+  request?: string;
+}
+
+/** 사용자 메시지에서 이 개념을 언급한 곳 — 이해 증거가 아니라 맥락으로만 쓴다 */
+export interface KnowledgeMention {
+  sessionKey: string;
+  sessionTitle: string;
+  messageIndex: number;
+  snippet: string;
+}
+
+export interface KnowledgeEntry {
+  conceptId: string;
+  name: string;
+  category: string;
+  summary: string;
+  state: LearnerConceptState;
+  /** 왜 이 상태인지 사람이 읽는 설명 (근거 세션과 응답·자기보고를 바탕으로 만든 문장) */
+  reason: string;
+  /** llm: AI 가 쓴 문장, rule: AI 문장이 검사를 통과하지 못해 규칙 문장, missing: 아직 AI 문장이 없어 규칙 문장 (쓰는 중일 수 있음) */
+  reasonOrigin?: 'llm' | 'rule' | 'missing';
+  sources: KnowledgeSource[];
+  mentions: KnowledgeMention[];
+  /** check: 먼저 확인할 것·위키 항목과 연결됨, background: 감지만 됨 */
+  priority: 'check' | 'background';
+  lastSeenAt?: string;
+}
+
+export interface KnowledgeWikiResponse {
+  profile: LearnerProfile;
+  entries: KnowledgeEntry[];
+  projects: { id: string; name: string }[];
+  /** 살펴본 세션 수 / 이 사용자의 전체 세션 수 (최근 세션부터 상한까지만 본다) */
+  scannedSessions: number;
+  totalSessions: number;
+  /** 설명 문장을 누가 썼는지. missing 이 있고 canGenerate 면 화면이 문장 쓰기 작업을 시작한다 */
+  text: { generator: TextGenerator; missing: number; canGenerate: boolean };
+}
+
+export type KnowledgeTextStartResponse = { status: 'done' } | { status: 'running' | 'queued'; jobId: string };

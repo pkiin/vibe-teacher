@@ -19,20 +19,22 @@ export function wikiRoutes(deps: AppDeps): Hono<AppEnv> {
   const personal = async (c: Context<AppEnv>, summary: SessionSummary): Promise<{ profile: LearnerProfile | null; answered: Set<string> }> => {
     try {
       const learnerId = learnerIdFor(currentUser(c).username);
-      const events = await deps.learner.events(learnerId, summary.projectId);
-      return { profile: await deps.learner.profile(learnerId, summary.projectId), answered: answeredQuestionIds(events) };
+      const events = await deps.learner.events(learnerId);
+      return { profile: await deps.learner.profile(learnerId), answered: answeredQuestionIds(events) };
     } catch (err) {
       console.warn(`[wiki] 개인 상태를 읽지 못해 개인화 없이 보여 줍니다: ${(err as Error).message}`);
       return { profile: null, answered: new Set() };
     }
   };
 
+  const level = (c: Context<AppEnv>) => deps.prefs.level(learnerIdFor(currentUser(c).username));
+
   app.get('/:key/wiki', async (c) => {
     const summary = await sessionSummaryFor(c, deps, c.req.param('key'));
     const snapshot = await deps.wiki.current(summary.projectId, summary.key);
     if (!snapshot) throw new HttpError(404, 'wiki_not_built', '아직 이 세션의 위키를 만들지 않았습니다');
     const { profile, answered } = await personal(c, summary);
-    const ai = await deps.wikiAi.layer(summary.projectId, snapshot.revision);
+    const ai = await deps.wikiAi.layer(summary.projectId, snapshot.revision, await level(c));
     return c.json(deps.wiki.view(snapshot, profile, answered, deps.wiki.isStale(snapshot, summary), ai));
   });
 
@@ -42,7 +44,7 @@ export function wikiRoutes(deps: AppDeps): Hono<AppEnv> {
     if (!session) throw notFound('세션');
     const snapshot = await deps.wiki.build(session, await deps.analysis.analyze(session));
     const { profile, answered } = await personal(c, summary);
-    const ai = await deps.wikiAi.layer(summary.projectId, snapshot.revision);
+    const ai = await deps.wikiAi.layer(summary.projectId, snapshot.revision, await level(c));
     return c.json(deps.wiki.view(snapshot, profile, answered, false, ai));
   });
 
@@ -59,7 +61,7 @@ export function wikiRoutes(deps: AppDeps): Hono<AppEnv> {
     const snapshot = await currentSnapshot(summary);
     const session = await deps.index.loadSession(summary.key);
     if (!session) throw notFound('세션');
-    return c.json(await deps.wikiAi.preview(session, await deps.analysis.analyze(session), snapshot));
+    return c.json(await deps.wikiAi.preview(session, await deps.analysis.analyze(session), snapshot, await level(c)));
   });
 
   app.post('/:key/wiki/ai', requireJson, async (c) => {
@@ -70,14 +72,14 @@ export function wikiRoutes(deps: AppDeps): Hono<AppEnv> {
     const snapshot = await currentSnapshot(summary);
     const session = await deps.index.loadSession(summary.key);
     if (!session) throw notFound('세션');
-    const res = await deps.wikiAi.start(session, await deps.analysis.analyze(session), snapshot, force);
+    const res = await deps.wikiAi.start(session, await deps.analysis.analyze(session), snapshot, force, await level(c));
     return c.json(res, res.status === 'done' ? 200 : 202);
   });
 
   const jobFor = async (c: Context<AppEnv>) => {
     const summary = await sessionSummaryFor(c, deps, c.req.param('key') ?? '');
     const job = deps.wikiAi.jobs.get(c.req.param('id') ?? '');
-    if (!job || job.sessionKey !== summary.key) throw notFound('작업');
+    if (!job || job.sessionKey.split('|')[0] !== summary.key) throw notFound('작업');
     return job;
   };
   app.get('/:key/wiki/ai/jobs/:id', async (c) => c.json(await jobFor(c)));

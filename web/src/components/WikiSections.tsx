@@ -84,14 +84,14 @@ export function WikiHeader({ wiki, building, error, onBuild }: { wiki: WikiRespo
 }
 
 /** 먼저 확인할 것 + 지금 알아 두면 좋은 것 + 분량 때문에 접어 둔 항목 */
-export function WikiBody({ wiki, profile, learner, projectId, sessionKey, onJump }: { wiki: WikiResponse; profile: LearnerProfile | null; learner: LearnerActions; projectId: string; sessionKey: string; onJump?: (i: number) => void }) {
+export function WikiBody({ wiki, profile, learner, projectId, sessionKey, onJump, aiWriting = false }: { wiki: WikiResponse; profile: LearnerProfile | null; learner: LearnerActions; projectId: string; sessionKey: string; onJump?: (i: number) => void; aiWriting?: boolean }) {
   const [showDeferred, setShowDeferred] = useState(false);
   const { snapshot, plan } = wiki;
   const items = new Map(snapshot.items.map((i) => [i.id, i]));
   const alerts = plan.commonAlertIds.map((id) => snapshot.findings.find((f) => f.id === id)).filter((f) => !!f);
   const card = (id: string, bundle: (typeof plan.bundles)[number] | null) => {
     const item = items.get(id);
-    return item ? <WikiItemCard key={item.id} item={item} bundle={bundle} wiki={wiki} profile={profile} learner={learner} projectId={projectId} sessionKey={sessionKey} onJump={onJump} /> : null;
+    return item ? <WikiItemCard key={item.id} item={item} bundle={bundle} wiki={wiki} profile={profile} learner={learner} projectId={projectId} sessionKey={sessionKey} onJump={onJump} aiWriting={aiWriting} /> : null;
   };
   return (
     <>

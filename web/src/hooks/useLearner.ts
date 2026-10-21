@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { ExposureAction, LearnerProfile, SelfReport, UnderstandingResponse } from '@vibe-teacher/shared';
+import type { ExposureAction, LearnerProfile, SelfReport } from '@vibe-teacher/shared';
 import { ApiError, api, apiPost } from '../api/client';
 
 /** 재시도해도 한 번만 기록되도록 붙이는 요청 ID (비보안 컨텍스트에서도 동작) */
@@ -19,12 +19,14 @@ export interface LearnerActions {
   profileChanged: (profile: LearnerProfile) => void;
 }
 
-export function useLearnerActions(projectId: string | undefined, sessionKey: string, revision: number, onProfile: (p: LearnerProfile) => void): LearnerActions {
+/**
+ * 내 이해 정보 쓰기 (사용자 전체 프로필, /api/me). sessionKey 를 주면 이벤트에 그 세션·프로젝트가 남는다.
+ */
+export function useLearnerActions(sessionKey: string | undefined, revision: number, onProfile: (p: LearnerProfile) => void): LearnerActions {
   const rev = useRef(revision);
   useEffect(() => {
     rev.current = revision;
   }, [revision]);
-  const base = `/api/projects/${projectId ?? ''}`;
 
   const profileChanged = useCallback(
     (p: LearnerProfile) => {
@@ -40,31 +42,30 @@ export function useLearnerActions(projectId: string | undefined, sessionKey: str
         return await fn(rev.current);
       } catch (err) {
         if (!(err instanceof ApiError) || err.status !== 409) throw err;
-        const latest = await api<UnderstandingResponse>(`${base}/understanding`);
+        const latest = await api<{ profile: LearnerProfile }>('/api/me/profile');
         profileChanged(latest.profile);
         return fn(latest.profile.revision);
       }
     },
-    [base, profileChanged],
+    [profileChanged],
   );
 
   const exposure = useCallback(
     (action: ExposureAction, ids: { conceptId?: string; itemId?: string }) => {
-      if (!projectId) return;
-      apiPost(`${base}/understanding/feedback`, { baseRevision: rev.current, sessionKey, requestId: requestId(), event: { kind: 'exposure', action, ...ids } }).catch(() => {
+      apiPost('/api/me/feedback', { baseRevision: rev.current, ...(sessionKey ? { sessionKey } : {}), requestId: requestId(), event: { kind: 'exposure', action, ...ids } }).catch(() => {
         // 노출 기록 실패는 읽기를 막지 않는다
       });
     },
-    [base, projectId, sessionKey],
+    [sessionKey],
   );
 
   const send = useCallback(
     async (event: object) => {
       const id = requestId();
-      const res = await withRevision((baseRevision) => apiPost<{ profile: LearnerProfile }>(`${base}/understanding/feedback`, { baseRevision, sessionKey, requestId: id, event }));
+      const res = await withRevision((baseRevision) => apiPost<{ profile: LearnerProfile }>('/api/me/feedback', { baseRevision, ...(sessionKey ? { sessionKey } : {}), requestId: id, event }));
       profileChanged(res.profile);
     },
-    [base, profileChanged, sessionKey, withRevision],
+    [profileChanged, sessionKey, withRevision],
   );
 
   return {

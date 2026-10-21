@@ -9,6 +9,8 @@ import { HttpError, type AppDeps, type AppEnv } from './routes/deps';
 import { jobsRoutes } from './routes/jobs';
 import { helpRoutes } from './routes/help';
 import { learnerRoutes } from './routes/learner';
+import { meRoutes } from './routes/me';
+import { repoRoutes } from './routes/repo';
 import { projectsRoutes } from './routes/projects';
 import { sessionsRoutes } from './routes/sessions';
 import { settingsRoutes } from './routes/settings';
@@ -49,6 +51,8 @@ export function createApp({ deps, distDir, quiet = false }: CreateAppOptions): H
   api.route('/projects', projectsRoutes(deps));
   api.route('/projects', learnerRoutes(deps));
   api.route('/projects', helpRoutes(deps));
+  api.route('/me', meRoutes(deps));
+  api.route('/projects', repoRoutes(deps));
   api.route('/sessions', sessionsRoutes(deps));
   api.route('/sessions', wikiRoutes(deps));
   api.route('/settings', settingsRoutes(deps));
