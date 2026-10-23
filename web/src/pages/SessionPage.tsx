@@ -99,8 +99,8 @@ export function SessionPage() {
           )}
           <Tabs
             tabs={[
-              { id: 'messages', label: ko.session.tabs.messages, badge: s.counts.human + s.counts.slashCommands },
               { id: 'understand', label: ko.understand.tab },
+              { id: 'messages', label: ko.session.tabs.messages, badge: s.counts.human + s.counts.slashCommands },
               { id: 'built', label: ko.session.tabs.built },
             ]}
             active={tab}

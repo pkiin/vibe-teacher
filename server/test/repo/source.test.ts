@@ -81,6 +81,53 @@ describe('code evidence and flow', () => {
     expect(graph.nodes).toHaveLength(2);
     expect(graph.edges.map((edge) => `${edge.from}:${edge.to}`)).toEqual(['a.ts:b.ts', 'b.ts:a.ts']);
   });
+  it('layers files unreachable from the start files instead of piling them into the last column', () => {
+    const files = new Set(['main.ts', 'lib.ts', 'tool.ts', 'helper.ts', 'alone.ts', 'x.ts', 'y.ts']);
+    const code = [
+      inspectCode('main.ts', "import './lib';", 'm', files),
+      inspectCode('lib.ts', '', 'l', files),
+      inspectCode('tool.ts', "import './helper';", 't', files),
+      inspectCode('helper.ts', '', 'h', files),
+      inspectCode('alone.ts', '', 'a', files),
+      inspectCode('x.ts', "import './y';", 'x', files),
+      inspectCode('y.ts', "import './x';", 'y', files),
+    ];
+    const columns = Object.fromEntries(codeFlow(code, ['main.ts']).nodes.map((node) => [node.id, node.column]));
+    expect(columns).toEqual({ 'main.ts': 0, 'lib.ts': 1, 'tool.ts': 1, 'helper.ts': 2, 'alone.ts': 1, 'x.ts': 1, 'y.ts': 2 });
+  });
+  it('treats __main__.py, __init__.py and index files as start files only in folders the start files never reach', () => {
+    const files = new Set(['main.ts', 'lib/index.ts', 'lib/main.ts', 'pkg/__main__.py', 'pkg/__init__.py', 'pkg/runner.py', 'pkg/rows.py', 'pkg/steps/__init__.py', 'pkg/steps/load.py']);
+    const code = [
+      inspectCode('main.ts', "import './lib/index';", 'm', files),
+      inspectCode('lib/index.ts', '', 'li', files),
+      inspectCode('lib/main.ts', '', 'lm', files),
+      inspectCode('pkg/__main__.py', 'from .runner import run', 'pm', files),
+      inspectCode('pkg/__init__.py', '', 'pi', files),
+      inspectCode('pkg/runner.py', '', 'pr', files),
+      inspectCode('pkg/rows.py', '', 'pw', files),
+      inspectCode('pkg/steps/__init__.py', '', 'si', files),
+      inspectCode('pkg/steps/load.py', '', 'sl', files),
+    ];
+    const columns = Object.fromEntries(codeFlow(code, ['main.ts']).nodes.map((node) => [node.id, node.column]));
+    expect(columns).toEqual({
+      'main.ts': 0, 'lib/index.ts': 1, 'lib/main.ts': 1,
+      'pkg/__main__.py': 0, 'pkg/__init__.py': 0, 'pkg/runner.py': 1, 'pkg/rows.py': 1,
+      'pkg/steps/__init__.py': 0, 'pkg/steps/load.py': 1,
+    });
+  });
+  it('connects Python submodules imported with from . import and from .package import', () => {
+    const files = new Set(['pkg/runner.py', 'pkg/context.py', 'pkg/rows.py', 'pkg/steps/__init__.py', 'pkg/steps/load.py', 'pkg/steps/export.py', 'pkg/steps/augment.py']);
+    const paths = (file: string, text: string) => inspectCode(file, text, 'h', files).imports;
+    expect(paths('pkg/runner.py', 'import uuid\nfrom . import steps as _steps  # noqa: F401 (registers all steps)\nfrom .context import OUTPUTS_DIR, Context\n')).toEqual([
+      { path: 'pkg/steps/__init__.py', line: 2 }, { path: 'pkg/context.py', line: 3 },
+    ]);
+    expect(paths('pkg/steps/__init__.py', 'from . import load, export as ex, missing  # noqa\n')).toEqual([{ path: 'pkg/steps/load.py', line: 1 }, { path: 'pkg/steps/export.py', line: 1 }]);
+    expect(paths('pkg/runner.py', 'from .steps import (\n    load,\n    augment as aug,  # 주석\n)\nfrom .steps import \\\n    export\n')).toEqual([
+      { path: 'pkg/steps/__init__.py', line: 1 }, { path: 'pkg/steps/load.py', line: 1 }, { path: 'pkg/steps/augment.py', line: 1 }, { path: 'pkg/steps/export.py', line: 5 },
+    ]);
+    // 함수·클래스 이름과 * 는 파일이 아니므로 모듈 파일만 잇는다
+    expect(paths('pkg/steps/load.py', 'from ..rows import original_row, Row\nfrom ..context import *\n')).toEqual([{ path: 'pkg/rows.py', line: 1 }, { path: 'pkg/context.py', line: 2 }]);
+  });
   it('leaves type-only imports out of the runtime file connection graph', () => {
     const files = new Set(['a.ts', 'types.ts', 'runtime.ts']);
     const code = inspectCode('a.ts', "import type { Config } from './types'; import { type Result } from './types'; import { run, type Options } from './runtime';", 'a', files);

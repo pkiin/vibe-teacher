@@ -2,6 +2,27 @@ import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { RepoFlow, RepoSource } from '@vibe-teacher/shared';
 import { ko } from '../i18n/ko';
 
+const fileName = (label: string) => label.slice(label.lastIndexOf('/') + 1);
+
+/** 깊이가 하나뿐인 영역을 나눠 담을 최대 열 수 */
+const SPREAD = 3;
+
+/**
+ * 영역마다 실제로 쓰는 깊이만 왼쪽부터 채운다. 빈 열 때문에 상자가 오른쪽에 몰리지 않게 하고,
+ * 깊이가 하나뿐인 영역은 세로 한 줄로 길어지지 않게 여러 열로 나눈다 (같은 깊이라 화살표 뜻은 그대로다).
+ */
+export function flowLayout<T extends { column: number }>(bands: T[][]): { width: number; columns: T[][][] } {
+  const lanes = bands.map((nodes) => [...new Set(nodes.map((node) => node.column))].sort((a, b) => a - b).map((depth) => nodes.filter((node) => node.column === depth)));
+  const width = Math.max(1, ...lanes.map((band) => (band.length === 1 ? Math.min(SPREAD, band[0]!.length) : band.length)));
+  const columns = lanes.map((band) => {
+    const only = band.length === 1 ? band[0]! : null;
+    if (!only) return band;
+    const rows = Math.ceil(only.length / width);
+    return Array.from({ length: Math.ceil(only.length / rows) }, (_, index) => only.slice(index * rows, (index + 1) * rows));
+  });
+  return { width, columns };
+}
+
 /** 코드에서 확인한 연결만 SVG로 그리고 각 노드를 원문과 잇는다. */
 export function RepoFlowView({ graph, onOpen }: { graph: RepoFlow; onOpen: (source: Extract<RepoSource, { kind: 'file' }>) => void }) {
   const marker = useId().replaceAll(':', '');
@@ -11,7 +32,7 @@ export function RepoFlowView({ graph, onOpen }: { graph: RepoFlow; onOpen: (sour
   const groups = (graph.groups ?? []).map((group) => ({ ...group, nodes: graph.nodes.filter((node) => node.groupId === group.id) })).filter((group) => group.nodes.length);
   const rest = graph.nodes.filter((node) => !groups.some((group) => group.id === node.groupId));
   const bands = [...groups, ...(rest.length ? [{ id: '', label: groups.length ? ko.source.ungrouped : '', description: '', nodes: rest }] : [])];
-  const columnCount = Math.max(1, ...graph.nodes.map((node) => node.column + 1));
+  const { width: columnCount, columns } = flowLayout(bands.map((band) => band.nodes));
 
   // 설명 줄바꿈이나 글자 크기가 바뀌어도 실제 상자 위치에 화살표를 맞춘다.
   useLayoutEffect(() => {
@@ -48,12 +69,12 @@ export function RepoFlowView({ graph, onOpen }: { graph: RepoFlow; onOpen: (sour
             return <path key={index} d={`M${start.x},${start.y} ${curve} ${end.x},${end.y}`} fill="none" stroke="currentColor" strokeWidth="1.5" markerEnd={`url(#${marker})`} />;
           })}
         </svg>
-        {bands.map((band) => <section key={band.id} className="flow-group" aria-label={band.label || ko.source.flowTitle}>
+        {bands.map((band, bandIndex) => <section key={band.id} className="flow-group" aria-label={band.label || ko.source.flowTitle}>
           {band.label && <header className="flow-group-heading"><h4>{band.label}</h4>{band.description && <p>{band.description}</p>}</header>}
           <div className="flow-columns" style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(270px, 1fr))` }}>
             {Array.from({ length: columnCount }, (_, column) => <div key={column} className="flow-column">
-              {band.nodes.filter((node) => node.column === column).map((node) => <button key={node.id} ref={(element) => { if (element) buttons.current.set(node.id, element); else buttons.current.delete(node.id); }} type="button" className="flow-node" onClick={() => onOpen(node.source)} title={ko.source.open(node.label)}>
-                <span className="flow-kind">{node.column === 0 ? ko.source.entry : ko.source.module}</span>
+              {(columns[bandIndex]?.[column] ?? []).map((node) => <button key={node.id} ref={(element) => { if (element) buttons.current.set(node.id, element); else buttons.current.delete(node.id); }} type="button" className="flow-node" onClick={() => onOpen(node.source)} title={ko.source.open(node.label)}>
+                <span className="flow-kind">{node.column === 0 ? ko.source.entry(fileName(node.label)) : fileName(node.label)}</span>
                 <span className="flow-description">{node.description || ko.source.flowDescriptionMissing}</span>
                 <code>{node.label}</code>
               </button>)}

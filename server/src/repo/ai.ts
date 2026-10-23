@@ -15,7 +15,7 @@ export const REPO_AI_SYSTEM_PROMPT = `당신은 실제 저장소와 세션 기�
 - 문단과 목록에는 자료의 근거 표시(F:경로, F:경로#L시작-L끝, S1…)를 sources에 인용합니다. 실제 코드와 README 설명, 에이전트의 완료 보고를 구분합니다.
 - 자료가 부족하면 부족하다고 씁니다. 코드에서 파일을 불러오는 관계를 실제 실행 순서라고 단정하지 않습니다.
 - 보안·데이터 주의사항도 실제 근거를 읽어 판단합니다. 모든 프로젝트에 같은 점검 목록을 붙이지 않습니다. 필요하면 id=security 절에 근거·확인할 일·범위 한계를 설명하세요. 전체 취약점 검사를 마쳤다고 쓰지 않습니다.
-- 원문 자료 블록의 표·코드·연결 그림은 sourceBlocks에 해당 id를 넣으면 그대로 표시됩니다. 값을 다시 만들지 마세요. 동작 설명에는 mechanism 원문 블록과 관련 코드 근거를 연결하세요.
+- 원문 자료 블록의 표·코드·연결 그림은 sourceBlocks에 해당 id를 넣으면 그대로 표시됩니다. 값을 다시 만들지 마세요. 같은 id는 한 페이지에서 한 절에만 넣으세요(두 번째부터는 표시하지 않습니다). 동작 설명에는 mechanism 원문 블록과 관련 코드 근거를 연결하세요.
 - mechanism 연결 그림이 있으면 system 페이지의 동작 설명에 반드시 포함하세요. flowNodes에는 그림의 모든 노드 id와 코드 근거 sources를 인용해 각 파일이 실제로 무엇을 입력받아 처리·표시·저장하는지 description으로 짧고 구체적으로 설명하세요. 파일명이나 '처리를 담당합니다' 같은 빈 설명을 반복하지 마세요. 확인하지 못한 역할은 그 한계를 쓰세요. id·파일명·화살표·열은 바꾸지 않습니다.
 - flowGroups로 코드의 큰 영역을 구분하고 flowNodes의 groupId로 연결하세요. 프론트엔드와 백엔드가 실제로 분리되어 있으면 각각 별도 영역으로, 양쪽에서 함께 쓰는 코드는 공통 영역으로 묶으세요. 한쪽만 있거나 다른 구조라면 자료에 맞는 영역을 고르고, 이름만 보고 없는 계층을 만들지 마세요. 각 영역에는 label·description과 근거 sources를 적으세요.
 - API 경로가 있으면 system 페이지의 관련 절에 api 원문 블록을 반드시 포함하세요. routeDescriptions에 각 경로의 method·path·file을 자료 그대로 적고 description으로 실제 처리 내용을 1~2문장 설명하세요. 입력·조회·저장·응답과 접근 검사는 코드에서 확인한 것만 설명하고 해당 파일의 코드 근거를 sources에 인용하세요. 경로 이름만으로 동작을 추측하지 말고, 발췌가 부족하거나 외부 처리 함수가 보이지 않으면 확인한 부분과 확인할 수 없는 부분을 구분하세요. 이 설명만 경로와 파일 사이의 동작 설명 열에 들어갑니다.
@@ -93,6 +93,21 @@ export function buildRepoAiPrompt({ draft, scan, sessions }: { draft: RepoWiki; 
 }
 
 const clean = (s: string, max: number) => truncate(maskSecrets(s ?? '').trim(), max);
+/** 저장된 문장 레이어에 같은 연결 그림·표·코드가 한 페이지에 두 번 들어 있으면 처음 것만 남긴다. */
+export function dropRepeatedBlocks(sections: RepoSection[]): RepoSection[] {
+  const shown = new Set<string>();
+  return sections.flatMap((section) => {
+    const blocks = section.blocks.filter((block) => {
+      if (block.kind === 'text' || block.kind === 'list') return true;
+      const key = JSON.stringify(block);
+      if (shown.has(key)) return false;
+      shown.add(key);
+      return true;
+    });
+    return blocks.length ? [{ ...section, blocks }] : [];
+  });
+}
+
 export function applyRepoAi({ draft, output, handles, fileSet, result, additionalSources = [] }: { draft: RepoWiki; output: RepoAiOutput; handles: Map<string, string>; fileSet: ReadonlySet<string>; result: Omit<LlmResult<unknown>, 'data'>; additionalSources?: RepoSource[] }): RepoWiki {
   const byHandle = new Map([...handles].map(([key, h]) => [h, key]));
   const titles = new Map(draft.inputs.sessions.map((s) => [s.key, s.title]));
@@ -158,6 +173,8 @@ export function applyRepoAi({ draft, output, handles, fileSet, result, additiona
   };
   const user: RepoSection[] = [], system: RepoSection[] = [];
   const seen = new Set<string>();
+  // 같은 원문 블록(연결 그림·표·코드)은 한 페이지에서 처음 고른 절에만 싣는다
+  const attached = { user: new Set<string>(), system: new Set<string>() };
   for (const s of output.sections.slice(0, 24)) {
     const id = /^[a-z0-9-]{1,64}$/.test(s.id) ? s.id : `section-${shortId(s.id, 12)}`;
     if (seen.has(id)) { dropped++; continue; }
@@ -173,8 +190,10 @@ export function applyRepoAi({ draft, output, handles, fileSet, result, additiona
     } else if (s.paragraphs.length || s.items.length) dropped++;
     for (const key of s.sourceBlocks) {
       const original = raw.get(key);
-      if (original) {
-        blocks.push(...(key === 'api' ? apiBlocks ?? [] : original.blocks.map(annotateBlock)));
+      const added = original && !attached[s.page].has(key) ? (key === 'api' ? apiBlocks ?? [] : original.blocks.map(annotateBlock)) : [];
+      if (original && added.length) {
+        attached[s.page].add(key);
+        blocks.push(...added);
         sources.push(...original.sources, ...(key === 'api' ? [...descriptions.values()].flatMap((d) => d.sources) : []), ...(original.blocks.some((b) => b.kind === 'flow') ? flowSources : []));
       }
     }

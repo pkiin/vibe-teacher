@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyRepoAi, assertRepoFlowComplete, missingRepoFlowNodes, RepoAiOutputSchema, repoFlowOutputSchema } from '../../src/repo/ai';
+import { applyRepoAi, assertRepoFlowComplete, dropRepeatedBlocks, missingRepoFlowNodes, RepoAiOutputSchema, repoFlowOutputSchema } from '../../src/repo/ai';
 import { inspectCode } from '../../src/repo/code';
 import { buildRepoWiki } from '../../src/repo/wiki';
 
@@ -37,6 +37,34 @@ describe('AI descriptions and architecture areas in repository graphs', () => {
     expect(result.warnings).toEqual([]);
     expect(block.graph.groups?.map((g) => g.label)).toEqual(['프론트엔드', '백엔드', '공통']);
     expect(block.graph.nodes.map((n) => [n.id, n.groupId, n.description])).toEqual(roles);
+  });
+
+  it('shows the same graph only in the first section that picks it on a page', () => {
+    const draft = draftWiki();
+    const output = RepoAiOutputSchema.parse({ changes: [], sections: [
+      { ...section, sourceBlocks: ['mechanism', 'mechanism'] },
+      { ...section, id: 'areas', title: '영역별로 보기', paragraphs: ['화면과 서버로 나뉩니다.'], sources: ['F:server/src/index.ts'] },
+      { ...section, id: 'graph-only', title: '그림만' },
+      { ...section, id: 'user-flow', page: 'user', title: '사용 흐름' },
+    ] });
+    const result = applyRepoAi({ draft, output, handles: new Map(), fileSet: files, result: { provider: 'openrouter', durationMs: 1 } });
+    const flows = (sections: typeof result.system) => sections.flatMap((s) => s.blocks.filter((b) => b.kind === 'flow').map(() => s.id));
+    expect(flows(result.system)).toEqual(['how']);
+    expect(result.system.map((s) => s.id)).toEqual(['how', 'areas']);
+    expect(result.system[1]!.blocks.map((b) => b.kind)).toEqual(['text']);
+    expect(result.system[1]!.sources).toEqual([{ kind: 'file', path: 'server/src/index.ts' }]);
+    expect(flows(result.user)).toEqual(['user-flow']);
+  });
+
+  it('drops a repeated graph from saved layers but keeps each section text', () => {
+    const raw = draftWiki().system.find((s) => s.id === 'mechanism')!.blocks[0]!;
+    const text = { kind: 'text' as const, text: '설명' };
+    const sections = [
+      { id: 'a', title: 'A', blocks: [text, raw], sources: [], origin: 'llm' as const },
+      { id: 'b', title: 'B', blocks: [text, raw], sources: [], origin: 'llm' as const },
+      { id: 'c', title: 'C', blocks: [raw], sources: [], origin: 'llm' as const },
+    ];
+    expect(dropRepeatedBlocks(sections).map((s) => [s.id, s.blocks.map((b) => b.kind)])).toEqual([['a', ['text', 'flow']], ['b', ['text']]]);
   });
 
   it('rejects unknown files, invented line citations and descriptions without the node file as evidence', () => {

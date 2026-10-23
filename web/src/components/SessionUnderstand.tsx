@@ -104,7 +104,7 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
       <div className="understand">
         <div className="understand-main">
           <nav className="reading-path" aria-label={ko.reading.path}>
-            {(['summary', 'security', 'wiki', 'concepts', 'knowledge'] as const).map((key, index) => (
+            {(['summary', 'wiki', 'concepts', 'knowledge', 'security'] as const).map((key, index) => (
               <a key={key} href={`#${key}`}><span aria-hidden="true">{index + 1}</span>{ko.reading[key]}</a>
             ))}
           </nav>
@@ -125,7 +125,6 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
             <SessionSummaryCard enrichment={enrichment} />
           </section>
 
-          <SecurityReview wiki={wiki} onJump={onJump} />
           <h2 id="wiki">{ko.understand.wiki}</h2>
           {wikiState === 'loading' && <Loading />}
           {wikiState === 'error' && wikiErr && <ErrorBox error={wikiErr} onRetry={() => loadWiki()} />}
@@ -148,6 +147,8 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
           )}
           <h2 id="knowledge">{ko.knowledge.sessionTitle}</h2>
           <KnowledgeList sessionKey={sessionKey} onProfile={onProfile} refreshKey={`${profile?.revision}|${wiki?.ai?.createdAt}|${enrichment?.createdAt}`} showMeta={false} />
+
+          <SecurityReview wiki={wiki} onJump={onJump} />
         </div>
         <HelpPanel data={data} />
       </div>
