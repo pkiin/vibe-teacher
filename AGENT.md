@@ -157,6 +157,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 ### 캐시 형식이 바뀌는 변경
 - LLM 프롬프트나 출력 스키마를 바꾸면 `shared/src/enrich.ts` 의 `ENRICH_PROMPT_VERSION` 을 올립니다 (AI 분석 캐시 무효화).
 - 세션 요약(`SessionSummary`) 형태나 인덱싱 결과가 바뀌면 `server/src/index/cache.ts` 의 `CACHE_VERSION` 을 올립니다.
+- 프로젝트는 같은 계정 안에서 `realpath` 기준으로 묶는다. 인덱스 디스크 캐시에는 기록된 원래 경로를 남기고 매 스캔마다 실제 경로를 다시 확인한다. 예전 ID는 `SessionIndex.getProjectIds()`로 조회하며, `createWikiServices`와 프로젝트 저장소에 이 resolver를 넘겨 위키·AI·질문·레포 이력을 함께 읽는다. 예전 파일은 보존하고 새 쓰기는 대표 ID로 한다. 이름·Git 원격 주소만으로 다른 폴더나 계정을 합치지 않는다.
 
 ### 위키 규칙 추가 (`server/src/wiki/build.ts`)
 - finding 은 근거 상태(`evidenceStatus`)·영향(`impact`)·생명주기를 따로 채우고, 하나의 점수로 합치지 않는다. 확실하지 않으면 `needs_check` / `undetermined`.

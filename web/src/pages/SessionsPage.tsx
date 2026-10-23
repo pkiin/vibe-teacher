@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from 'react-router';
+import { Navigate, useParams, useSearchParams } from 'react-router';
 import type { Account, Project, SessionSummary } from '@vibe-teacher/shared';
 import { Breadcrumb } from '../components/Layout';
 import { ErrorBox, Loading, Notice } from '../components/Notice';
@@ -11,12 +11,18 @@ import { ko } from '../i18n/ko';
 
 export function SessionsPage() {
   const { projectId = '' } = useParams();
+  return <ProjectSessions key={projectId} projectId={projectId} />;
+}
+
+function ProjectSessions({ projectId }: { projectId: string }) {
   const project = useApi<Project>(`/api/projects/${projectId}`);
   const account = useApi<Account>(project.data ? `/api/accounts/${project.data.accountId}` : null, [project.data?.accountId]);
   const sessions = useApi<SessionSummary[]>(`/api/projects/${projectId}/sessions`);
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'sessions' || params.get('tab') === 'knowledge' ? params.get('tab')! : 'wiki';
   const setTab = (t: string) => setParams({ tab: t }, { replace: true });
+
+  if (project.data && project.data.id !== projectId) return <Navigate replace to={{ pathname: `/projects/${project.data.id}`, search: params.toString() }} />;
 
   return (
     <div className="page">

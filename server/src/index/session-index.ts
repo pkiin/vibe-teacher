@@ -56,6 +56,7 @@ export class SessionIndex {
   private sources = new Map<string, SourceStatus>();
   private sessions = new Map<string, SessionSummary>();
   private projects = new Map<string, Project>();
+  private projectAliases = new Map<string, string>();
   private loaded = new Map<string, LoadedEntry>();
   private lastRescanAt = 0;
   private rescanning: Promise<RescanResponse> | null = null;
@@ -175,6 +176,28 @@ export class SessionIndex {
       }
     }
 
+    // 원본 경로는 디스크 캐시에 남기고, 실제 폴더가 같은 세션을 계정 안에서 합친다.
+    // 경로마다 한 번만 확인하며, 없어졌거나 읽을 수 없는 폴더는 기록된 경로를 유지한다.
+    const roots = new Map<string, string>();
+    const aliases = new Map<string, string>();
+    const hiddenRoot = this.opts.hiddenRoot ? await realpathSafe(this.opts.hiddenRoot) : '';
+    for (const [key, summary] of nextSessions) {
+      const original = normalizeRoot(summary.projectRoot);
+      let root = roots.get(original);
+      if (root === undefined) {
+        root = original === '(unknown)' ? original : await realpathSafe(original);
+        roots.set(original, root);
+      }
+      if (hiddenRoot && root !== '(unknown)' && isInside(hiddenRoot, root)) {
+        nextSessions.delete(key);
+        continue;
+      }
+      const id = projectIdFor(summary.accountId, root);
+      aliases.set(projectIdFor(summary.accountId, original), id);
+      aliases.set(id, id);
+      nextSessions.set(key, { ...summary, projectId: id, projectRoot: root });
+    }
+
     // 4) 프로젝트 집계
     const nextProjects = new Map<string, Project>();
     for (const s of nextSessions.values()) {
@@ -223,6 +246,8 @@ export class SessionIndex {
     this.sources = nextSources;
     this.sessions = nextSessions;
     this.projects = nextProjects;
+    this.projectAliases = aliases;
+    this.loaded.clear();
     this.lastRescanAt = Date.now();
     return {
       accounts: accountMap.size,
@@ -313,12 +338,19 @@ export class SessionIndex {
   }
 
   getProject(id: string): Project | undefined {
-    return this.projects.get(id);
+    return this.projects.get(this.projectAliases.get(id) ?? id);
+  }
+
+  /** 대표 ID 우선. 예전 링크와 프로젝트별 저장 기록을 읽을 때 함께 사용한다. */
+  getProjectIds(id: string): string[] {
+    const canonical = this.getProject(id)?.id ?? id;
+    return [canonical, ...[...this.projectAliases].filter(([alias, target]) => target === canonical && alias !== canonical).map(([alias]) => alias).sort()];
   }
 
   getSessions(projectId: string): SessionSummary[] {
+    const canonical = this.getProject(projectId)?.id ?? projectId;
     return Array.from(this.sessions.values())
-      .filter((s) => s.projectId === projectId)
+      .filter((s) => s.projectId === canonical)
       .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
   }
 
@@ -362,7 +394,7 @@ export class SessionIndex {
     }
     const file: SessionFileInfo = { filePath: summary.filePath, size: st.size, mtimeMs: st.mtimeMs };
     const draft = await adapter.load(file, source, { account, extra });
-    const session: NormalizedSession = { ...this.finalize(draft, source), messages: draft.messages, toolCalls: draft.toolCalls, parseWarnings: draft.parseWarnings };
+    const session: NormalizedSession = { ...this.finalize(draft, source), projectId: summary.projectId, projectRoot: summary.projectRoot, messages: draft.messages, toolCalls: draft.toolCalls, parseWarnings: draft.parseWarnings };
     this.loaded.set(key, { mtimeMs: st.mtimeMs, size: st.size, session });
     while (this.loaded.size > 8) {
       const oldest = this.loaded.keys().next().value;

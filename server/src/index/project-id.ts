@@ -3,7 +3,7 @@ import { shortId } from '../lib/hash';
 import { normalizePath } from '../lib/fsx';
 
 export function normalizeRoot(root: string): string {
-  if (!root) return '(unknown)';
+  if (!root || root === '(unknown)') return '(unknown)';
   return normalizePath(root);
 }
 

@@ -43,7 +43,7 @@ async function main() {
   const enrich = new EnrichService({ store, paths });
   const auth = new AuthService({ store, paths, index, serviceUser: currentUser().username, bearerToken: env.token, isLoopback: env.isLoopback, cookieSecure: process.env.VIBE_TEACHER_COOKIE_SECURE === '1' });
   await auth.init();
-  const { wiki, learner, assessments, wikiAi, help, prefs } = createWikiServices(paths.home, store, () => enrich.resolveProvider());
+  const { wiki, learner, assessments, wikiAi, help, prefs } = createWikiServices(paths.home, store, () => enrich.resolveProvider(), (id) => index.getProjectIds(id));
 
   const app = createApp({
     deps: { store, index, paths, analysis, enrich, auth, wiki, learner, assessments, wikiAi, help, prefs, version: VERSION },

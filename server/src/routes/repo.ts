@@ -10,7 +10,7 @@ const TextSchema = z.object({ force: z.boolean().default(false) });
 /** /api/projects/:id/repo-wiki — 저장소 단위 위키 (사용자 중심 / 기능·동작 중심). 문장은 읽는 사람 수준별 */
 export function repoRoutes(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
-  const service = new RepoWikiService({ storage: new WikiStorage(deps.paths.home), store: deps.store, index: deps.index, analysis: deps.analysis, wiki: deps.wiki, enrich: deps.enrich });
+  const service = new RepoWikiService({ storage: new WikiStorage(deps.paths.home, (id) => deps.index.getProjectIds(id)), store: deps.store, index: deps.index, analysis: deps.analysis, wiki: deps.wiki, enrich: deps.enrich });
 
   const project = async (c: Context<AppEnv>) => {
     await deps.index.ensureFresh();

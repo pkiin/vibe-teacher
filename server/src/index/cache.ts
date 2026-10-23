@@ -9,11 +9,11 @@ export interface IndexCacheEntry {
 }
 
 export interface IndexCacheFile {
-  version: 1;
+  version: number;
   entries: Record<string, IndexCacheEntry>;
 }
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 3;
 
 export function cachePathFor(dir: string, sourceId: string): string {
   return path.join(dir, `${sourceId}.json`);
