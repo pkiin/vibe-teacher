@@ -7,7 +7,7 @@ import type { BaseJobStatus, LlmProviderId, LlmStatus } from './api';
 import type { ReaderLevel } from './reader';
 import type { ConceptLink } from './domain';
 
-export const WIKI_SCHEMA_VERSION = 1;
+export const WIKI_SCHEMA_VERSION = 2;
 
 /** rule: 규칙 기반 원장, llm: AI 가 제안하고 코드 검사를 통과한 후보 */
 export type ContentOrigin = 'rule' | 'llm';
@@ -87,6 +87,7 @@ export interface KnowledgeItem {
   actions: string[];
   unverified: string[];
   origin?: ContentOrigin;
+  suggestedDepth?: ExplanationDepth;
 }
 
 export type CoverageLevel = 'available' | 'partial' | 'unavailable';
@@ -109,13 +110,14 @@ export type RunStatus = 'success' | 'partial' | 'failed';
 
 /** 프로젝트 평면 원장: 세션 하나(= snapshot 하나)에서 만든 사실·위험·지식 항목 */
 export interface WikiSnapshot {
+  generationId?: string;
   schemaVersion: number;
   projectId: string;
   sessionKey: string;
   /** 세션 파일 크기·수정 시각으로 정한 snapshot ID. Git commit 이 아니다 */
   revision: string;
   builtAt: string;
-  generator: { kind: 'rule-based'; rulesVersion: string; catalogVersion: string };
+  generator: { kind: 'rule-based' | 'pending' | 'llm'; rulesVersion: string; catalogVersion: string; provider?: LlmProviderId; model?: string };
   status: RunStatus;
   coverage: WikiCoverage;
   evidence: EvidenceRef[];
@@ -123,6 +125,9 @@ export interface WikiSnapshot {
   findings: RiskFinding[];
   items: KnowledgeItem[];
   warnings: string[];
+  /** 이 세션에서 AI가 선정·작성한 개념. 고정 카탈로그를 참조하지 않는다. */
+  concepts?: WikiConcept[];
+  prerequisites?: { from: string; to: string }[];
 }
 
 // ---- 개념 카탈로그 (일반 배경 지식, 프로젝트 사실과 별도) ----
@@ -142,6 +147,10 @@ export interface WikiConcept {
   /** D3: 구현 원리 */
   deep?: string;
   links: ConceptLink[];
+  whyHere?: string;
+  evidenceIds?: string[];
+  level?: 'beginner' | 'intermediate';
+  documentation?: { retrievedAt: string; provider: LlmProviderId; model?: string; sources: { title: string; url: string; excerpt?: string }[] };
 }
 
 // ---- 설명 계획 (개인 평면에서 파생, 프로젝트 사실은 바꾸지 않음) ----
@@ -177,6 +186,7 @@ export interface RenderPlan {
 }
 
 export interface WikiResponse {
+  generation?: { jobId: string; status: 'queued' | 'running' };
   /** AI 보강 레이어가 있으면 그 claim·item·evidence 를 합친 것 (origin 으로 구분) */
   snapshot: WikiSnapshot;
   plan: RenderPlan;
@@ -186,10 +196,10 @@ export interface WikiResponse {
   ai: WikiAiLayer | null;
 }
 
-// ---- AI 보강 레이어 (규칙 기반 원장과 따로 저장) ----
+// ---- AI 생성 레이어 (독자 수준별로 저장) ----
 
 /** 2: 읽는 사람 수준별 문체, 레이어도 수준별로 저장 */
-export const WIKI_AI_PROMPT_VERSION = 3;
+export const WIKI_AI_PROMPT_VERSION = 4;
 
 /** 기존 지식 항목을 이 프로젝트에 맞춰 풀어 쓴 설명. 근거 주장이 없으면 싣지 않는다 */
 export interface WikiNarrative {
@@ -205,6 +215,8 @@ export interface WikiAiRejection {
 }
 
 export interface WikiAiLayer {
+  generationId?: string;
+  warnings?: string[];
   schemaVersion: number;
   snapshotRevision: string;
   rulesVersion: string;
@@ -220,12 +232,15 @@ export interface WikiAiLayer {
   narratives: WikiNarrative[];
   /** 검사를 통과한 새 주장 후보 (origin: llm) */
   claims: ProjectClaim[];
-  /** 새 주장이 인용한 근거 (규칙 기반 원장에 없던 것) */
+  /** AI가 인용할 수 있는 세션 근거 발췌 */
   evidence: EvidenceRef[];
   /** 검사를 통과한 새 지식 항목 후보 (origin: llm) */
   items: KnowledgeItem[];
-  /** 카탈로그에 없는 개념 제안 — 자동으로 카탈로그에 넣지 않는다 */
+  /** 이전 레이어 형식과의 호환용. 새 개념은 concepts에 직접 저장한다 */
   proposedConcepts: { name: string; reason: string }[];
+  concepts?: WikiConcept[];
+  findings?: RiskFinding[];
+  prerequisites?: { from: string; to: string }[];
   /** 검사에서 걸러 낸 제안과 이유 */
   rejected: WikiAiRejection[];
 }

@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import type { TextGenerator } from './api';
+import type { WikiConcept } from './wiki';
 
 export const LEARNER_SCHEMA_VERSION = 1;
 
@@ -179,8 +180,8 @@ export interface KnowledgeEntry {
   state: LearnerConceptState;
   /** 왜 이 상태인지 사람이 읽는 설명 (근거 세션과 응답·자기보고를 바탕으로 만든 문장) */
   reason: string;
-  /** llm: AI 가 쓴 문장, rule: AI 문장이 검사를 통과하지 못해 규칙 문장, missing: 아직 AI 문장이 없어 규칙 문장 (쓰는 중일 수 있음) */
-  reasonOrigin?: 'llm' | 'rule' | 'missing';
+  /** llm: AI 문장, missing: 생성 전, error: 출력 검사 실패. rule은 이전 형식 호환용 */
+  reasonOrigin?: 'llm' | 'rule' | 'missing' | 'error';
   sources: KnowledgeSource[];
   mentions: KnowledgeMention[];
   /** check: 먼저 확인할 것·위키 항목과 연결됨, background: 감지만 됨 */
@@ -189,6 +190,7 @@ export interface KnowledgeEntry {
 }
 
 export interface KnowledgeWikiResponse {
+  concepts?: Record<string, WikiConcept>;
   profile: LearnerProfile;
   entries: KnowledgeEntry[];
   projects: { id: string; name: string }[];

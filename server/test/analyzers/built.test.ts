@@ -35,7 +35,7 @@ describe('summarizeBuilt', () => {
     expect(b.gitInitialized).toBe(true);
     expect(b.gitCommits).toHaveLength(1);
     expect(b.gitCommits[0]).toMatchObject({ message: 'feat: 첫 커밋', hash: 'abc1234', pushed: true });
-    expect(b.stack.map((s) => s.id)).toEqual(expect.arrayContaining(['typescript', 'react', 'git', 'npm', 'dotenv', 'markdown']));
+    expect(b.stack).toEqual([]);
     const cats = Object.fromEntries(b.commandsRun.map((c) => [c.command, c.category]));
     expect(cats['npm create vite@latest web -- --template react-ts']).toBe('scaffold');
     expect(cats['npm install react-router@7 -D vitest']).toBe('install');

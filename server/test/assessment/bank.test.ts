@@ -1,20 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildQuestionBank, gradeChoice, loadQuestionBank, toPublicQuestion } from '../../src/assessment/bank';
-import { loadWikiCatalog } from '../../src/wiki/catalog';
+import { buildQuestionBank, gradeChoice, toPublicQuestion } from '../../src/assessment/bank';
 
 const TF = [{ id: 'o', text: 'O' }, { id: 'x', text: 'X' }];
 const base = { version: 1, conceptIds: ['auth'], target: 'concept_knowledge', kind: 'distinction', explanation: '해설입니다.', reviewStatus: 'reviewed' };
 const file = (questions: unknown[]) => ({ version: 't', rubricVersion: 'r', questions });
 
-describe('question bank', () => {
-  it('ships only valid questions whose concepts exist in the catalog', () => {
-    const catalog = loadWikiCatalog();
-    const bank = loadQuestionBank(new Set(catalog.concepts.keys()));
-    expect(bank.rejected).toEqual([]);
-    expect(bank.questions.size).toBeGreaterThanOrEqual(30);
-    for (const q of bank.questions.values()) for (const c of q.conceptIds) expect(catalog.concepts.has(c), `${q.questionId}:${c}`).toBe(true);
-  });
+const fixtureBank = () => buildQuestionBank(file([{ ...base, questionId: 'q-fixture', format: 'true_false', prompt: '명제 하나입니다', options: TF, correctOptionIds: ['x'] }]));
 
+describe('question bank', () => {
   it('rejects questions without a single best answer or with malformed OX options (T37)', () => {
     const bank = buildQuestionBank(
       file([
@@ -31,7 +24,7 @@ describe('question bank', () => {
   });
 
   it('never sends answers or explanations to the browser before submission (T38)', () => {
-    const bank = loadQuestionBank();
+    const bank = fixtureBank();
     for (const q of bank.questions.values()) {
       const json = JSON.stringify(toPublicQuestion(q));
       expect(json).not.toContain('correctOptionIds');
@@ -40,7 +33,7 @@ describe('question bank', () => {
   });
 
   it('grades on the server and treats skip / dont-know as unscorable, not wrong (T30)', () => {
-    const q = [...loadQuestionBank().questions.values()].find((x) => x.format === 'true_false')!;
+    const q = [...fixtureBank().questions.values()].find((x) => x.format === 'true_false')!;
     const right = q.correctOptionIds[0]!;
     const wrong = q.options.find((o) => o.id !== right)!.id;
     expect(gradeChoice(q, 'answered', right).grade).toBe('correct');

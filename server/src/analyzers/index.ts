@@ -1,14 +1,13 @@
 import os from 'node:os';
 import type { BuiltSummary, ConceptHit, NormalizedSession } from '@vibe-teacher/shared';
 import { summarizeBuilt } from './built/index';
-import { detectConcepts } from './concepts/index';
 
 export interface Analysis {
   built: BuiltSummary;
   concepts: ConceptHit[];
 }
 
-/** 세션별 규칙 기반 분석 결과를 메모리에 캐시한다 (key + mtime 기준) */
+/** 세션별 원본 작업 수집 결과를 메모리에 캐시한다 (key + mtime 기준) */
 export class AnalysisService {
   private cache = new Map<string, Analysis>();
   constructor(private readonly home: string = os.homedir()) {}
@@ -18,7 +17,7 @@ export class AnalysisService {
     const hit = this.cache.get(k);
     if (hit) return hit;
     const built = summarizeBuilt(session, this.home);
-    const concepts = detectConcepts(session, built);
+    const concepts: ConceptHit[] = [];
     const result = { built, concepts };
     this.cache.set(k, result);
     while (this.cache.size > 64) {

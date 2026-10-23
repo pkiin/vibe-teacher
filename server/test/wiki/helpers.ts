@@ -1,9 +1,9 @@
 import type { LearnerConceptState, LearnerProfile, Message, NormalizedSession, ToolCall } from '@vibe-teacher/shared';
 import { summarizeBuilt } from '../../src/analyzers/built/index';
-import { detectConcepts } from '../../src/analyzers/concepts/index';
 import { emptyConceptCounts } from '../../src/learner/reducer';
 import { buildWikiSnapshot } from '../../src/wiki/build';
-import { loadWikiCatalog } from '../../src/wiki/catalog';
+import { acceptWikiAiOutput, buildEvidencePool, mergeWikiAi, type WikiAiOutput } from '../../src/wiki/ai';
+import type { LlmProvider, LlmRequest } from '../../src/llm/types';
 
 export const ROOT = '/home/tester/app';
 
@@ -75,12 +75,44 @@ export function fakeSession(steps: Step[], over: Partial<NormalizedSession> = {}
   };
 }
 
-export function snapshotOf(session: NormalizedSession) {
-  const catalog = loadWikiCatalog();
-  const built = summarizeBuilt(session, '/home/tester');
-  const concepts = detectConcepts(session, built);
-  return buildWikiSnapshot({ session, built, concepts, catalogVersion: catalog.version, conceptIds: new Set(catalog.concepts.keys()), now: new Date('2026-10-18T10:00:00Z') });
+/** 모델 대신 사용하는 명시적인 합성 응답. 실제 기록으로 학습 규칙을 재현하지 않는다. */
+export function aiOutput(evidenceId: string): WikiAiOutput {
+  const concept = (id: string, name: string) => ({ id, name, category: '설계', summary: `${name}의 정의입니다.`, explanation: `${name}을 이해하면 기능의 처리 경계를 판단할 수 있습니다.`, whyHere: '이번 작업의 접근 범위를 판단하는 데 필요합니다.', evidenceIds: [evidenceId], level: 'beginner' as const, example: null, confusions: [], deep: null, links: [] });
+  return {
+    concepts: [concept('authorization', '권한 검사'), concept('auth', '인증'), concept('testing', '테스트')],
+    claimCandidates: [{ ref: 'new-1', statement: '제공된 세션에 작업 기록이 있습니다.', kind: 'observed_artifact', evidenceIds: [evidenceId], limits: '제공된 기록 범위' }],
+    findings: [{ ref: 'check-1', category: 'security', title: '접근 범위 확인', statement: '접근 범위를 확인할 자료가 더 필요합니다.', evidenceStatus: 'needs_check', impact: 'undetermined', lifecycle: 'open', claimRefs: ['new-1'], checks: ['허용된 계정 범위를 확인해 보세요.'], conceptIds: ['authorization'], missingContext: ['권한 정책'] }],
+    itemCandidates: [{ title: '누가 이 기능을 사용할 수 있나요?', question: '허용 범위는 무엇인가요?', why: '이번 작업의 접근 범위를 판단하는 데 필요합니다.', text: '관련 작업 기록이 있습니다. 이 기록만으로 전체 권한 정책을 확인할 수는 없습니다.', conceptIds: ['authorization'], claimRefs: ['new-1'], findingRefs: ['check-1'], actions: ['허용 범위를 확인해 보세요.'], unverified: ['배포 환경'], depth: 'D2' }],
+    prerequisites: [{ from: 'authorization', to: 'auth' }],
+  };
 }
+
+export function snapshotOf(session: NormalizedSession) {
+  const base = buildWikiSnapshot({ session, built: summarizeBuilt(session), concepts: [] });
+  const pool = buildEvidencePool(session, base);
+  const ev = pool.find((e) => e.sourceKind === 'tool_call') ?? pool[0]!;
+  const layer = acceptWikiAiOutput({ snapshot: base, pool, output: aiOutput(ev.id), result: { provider: 'claude-cli', model: 'fixture', durationMs: 1 } });
+  return mergeWikiAi(base, layer).snapshot;
+}
+
+export const fakeAi: LlmProvider = {
+  id: 'claude-cli', availability: async () => ({ ok: true }),
+  complete: async <T,>(req: LlmRequest<T>) => {
+    let data: unknown;
+    if (req.schemaName === 'wiki_ai_candidates') data = aiOutput(/(ev_[a-z0-9]+)/.exec(req.user)![1]!);
+    else if (req.schemaName === 'wiki_ai_texts') { const input = JSON.parse(req.user); data = { concepts: input.concepts.map((c: { id: string }) => ({ id: c.id, summary: '같은 개념의 다른 설명입니다.', explanation: 'AI가 동일한 개념을 읽는 사람에 맞춰 설명합니다.' })), narratives: input.items.map((i: { id: string }) => ({ itemId: i.id, text: '같은 프로젝트 사실을 읽는 사람 수준에 맞춰 설명합니다.' })) }; }
+    else if (req.schemaName === 'concept_documentation') data = { concepts: [] };
+    else if (req.schemaName === 'repo_inspect_plan') data = { questions: [] };
+    else if (req.schemaName === 'concept_practice') data = { prompt: '로그인한 사용자는 모든 기능을 사용해도 됩니다.', format: 'true_false', kind: 'distinction', options: [{ id: 'o', text: 'O' }, { id: 'x', text: 'X' }], correctOptionId: 'x', explanation: '로그인 여부와 기능을 사용할 권한은 별도로 확인합니다.' };
+    else if (req.schemaName === 'repo_wiki_text') {
+      const source = /F:([^\s|]+)/.exec(req.user)?.[0] ?? /\bS\d+\b/.exec(req.user)?.[0] ?? 'F:README.md';
+      data = { sections: [{ id: 'overview', page: 'user', title: '프로젝트 설명', paragraphs: ['제공된 자료를 읽고 작성한 AI 설명입니다.'], items: [], sources: [source], sourceBlocks: [] }, { id: 'mechanism', page: 'system', title: '실제 코드 연결', paragraphs: ['코드에 적힌 연결을 확인합니다.'], sources: [source], items: [], sourceBlocks: ['mechanism'] }], changes: [] };
+    } else if (req.schemaName === 'session_enrichment') data = { summary: { title: '세션', oneLiner: '작업을 정리했습니다.', narrative: '자료를 확인했습니다.', features: [], outcome: 'partial', nextSteps: [] }, concepts: [] };
+    else if (req.schemaName === 'knowledge_texts') data = { texts: [...req.user.matchAll(/--- (K\d+) ---/g)].map((m) => ({ id: m[1], text: '이번 작업과 연결된 개념입니다. 이해를 확인할 응답은 아직 없습니다.' })) };
+    else throw new Error(`정의하지 않은 합성 응답: ${req.schemaName}`);
+    return { data: req.schema.parse(data), provider: 'claude-cli', model: 'fixture', durationMs: 1, sources: [] };
+  },
+};
 
 /** 통제된 프로필 입력 (plan §14 의 "프로필 입력" — 실제 사람의 추정이 아님) */
 export function profileWith(states: Record<string, Partial<LearnerConceptState>>, revision = 1): LearnerProfile {

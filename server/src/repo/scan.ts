@@ -39,6 +39,8 @@ export interface RouteInfo {
   method: string;
   path: string;
   line?: number;
+  endLine?: number;
+  code?: string;
   hash?: string;
 }
 
@@ -205,6 +207,7 @@ export async function scanRepo(root: string, opts: { light?: boolean } = {}): Pr
   scan.docker = files.some((f) => /(^|\/)(Dockerfile|docker-compose\.ya?ml|compose\.ya?ml)$/.test(f.path));
 
   let scanned = 0;
+  let routeCodeBudget = 40_000;
   const code: CodeFile[] = [];
   const fileSet = new Set(files.map((file) => file.path));
   scan.entries = entryPaths(scan.packages, fileSet);
@@ -216,7 +219,20 @@ export async function scanRepo(root: string, opts: { light?: boolean } = {}): Pr
     scanned += 1;
     const source = await readRepoText(root, f.path);
     if (source) {
-      scan.routes.push(...extractRoutes(f.path, source.text).slice(0, Math.max(0, 300 - scan.routes.length)).map((route) => ({ ...route, hash: source.hash })));
+      const routes = extractRoutes(f.path, source.text).slice(0, Math.max(0, 300 - scan.routes.length));
+      const lines = source.text.split('\n');
+      scan.routes.push(...routes.map((route, index) => {
+        const start = (route.line ?? 1) - 1;
+        const end = Math.min(start + 40, (routes[index + 1]?.line ?? lines.length + 1) - 1);
+        const excerpt: string[] = [];
+        let chars = 0;
+        for (const line of lines.slice(start, end)) {
+          if (chars + line.length + 1 > Math.min(2400, routeCodeBudget)) break;
+          excerpt.push(line); chars += line.length + 1;
+        }
+        routeCodeBudget -= chars;
+        return { ...route, hash: source.hash, ...(excerpt.length ? { code: excerpt.join('\n'), endLine: start + excerpt.length } : {}) };
+      }));
       code.push(inspectCode(f.path, source.text, source.hash, fileSet));
     }
   }

@@ -1,7 +1,6 @@
 import type { ConceptHit, KnowledgeEntry, KnowledgeMention, KnowledgeSource, LearnerConceptState, LearnerProfile, NormalizedSession, WikiConcept, WikiSnapshot } from '@vibe-teacher/shared';
 import { truncate } from '../lib/text';
 import { maskSecrets } from '../llm/digest';
-import type { CompiledConcept } from '../analyzers/concepts/dictionary';
 import { unknownConcept } from './reducer';
 
 /**
@@ -20,6 +19,7 @@ export interface SessionOccurrences {
   request?: string;
   /** request: 그 개념이 나온 턴의 사용자 요청 (없으면 세션 첫 요청을 쓴다) */
   concepts: { conceptId: string; via: KnowledgeSource['via']; refTitle?: string; weight: number; request?: string }[];
+  catalog?: WikiConcept[];
   mentions: { conceptId: string; messageIndex: number; snippet: string }[];
 }
 
@@ -28,18 +28,6 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** 이름에서 괄호를 뺀 짧은 이름: "권한 검사 (인가)" → "권한 검사" */
 export function shortName(name: string): string {
   return name.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || name;
-}
-
-/** 언급 감지용 패턴: 자동 감지 트리거(text) + 이름과 괄호 속 별칭 */
-export function mentionPatterns(dictionary: CompiledConcept[]): Map<string, RegExp[]> {
-  const out = new Map<string, RegExp[]>();
-  for (const c of dictionary) {
-    const terms = new Set<string>([shortName(c.name)]);
-    for (const m of c.name.matchAll(/\(([^)]+)\)/g)) for (const t of (m[1] ?? '').split(/[/,]/)) if (t.trim().length >= 2) terms.add(t.trim());
-    const res = [...c.re.text, ...[...terms].filter((t) => t.length >= 2).map((t) => new RegExp(escape(t), 'i'))];
-    out.set(c.id, res);
-  }
-  return out;
 }
 
 /** 붙여 넣은 글·IDE 정보 태그를 뺀 사용자 본인의 말 (언급 감지와 요청 문구에 쓴다) */
@@ -97,6 +85,7 @@ export function extractOccurrences(input: {
       i.conceptIds.forEach((id, n) => concepts.push({ conceptId: id, via: 'item', refTitle: i.title, weight: n === 0 ? 2 : 1.5, ...(request ? { request } : {}) }));
     }
   }
+  for (const c of snapshot?.concepts ?? []) if (!concepts.some((x) => x.conceptId === c.id)) concepts.push({ conceptId: c.id, via: 'concept_hit', weight: 1 });
   for (const h of input.hits) if (input.knownConceptIds.has(h.id)) concepts.push({ conceptId: h.id, via: 'concept_hit', weight: 1 });
 
   const mentions: SessionOccurrences['mentions'] = [];
@@ -126,30 +115,6 @@ export function extractOccurrences(input: {
 }
 
 const STATE_ORDER: Record<LearnerConceptState['state'], number> = { conflicting: 0, unknown: 1, partial: 2, demonstrated: 3 };
-
-/** 상태가 어떤 근거에서 나왔는지 말하는 문장. "모른다"고 단정하지 않는다 */
-export function reasonFor(input: { name: string; state: LearnerConceptState; top?: KnowledgeSource; mention?: KnowledgeMention }): string {
-  const { state: s, top, mention } = input;
-  const req = top ? (top.request ? `"${truncate(top.request, 40)}"` : `'${truncate(top.sessionTitle, 40)}'`) : null;
-  let context = '';
-  if (top && req) {
-    if (top.via === 'finding') context = `${req} 작업에서 "${top.refTitle}" 확인이 필요했습니다.`;
-    else if (top.via === 'item') context = `${req} 작업의 위키 항목 "${top.refTitle}"에 나온 개념입니다.`;
-    else context = `${req} 작업에서 이 개념이 나왔습니다.`;
-  }
-  let evidence: string;
-  if (s.disputed) evidence = '추정이 잘못됐다고 알려 주셔서, 다시 확인하기 전까지 판단을 보류하고 있습니다.';
-  else if (s.state === 'conflicting') evidence = `정답과 오답이 섞여 있어 판단을 보류하고 있습니다${s.assessmentScope ? ` (${s.assessmentScope})` : ''}.`;
-  else if (s.state === 'demonstrated') evidence = `서로 다른 문제에서 이해를 확인했습니다${s.assessmentScope ? ` (${s.assessmentScope})` : ''}. 이 범위 밖까지 확인된 것은 아닙니다.`;
-  else if (s.state === 'partial') evidence = `일부 문제에서 맞혔지만 아직 충분히 확인되지 않았습니다${s.assessmentScope ? ` (${s.assessmentScope})` : ''}.`;
-  else if (s.counts.incorrect > 0) evidence = '문제에 응답했지만 이해를 확인하지는 못했습니다. 오답 한 번으로 모른다고 판단하지 않습니다.';
-  else if (s.selfReport === 'known') evidence = `'알고 있어요'라고 답하셨지만, 문제로 확인된 것은 아닙니다.`;
-  else if (s.selfReport === 'unsure' || s.selfReport === 'unfamiliar') evidence = `'잘 모르겠어요'라고 답하셔서 설명을 더 자세히 보여 드립니다.`;
-  else if (s.counts.practice > 0) evidence = '문제를 풀었지만 검토 전 문항이거나 연습이라 이해 확인에는 쓰지 않았습니다.';
-  else if (mention) evidence = `대화에서 "${mention.snippet}"처럼 언급하셨습니다. 아직 이해를 확인할 만한 문제 응답은 없습니다.`;
-  else evidence = '이 개념은 아직 문제로 이해를 확인하지 않았습니다.';
-  return [context, evidence].filter(Boolean).join(' ');
-}
 
 export function buildKnowledgeEntries(input: {
   sessions: SessionOccurrences[];
@@ -209,7 +174,7 @@ export function buildKnowledgeEntries(input: {
       category: concept.category,
       summary: concept.summary,
       state,
-      reason: reasonFor({ name: concept.name, state, top: sources[0], mention: mentions.find((m) => m.sessionKey === sources[0]?.sessionKey) ?? mentions[0] }),
+      reason: '',
       sources: sources.slice(0, 5),
       mentions,
       priority: e.check ? 'check' : 'background',

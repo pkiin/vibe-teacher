@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import type { Account, HealthResponse, LlmEffort, LlmProviderSetting, Provider, RescanResponse, SettingsResponse, SourceStatus } from '@vibe-teacher/shared';
+import type { Account, HealthResponse, LlmProviderSetting, Provider, RescanResponse, SettingsResponse, SourceStatus } from '@vibe-teacher/shared';
 import { apiDelete, apiPatch, apiPost, apiPut } from '../api/client';
 import { Breadcrumb } from '../components/Layout';
 import { LlmProviderChoice } from '../components/LlmProviderPicker';
@@ -27,11 +27,9 @@ export function SourcesPage() {
   const [homeRoots, setHomeRoots] = useState('/home');
   const [llmProvider, setLlmProvider] = useState<LlmProviderSetting>('auto');
   const [openrouterModel, setOpenrouterModel] = useState('openrouter/free');
-  const [openaiModel, setOpenaiModel] = useState('gpt-5-mini');
   const [llmModel, setLlmModel] = useState('');
   const [llmBudget, setLlmBudget] = useState('0.5');
   const [llmCliPath, setLlmCliPath] = useState('');
-  const [llmEffort, setLlmEffort] = useState<LlmEffort>('medium');
   const [autoText, setAutoText] = useState(true);
 
   const [authMode, setAuthMode] = useState<'none' | 'home-token'>('none');
@@ -52,10 +50,8 @@ export function SourcesPage() {
     setLlmModel(settings.data.llm.model ?? '');
     setLlmBudget(String(settings.data.llm.maxBudgetUsd));
     setLlmCliPath(settings.data.llm.claudeCliPath ?? '');
-    setLlmEffort(settings.data.llm.effort ?? 'medium');
     setAutoText(settings.data.llm.autoText ?? true);
     setOpenrouterModel(settings.data.llm.openrouterModel);
-    setOpenaiModel(settings.data.llm.openaiModel);
     setAuthMode(settings.data.auth.mode);
     setAdmins(settings.data.auth.admins.join(', '));
     setSessionTtl(String(settings.data.auth.sessionTtlHours));
@@ -101,10 +97,8 @@ export function SourcesPage() {
           model: llmModel.trim() || null,
           maxBudgetUsd: Number(llmBudget) || 0.5,
           claudeCliPath: llmCliPath.trim() || null,
-          effort: llmEffort,
           autoText,
           openrouterModel,
-          openaiModel,
         },
       });
     }, ko.sources.saved);
@@ -253,24 +247,14 @@ export function SourcesPage() {
               onChange={setLlmProvider}
               options={settings.data.llmOptions}
               defaultModel={settings.data.llmDefaultModel}
-              models={{ claude: llmModel.trim() || null, openrouter: openrouterModel, openai: openaiModel }}
-              onModelChange={(p, m) => (p === 'openrouter' ? setOpenrouterModel(m) : setOpenaiModel(m))}
+              models={{ claude: llmModel.trim() || null, openrouter: openrouterModel }}
+              onModelChange={(_, m) => setOpenrouterModel(m)}
               envOverride={settings.data.llmEnvOverride}
             />
           )}
           <label className="field">
             {ko.sources.llmModelClaude}
-            <input value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder={`비우면 ${settings.data?.llmDefaultModel ?? 'claude-opus-5-5'} (API) / Claude Code 기본 모델 (CLI)`} />
-          </label>
-          <label className="field">
-            {ko.sources.llmEffort}
-            <select value={llmEffort} onChange={(e) => setLlmEffort(e.target.value as LlmEffort)}>
-              {(['low', 'medium', 'high', 'xhigh', 'max'] as const).map((v) => (
-                <option key={v} value={v}>
-                  {ko.sources.llmEffortLevel[v]}
-                </option>
-              ))}
-            </select>
+            <input value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder={ko.sources.cliModelDefault} />
           </label>
           <label className="field">
             {ko.sources.llmBudget}

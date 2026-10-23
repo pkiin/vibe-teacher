@@ -50,7 +50,7 @@ export interface HelpMessage {
   model?: string;
   durationMs?: number;
   costUsd?: number;
-  /** 사용자에게 알릴 제한 (예: AI 없이 카탈로그로 답함, 인용을 확인하지 못해 일부를 숨김) */
+  /** 사용자에게 알릴 제한 (예: 인용을 확인하지 못해 일부를 숨김) */
   notices: string[];
   error?: { kind: string; message: string };
   jobId?: string;

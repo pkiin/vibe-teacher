@@ -6,9 +6,9 @@ import type { LlmModelInfo } from '@vibe-teacher/shared';
  */
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-export const OPENAI_BASE_URL = 'https://api.openai.com/v1';
-export const DEFAULT_OPENROUTER_MODEL = 'openrouter/free';
-export const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
+export const DEFAULT_OPENROUTER_MODEL = 'openai/gpt-5-mini';
+/** 예전 설정 응답과의 호환용. 모든 API 요청은 OpenRouter를 사용한다. */
+export const DEFAULT_OPENAI_MODEL = DEFAULT_OPENROUTER_MODEL;
 
 const TTL_MS = 60 * 60 * 1000;
 
@@ -80,7 +80,7 @@ export class ModelCatalog {
   async list(provider: 'openrouter' | 'openai', force = false): Promise<{ models: LlmModelInfo[]; fetchedAt: string }> {
     const hit = this.cache.get(provider);
     if (hit && !force && Date.now() - hit.at < TTL_MS) return { models: hit.models, fetchedAt: new Date(hit.at).toISOString() };
-    const models = provider === 'openrouter' ? await this.fetchOpenRouter() : await this.fetchOpenAi();
+    const models = await this.fetchOpenRouter();
     const at = Date.now();
     this.cache.set(provider, { at, models });
     return { models, fetchedAt: new Date(at).toISOString() };
@@ -88,7 +88,6 @@ export class ModelCatalog {
 
   /** 모델이 JSON 스키마 강제를 지원하는지. 목록을 못 읽으면 null (요청해 보고 실패하면 프롬프트 지시로 다시 시도) */
   async structured(provider: 'openrouter' | 'openai', model: string): Promise<boolean | null> {
-    if (provider === 'openai') return true;
     try {
       const { models } = await this.list('openrouter');
       return models.find((m) => m.id === model)?.structured ?? null;
@@ -103,11 +102,4 @@ export class ModelCatalog {
     return parseOpenRouterModels(await res.json());
   }
 
-  private async fetchOpenAi(): Promise<LlmModelInfo[]> {
-    const key = (this.opts.env ?? process.env).OPENAI_API_KEY;
-    if (!key) throw new Error('OPENAI_API_KEY 가 없어 OpenAI 모델 목록을 가져올 수 없습니다');
-    const res = await this.fetch(`${OPENAI_BASE_URL}/models`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(20_000) });
-    if (!res.ok) throw new Error(`OpenAI 모델 목록을 가져오지 못했습니다 (HTTP ${res.status})`);
-    return parseOpenAiModels(await res.json());
-  }
 }

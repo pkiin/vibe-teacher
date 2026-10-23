@@ -25,7 +25,7 @@ README 는 한국어로, 사용자가 **그대로 복사해 실행할 수 있는
 | CLI 인자 (`scripts/dev.mjs`, `server/src/config/env.ts`) | "포트와 주소 지정" 예시 블록 (`dev.mjs` 의 `usage()` 도 같이) |
 | 설정 파일 필드 (`server/src/config/schema.ts`) | "설정 파일" JSON 예시와 설명 목록 |
 | 새 어댑터 / 기본 경로 변경 | "읽는 위치 (기본값)" 표, 첫 문단의 지원 도구 목록 |
-| AI 제공자·모델·전송 범위, AI 가 쓰는 문장과 규칙 대체 조건 | "AI 문장과 제공자" 표와 설명 |
+| AI 제공자·모델·전송 범위, AI 가 쓰는 문장과 규칙 대체 조건 | "AI 제공자와 외부 문서 검색" 표와 설명 |
 | 로그인·권한·바인딩 규칙 | "로그인", "원격 접근", "다중 계정 운영" 절 |
 | `scripts/grant-read-acl.sh` | "다중 계정 운영" 명령 블록 |
 | npm 스크립트 추가·변경 | "빠른 시작", 검사와 테스트 블록 |
@@ -46,31 +46,31 @@ shared/            도메인 타입, API DTO, LLM 출력 스키마 (zod). server
 server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
   src/adapters/    도구별 기록 파서. 도구마다 index(어댑터) · paths(기본 경로) · records(원본 레코드 타입) · parse(정규화)
   src/index/       계정 탐색, 소스, 세션 인덱스, 인덱스 디스크 캐시
-  src/analyzers/   user-messages(내 메시지) · built/(파일·명령·패키지·커밋·스택) · concepts/(개념 사전 매칭)
-  src/llm/         AI: digest(전송용 요약 + 비밀값 마스킹) · gate(AI 문장을 쓸 수 있는지와 못 쓰는 사유) · reader(읽는 사람 수준별 문체 지침, withReader) · claude-cli · anthropic-sdk · openai-compat(OpenRouter·OpenAI, fetch) · models(모델 목록) · select(제공자 선택) · jobs · cache
+  src/analyzers/   user-messages(내 메시지) · built/(파일·명령·패키지·커밋 원문 수집)
+  src/llm/         AI: digest(전송용 요약 + 비밀값 마스킹) · gate(AI 문장을 쓸 수 있는지와 못 쓰는 사유) · reader(읽는 사람 수준별 문체 지침, withReader) · claude-cli · openai-compat(OpenRouter 전용, fetch) · concepts(개념 ID·링크 검사) · models(모델 목록) · select(제공자 선택) · jobs · cache
   src/auth/        홈 디렉터리 토큰 로그인, 쿠키, 미들웨어
   src/config/      설정 스키마(zod)·저장소·환경변수/CLI 인자
   src/routes/      API 라우트. 공통 의존성과 HttpError 는 routes/deps.ts
   src/lib/         fsx(안전한 파일 IO) · jsonl · shell(셸 명령 파서) · text · hash
-  src/wiki/        프로젝트 위키: build(세션 → 원장, 규칙) · validate(출처 검사·격리) · plan(설명 계획) · graph(선행관계) · catalog · service
+  src/wiki/        프로젝트 위키: build(AI 입력 snapshot) · validate(출처 검사·격리) · plan(설명 계획) · graph(선행관계) · catalog · service
   src/learner/     내 이해 정보(사용자 전체): reducer(원장 → 개념 상태) · service(원장 쓰기, revision 충돌, 예전 프로젝트별 원장 병합)
-                   · knowledge(개념이 나온 곳·언급·규칙 설명 문장) · knowledge-service(내 세션 모으기·캐시)
+                   · knowledge(AI 개념이 나온 곳·명시적 이해 증거) · knowledge-service(내 세션 모으기·캐시)
                    · knowledge-text(설명 문장 AI 작성: 사실 → 프롬프트, 넘겨짚는 문장 거르기, 지문별 저장, 작업)
                    · prefs(사용자 설정: 읽는 사람 수준, prefs.json)
-  src/repo/        레포 위키: scan(저장소 읽기 전용 스캔) · source(근거 파일 안전 읽기) · code(TS 구문 분석·내부 파일 연결) · wiki(사실 초안 조립, 판 비교) · ai(AI 가 문장 쓰기, 표·코드 유지, 근거 표시 검사)
-                   · service(저장·갱신 필요 판단, AI 작업과 규칙 대체)
-  src/assessment/  문항 은행(bank) · 출제·채점(service)
-  src/help/        도움 패널 질문: answer(대상별 근거 고르기·프롬프트·답 검사·AI 없는 대체 답) · service(개인 기록·작업)
+  src/repo/        레포 위키: scan(저장소 읽기 전용 스캔) · source(근거 파일 안전 읽기) · code(TS 구문 분석·내부 파일 연결) · wiki(사실 초안 조립, 판 비교) · inspect(AI 질문·필요한 코드만 추가 확인) · ai(AI 가 문장 쓰기, 표·코드 유지, 근거 표시 검사)
+                   · service(저장·갱신 필요 판단, AI 작업과 실패 상태)
+  src/assessment/  bank(문항 형식 검사) · service(AI 출제·서버 채점)
+  src/help/        도움 패널 질문: answer(대상별 근거 고르기·프롬프트·답 검사) · service(개인 기록·작업)
   src/storage/     <home>/wiki 저장소 (경로 검사, 키별 직렬화, JSONL 원장)
-  data/            concepts.ko.json (개념 사전) · prerequisites.json (선행관계) · questions.json (문항 은행)
   test/            vitest 테스트와 합성 픽스처
 web/               Vite + React 19 + react-router UI (한국어)
+  test/           화면 렌더링 검사 (vitest, Node 환경에서 서버 렌더링)
   src/i18n/ko.ts   화면 문자열 모음
   src/components/SessionUnderstand.tsx  "이번 세션 이해하기" 통합 화면 (위키·만들어진 것·개념 + 도움 패널)
   src/context/DisplayContext.tsx        화면 설정(본문 14px·코드 12px·촘촘한 밀도 기본), 설명 난이도와 분리해 브라우저에 저장
   src/components/SettingsPopover.tsx    오른쪽 위 톱니바퀴 설정. Modal.tsx 의 네이티브 dialog로 초점·Escape·복귀 처리
   src/components/RepoSourceViewer.tsx   근거 파일 원문·줄 강조·검색, RepoFlowView.tsx 는 검증된 파일 연결을 SVG로 표시
-  src/components/ReadingGuide.tsx       위키의 쉬운 용어 풀이, SecurityReview.tsx 는 세션의 보안·데이터 주의사항과 추가 확인 안내
+  src/components/SecurityReview.tsx    AI가 선정한 보안·데이터 주의사항과 출처 표시
   src/components/HelpPanel.tsx          도움 패널 (설명/질문/퀴즈), src/context/FocusContext.tsx 가 지금 보는 대상을 공유
 scripts/           dev.mjs(웹+API 동시 실행), grant-read-acl.sh(다중 계정 읽기 ACL)
 ```
@@ -99,7 +99,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 
 - **스캔 대상은 읽기 전용.** `~/.claude`, `~/.codex`, `~/.copilot`, VS Code 저장소 등 스캔하는 홈에는 아무것도 쓰지 않습니다. 쓰기는 `VIBE_TEACHER_HOME`(기본 `~/.vibe-teacher`) 아래 `config.json`, `cache/index/`, `cache/enrich/` 만 허용합니다. 파일 쓰기는 `server/src/lib/fsx.ts` 의 `writeJsonAtomic` 을 씁니다.
 - **LLM 에는 다이제스트만.** 원본 JSONL, 도구 출력 전문은 절대 보내지 않습니다. 보내는 내용은 `server/src/llm/digest.ts` 의 `buildDigest` 를 거치고 `maskSecrets` 로 마스킹합니다. 새 비밀값 형식을 발견하면 `SECRET_PATTERNS` 에 추가하고 테스트를 붙입니다.
-- **사람이 읽는 문장은 AI 가, 사실은 코드가.** 레포 위키 본문, 내 지식 설명 문장, 세션 요약·위키 항목 설명은 AI 가 쓰는 것이 기본입니다(설정 `llm.autoText`, 기본 켜짐). 규칙 기반 문장은 AI 를 쓸 수 없을 때(설정에서 끔, `auth.enrichFor` 권한 없음, 제공자 없음, 호출 실패)만 쓰고, 그 사유를 화면에 보입니다. 가능 여부는 `server/src/llm/gate.ts` 의 `textGate` 하나로 판단합니다. 같은 입력이면 다시 부르지 않습니다(입력 지문·revision 별 저장). AI 작업은 POST(`requireJson`)로만 시작하고 GET 은 부작용이 없게 둡니다 — 화면이 GET 결과를 보고 자동으로 POST 합니다. 세션 위키 자체(원장) 생성은 사용자가 버튼을 누를 때만 합니다.
+- **교육 내용은 AI가 생성한다.** 개념 선정·설명·위키 구성·주의사항·선행관계·연습 문항은 AI가 작성한다. 고정 카탈로그나 규칙 기반 대체 문장을 다시 넣지 않는다. 코드는 원문 수집·접근 권한·출처 참조·스키마·순환·출력 예산을 검사한다. AI를 쓸 수 없으면 실패 사유를 표시한다. GET은 AI를 호출하지 않고 POST로만 생성한다. `llm.autoText`는 자동 POST 여부이며 수동 생성은 유지한다.
+- **API는 OpenRouter만 사용한다.** 기본 모델은 `openai/gpt-5-mini`. 일반 작업은 Claude CLI를 우선하고 CLI 실패·외부 검색은 OpenRouter로 처리한다. 취소는 다른 제공자로 재시도하지 않는다. OpenAI·Anthropic 직접 호출이나 해당 API 키 사용을 추가하지 않는다. 검색에는 공개 개념 이름만 보내고 프로젝트 원문·사설 경로는 넣지 않는다. 참고 링크는 실제 API 검색 출처와 대조한다.
 - **기본 바인딩은 `127.0.0.1`.** loopback 이 아닌 주소는 `VIBE_TEACHER_TOKEN` 또는 `auth.mode=home-token` 없이는 부팅을 거부합니다 (`server/src/index.ts`).
 - **계정 범위 밖은 404.** 다른 계정의 리소스는 403 이 아니라 404 로 존재 자체를 숨깁니다. 계정에 딸린 라우트에는 `assertAccount` 를 호출합니다 (`server/src/routes/deps.ts`).
 - **권한 없는 홈은 오류가 아니라 상태.** 읽을 수 없는 계정은 `readable: 'denied'` 로 표시하고 나머지는 계속 동작해야 합니다.
@@ -107,11 +108,11 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **위키: 위험 알림은 사용자 상태와 무관.** `planWiki` 는 공통 알림을 profile 을 보기 전에 정한다. 숙련 추정으로 알림을 숨기거나 줄이지 않는다 (예산을 넘어도 `mandatory_overflow` 로 표시하고 모두 보여 줌).
 - **위키: 사실·해석·에이전트 주장 구분.** 세션 기록에 없는 것은 `inference` + `limits`("이 세션 기록에서 찾지 못함")로만 쓰고 저장소 전체의 부재로 단정하지 않는다. 에이전트의 "완료" 보고는 `agent_reported` 로 실행 기록과 분리한다. claim·finding·item ID 와 근거 ID 는 코드가 만들며, `enforceSnapshot` 을 통과하지 못한 것은 격리하고 `status: partial` 로 낮춘다.
 - **이해 증거는 명시적 입력만.** 세션 로그에서 사용자 이해 증거를 뽑지 않는다(동의 전). 자기보고·노출·건너뛰기·모르겠어요는 이해/오답으로 바꾸지 않고, 검토 전(candidate) 문항·해설 뒤 재시도·도움 사용 응답은 연습으로만 센다 (`server/src/learner/reducer.ts` 의 policy). 학습자 ID 는 인증 주체에서만 만든다 (`learnerIdFor`).
-- **위키 AI 는 후보만.** AI 응답은 `server/src/wiki/ai.ts` 의 `acceptWikiAiOutput` 을 거쳐야 실린다: 제공한 ID 만 인용(하나라도 지어내면 그 제안 전체를 버림), 프로젝트 문장은 근거 주장 인용 필수, 출력도 `maskSecrets`. finding 과 공통 알림은 AI 가 바꾸지 못하며, AI 결과는 `wiki/projects/<p>/ai/<revision>.json` 레이어로 원장과 따로 둔다. 전송 전 미리 보기(`/wiki/ai/preview`)를 유지한다.
+- **위키 AI 는 후보만.** AI 응답은 `server/src/wiki/ai.ts` 의 `acceptWikiAiOutput` 을 거쳐야 실린다: 제공한 ID 만 인용(하나라도 지어내면 그 제안 전체를 버림), 프로젝트 문장은 근거 주장 인용 필수, 출력도 `maskSecrets`. 주의사항도 AI가 근거를 보고 생성하며, AI 결과는 `wiki/projects/<p>/ai/<revision>.json` 레이어로 원장과 따로 둔다. 전송 전 미리 보기(`/wiki/ai/preview`)를 유지한다.
 - **CLI 로그인을 고르면 API 키를 넘기지 않는다.** `claude` 자식 프로세스 환경에서 `ANTHROPIC_API_KEY`·`ANTHROPIC_AUTH_TOKEN` 을 지운다 (`childEnv`).
 - **읽는 사람 수준은 문체만.** 사용자가 고른 수준(`shared/src/reader.ts` 의 `ReaderLevel`, 기본 `non-dev` = 완전 비개발자)은 AI 문장의 단어·설명 깊이에만 쓴다. 이해 증거가 아니므로 learner 원장에 넣지 않고(`learners/<id>/prefs.json`), 개념 상태·위험 알림·사실·근거를 바꾸지 않는다. 사람이 읽는 문장을 쓰는 **모든** AI 호출은 시스템 프롬프트를 `server/src/llm/reader.ts` 의 `withReader(prompt, level)` 로 감싸고, 결과는 수준별로 따로 저장한다(캐시 키·파일 이름·지문에 수준 포함). 시스템 프롬프트 본문에 특정 독자("초보", "비개발자")를 박아 넣지 않는다. 화면은 사용자가 수준을 고르기 전(`reader.chosen=false`)에는 AI 자동 작성을 시작하지 않고 먼저 묻는다.
-- **레포 위키 AI 는 문장만.** AI 응답은 `server/src/repo/ai.ts` 의 `applyRepoAi` 를 거친다: 명령·스크립트·API·폴더 표와 코드 블록은 초안(저장소에서 읽은 것) 그대로 두고 AI 는 문단·목록만 바꾼다. 근거는 미리 준 표시(`F:경로` 중 실제 파일, `S1…`)만 받고 나머지는 버리며 경고로 남긴다. 입력·출력 모두 `maskSecrets`. 보내기 전 미리 보기(`/repo-wiki/ai/preview`)를 유지한다.
-- **내 지식 설명 문장은 상태를 넘겨짚지 않는다.** AI 문장은 `server/src/learner/knowledge-text.ts` 의 `acceptKnowledgeText` 를 거친다: "모르십니다"류 단정, 확인되지 않았는데 "이해하고 계십니다"류는 버리고 규칙 문장을 쓴다(같은 사실로 다시 부르지 않도록 거른 것도 저장). 상태 자체는 AI 가 바꾸지 못한다.
+- **레포 위키 구성과 문장은 AI가.** AI 응답은 `server/src/repo/ai.ts` 의 `applyRepoAi` 를 거친다: 명령·스크립트·API·폴더 표의 원문 값과 코드 블록은 저장소에서 읽은 그대로 보존한다. API 표의 동작 설명, 연결 그림의 파일 역할·영역 정보는 검증된 AI 설명으로 채운다. AI가 절 구성과 설명을 결정하되 원문 값과 파일 연결은 변조하지 않는다. 근거는 미리 준 표시(`F:경로` 중 실제 파일, `S1…`)만 받고 나머지는 버리며 경고로 남긴다. 입력·출력 모두 `maskSecrets`. 보내기 전 미리 보기(`/repo-wiki/ai/preview`)를 유지한다.
+- **내 지식 설명 문장은 상태를 넘겨짚지 않는다.** AI 문장은 `server/src/learner/knowledge-text.ts` 의 `acceptKnowledgeText` 를 거친다: "모르십니다"류 단정, 확인되지 않았는데 "이해하고 계십니다"류는 버리고 생성 실패를 표시한다(같은 사실로 다시 부르지 않도록 거른 것도 저장). 상태 자체는 AI 가 바꾸지 못한다.
 - **저장소 스캔은 읽기만.** `server/src/repo/scan.ts` 는 쓰기·명령 실행(git 포함)을 하지 않고, 심볼릭 링크를 따라가지 않으며, `.env`·키 파일을 열지 않는다(`.env.example` 은 변수 이름만). 새로 읽을 파일 종류를 늘리면 비밀값이 섞이지 않는지 테스트(`server/test/repo`)를 붙인다.
 - **내 지식 위키: 언급은 증거가 아니다.** 사용자 메시지의 언급은 설명 문장의 맥락으로만 쓰고 상태는 learner 원장으로만 정한다. 붙여 넣은 글(`<pasted_content>`)은 언급으로 보지 않는다 (`ownWords`).
 - **도움 패널 질문은 이해 증거가 아니다.** 질문은 `help.jsonl` 에 개인 기록으로만 남기고 learner 원장을 바꾸지 않는다. 답의 프로젝트 연결은 검증된 claim 인용이 있어야 싣는다 (`acceptHelpOutput`). 도움 패널로 물어본 개념의 문제 응답은 `helpUsed` 로 보조 응답이 된다.
@@ -139,10 +140,10 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 4. `server/test/fixtures/<provider>/` 에 **합성** 픽스처를 만들고 `server/test/adapters/` 에 테스트를 씁니다.
 5. README "읽는 위치" 표와 첫 문단을 고칩니다.
 
-### 개념 사전 항목 추가
-- `server/data/concepts.ko.json` 에 추가합니다. `id` 는 `^[a-z0-9-]+$`, 중복 불가. 트리거는 대소문자 무시 정규식 문자열입니다 (JSON 이므로 `\` 는 `\\`).
-- 설명은 초보자가 읽을 수 있는 한국어 2~4문장, 링크는 가능하면 공식 문서(한국어판이 있으면 그것).
-- `npm test -- server/test/analyzers/concepts.test.ts` 로 스키마 검증을 확인합니다.
+### 개념과 위키 생성 변경
+- 고정 개념 목록을 추가하지 않는다. `wiki/ai.ts`에서 AI가 필요한 개념·주장·주의사항·카드를 함께 작성하고 출처를 검사한다.
+- 새 개념은 세션 snapshot과 AI 레이어에 저장하고 세션 카드·도움 패널·내 지식에 연결한다. 전역 카탈로그로 계정 간 자료를 섞지 않는다.
+- 생성 문항은 candidate 연습으로만 기록하고 정답·해설은 제출 전 공개하지 않는다.
 
 ### 설정 필드 추가
 - `server/src/config/schema.ts` 에 zod 로 정의하고 **반드시 `.default()`** 를 줍니다 (기존 사용자의 `config.json` 이 그대로 읽혀야 함).
@@ -164,16 +165,14 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 세션 요약(`SessionSummary`) 형태나 인덱싱 결과가 바뀌면 `server/src/index/cache.ts` 의 `CACHE_VERSION` 을 올립니다.
 - 프로젝트는 같은 계정 안에서 `realpath` 기준으로 묶는다. 인덱스 디스크 캐시에는 기록된 원래 경로를 남기고 매 스캔마다 실제 경로를 다시 확인한다. 예전 ID는 `SessionIndex.getProjectIds()`로 조회하며, `createWikiServices`와 프로젝트 저장소에 이 resolver를 넘겨 위키·AI·질문·레포 이력을 함께 읽는다. 예전 파일은 보존하고 새 쓰기는 대표 ID로 한다. 이름·Git 원격 주소만으로 다른 폴더나 계정을 합치지 않는다.
 
-### 위키 규칙 추가 (`server/src/wiki/build.ts`)
-- finding 은 근거 상태(`evidenceStatus`)·영향(`impact`)·생명주기를 따로 채우고, 하나의 점수로 합치지 않는다. 확실하지 않으면 `needs_check` / `undetermined`.
-- statement 에 관찰 범위와 불확실성을 쓴다. 정규식에 안 보인다는 이유만으로 "없다"고 쓰지 않는다.
-- 관련 개념은 카탈로그에 있는 ID 만 쓴다. `server/test/wiki/helpers.ts` 의 `fakeSession` 으로 합성 세션 테스트를 붙인다.
-- 판단 규칙이 바뀌면 `RULES_VERSION` 을 올린다.
-- 세션 위키의 revision에는 `RULES_VERSION`도 포함한다. 같은 기록을 새 기준으로 다시 만들어도 예전 판을 덮어쓰지 않고, 이전 기준의 위키에는 갱신 안내를 표시한다.
+### 위키 생성 변경
+- AI의 claim·finding·item은 제공된 근거와 올바른 개념 참조가 있어야 한다. 없는 참조를 일부 지워 카드를 살리지 않고 해당 후보를 거른다.
+- AI 위험 판단은 근거 상태·영향·생명주기를 구분하고 관찰 범위를 보존한다. 모든 프로젝트에 같은 점검 목록을 붙이지 않는다.
+- 입력 형식 변경은 `RULES_VERSION`(AI 파이프라인 식별자)을 올린다. 이전 규칙 기반 snapshot은 현재 화면에 사용하지 않고 이력 파일은 보존한다.
 
 ### 문항·선행관계 추가
-- 문항은 `server/data/questions.json`. 객관식은 정답 1개·선택지 3개 이상, OX 는 선택지 `o`,`x`. 직접 쓴 문항은 `reviewStatus: "candidate"` 로 두고, 사람이 검토한 것만 `reviewed` 로 바꾼다.
-- 선행관계는 `server/data/prerequisites.json`. 검토 전이면 `status: "proposed"`. `npm test` 의 shipped catalog 테스트가 순환·없는 개념을 잡는다.
+- 문항은 `assessment/service.ts`에서 AI로 생성한다. 객관식은 정답 1개·선택지 3개 이상, OX는 `o`,`x`. 생성 문항은 `candidate`로 보존한다.
+- 선행관계는 AI 결과에서 받아 구조·참조·순환을 검사한다. 고정 선행관계 파일은 사용하지 않는다.
 - 위키 AI 프롬프트나 출력 스키마(`WikiAiOutputSchema`)를 바꾸면 `shared/src/wiki.ts` 의 `WIKI_AI_PROMPT_VERSION` 을 올린다 (저장된 AI 레이어 무효화).
 - 내 지식 설명 문장 프롬프트·사실 형식을 바꾸면 `server/src/learner/knowledge-text.ts` 의 `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 올린다. 레포 위키는 시스템 프롬프트와 입력 전체가 지문(`inputHash`)에 들어간다. 공통 문체나 문장 형식이 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올려 기존 문장 레이어를 갱신 대상으로 돌린다.
 - 읽는 사람 문체 지침(`server/src/llm/reader.ts`)을 바꾸면 `ENRICH_PROMPT_VERSION`, `WIKI_AI_PROMPT_VERSION`, `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 함께 올린다 (이 셋은 지문에 시스템 프롬프트 본문이 들어가지 않는다). 수준을 추가하면 `READER_LEVELS`, `reader.ts` 의 지침, `web/src/i18n/ko.ts` 의 `reader.levels`, README "읽는 사람 수준" 표를 함께 고친다.
@@ -184,16 +183,22 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 색상은 `web/src/styles/app.css`의 의미별 토큰(`--panel`, `--surface`, `--text` 등)으로 정한다. 새 패널에도 라이트·다크 모드, 키보드 초점, 좁은 화면, 동작 줄이기를 함께 확인한다.
 - 기술 용어는 쉬운 말을 먼저 쓰고 필요한 원어만 덧붙인다. 퀴즈 문장을 바꾸면 문항 version과 은행 version을 올리되 정답·검토 상태를 임의로 바꾸지 않는다.
 - 개념의 작업 연결 설명은 확인한 사실과 알아둘 이유(`whyItMatters`)를 잇는다. 잘린 대화·링크·언급 횟수를 본문에 나열하지 않고 원문은 접힌 기록에 둔다. `contextKind=mention`은 대화 언급만 확인된 경우로, 구현·실행 사실로 표현하지 않는다. 자동 감지 개념을 추가할 때는 실용적인 이유도 함께 작성한다.
-- 레포 위키의 `security` 절은 AI가 바꾸지 못한다. 세션마다 보안·데이터 항목과 근거를 보존하며, 위키가 만들어진 세션 수와 미점검 범위를 표시한다. 설치 버전별 취약점 검사나 실제 서비스 점검을 한 것으로 표현하지 않는다.
+- 레포 위키의 `security` 절도 AI가 근거를 읽고 작성한다. 세션마다 보안·데이터 항목과 근거를 보존하며, 위키가 만들어진 세션 수와 미점검 범위를 표시한다. 설치 버전별 취약점 검사나 실제 서비스 점검을 한 것으로 표현하지 않는다.
 - 레포 위키 문장 형식·공통 문체가 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올린다. 예전 문장 레이어는 GET에서 사용하지 않고 자동 작성 대상으로 돌린다.
+- 레포 위키 API 표는 방식·경로·동작 설명·파일 순서다. 동작 설명은 경로별 코드 발췌를 받은 AI가 작성하고, `applyRepoAi`에서 방식·경로·파일이 일치하고 해당 파일 근거가 확인된 설명만 병합한다. 원문 경로·파일과 다른 자료 블록은 보존한다.
 
 ### 레포 위키의 코드 근거와 파일 보기
 - 파일 읽기는 `repo/source.ts`를 사용한다. 계정 권한을 검사한 프로젝트 아래의 허용된 텍스트만 읽고 숨김 설정·키·심볼릭 링크·특수 파일을 거절한다. 환경 변수 예제는 이름만, 코드의 비밀값은 가려서 반환한다. 응답은 `Cache-Control: no-store`.
-- 코드 발췌와 파일 연결은 `repo/code.ts`의 TypeScript 구문 분석으로 모으며 코드·명령을 실행하지 않는다. 파일 근거의 줄·내용 지문을 보존하고, 없는 줄 인용은 버린다. AI는 `flow` 블록을 바꾸지 못한다.
+- 코드 발췌와 파일 연결은 `repo/code.ts`의 TypeScript 구문 분석으로 모으며 코드·명령을 실행하지 않는다. 파일 근거의 줄·내용 지문을 보존하고, 없는 줄 인용은 버린다. AI는 `flow`의 파일·연결을 바꾸지 못한다.
+- `flow`의 파일 ID·원문 경로·열·연결·근거는 보존하고, 파일별 동작 설명과 프론트엔드·백엔드·공통 등의 영역 정보만 AI가 작성해 `applyRepoAi`에서 출처 검사 후 입힌다. 이름만으로 영역을 규칙 분류하지 않는다. 상자와 화살표 위치는 설명 줄바꿈·글자 크기를 반영한다.
+- 줄 인용은 제공된 발췌 전체 또는 그 안에 포함된 더 좁은 범위를 허용하고 원래 지문을 보존한다. 읽지 않은 줄, 역순·0·안전한 정수 범위를 벗어난 줄은 거절한다. 여러 발췌 사이의 읽지 않은 구간을 합쳐 인용할 수는 없다.
+- 원본 그래프의 모든 노드에 검증된 동작 설명과 유효한 영역이 있어야 레포 위키를 완료로 저장한다. 누락 시 `repo_wiki_flow` 작업으로 한 번 보완하고 다시 검사한다. 여전히 누락되면 생성 실패로 저장하며 설명 없는 성공 캐시를 만들지 않는다. 보완은 `repo-inspect` 프로필을 쓰고 기존 입력과 같은 코드 발췌만 전달한다.
+- `repo/inspect.ts`는 AI가 최대 6곳의 확인 위치·질문을 고른 뒤 `readRepoText`로 합계 24,000자 이내의 마스킹된 발췌를 읽고 짧은 답을 받는다. 저장소 밖·숨김 설정·키·심볼릭 링크는 읽지 않으며 알려진 지문과 다른 파일도 추가 확인에서 제외한다. 추가 답의 출처는 실제 제공한 줄 범위와 대조한다. GET 미리 보기는 AI를 호출하지 않고 기본 입력과 추가 확인 상한을 알린다.
+- `LlmRequest.task=repo-inspect`만 Claude CLI의 `haiku`·`--effort low`로 실행한다. CLI 도구는 계속 비활성화하고 서버가 파일을 읽는다. CLI 실패는 기존 OpenRouter 경로를 쓰며 취소는 전파한다. 보조 확인 실패는 경고를 남기고 원래 코드 근거로 작성할 수 있다.
 - 실제 파일 내용의 지문이 위키 근거와 달라지면 현재 파일임을 알리고 예전 줄 강조를 끈다. 글꼴을 적용해도 줄 번호가 변하지 않도록 비밀값 마스킹은 줄바꿈을 보존한다.
 
 ### AI 제공자 추가
-- `shared/src/api.ts` 의 `LlmProviderId`, `server/src/config/schema.ts` 와 `server/src/routes/settings.ts` 의 provider enum, `server/src/llm/select.ts` 의 `providers()`·`IDS`·auto 순서(GPT 우선: OpenAI 키 → Anthropic 키 → Claude 로그인 → OpenRouter 키)·`modelFor` 를 함께 고친다.
+- `shared/src/api.ts` 의 `LlmProviderId`, `server/src/config/schema.ts` 와 `server/src/routes/settings.ts` 의 provider enum, `server/src/llm/select.ts` 의 `providers()`·`IDS`·라우팅(Claude CLI 우선, 실패·검색은 OpenRouter)·`modelFor` 를 함께 고친다.
 - 화면 문구는 `web/src/i18n/ko.ts` 의 `sources.llmChoice`·`llmNoKey`, 키는 `.env.example` 에 주석과 함께 추가한다.
 - 응답은 항상 zod 스키마로 다시 검사한다 (`LlmProvider.complete`). 네트워크는 테스트에서 fetch 를 주입해 막는다.
 
@@ -202,40 +207,14 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 
 ## 8. 테스트
 
-- vitest, 테스트 위치는 `server/test/**` (`shared/test/**` 도 수집됨). 구조는 `src/` 를 따라갑니다.
+- vitest, 테스트 위치는 `server/test/**`, `shared/test/**`, `web/test/**`. 구조는 `src/` 를 따라갑니다. 웹 렌더링 검사는 웹의 JSX·DOM 타입 설정을 사용합니다.
 - **픽스처는 합성 데이터만.** 실제 대화 기록, 실제 사용자명, 실제 홈 경로, 실제 키·토큰을 넣지 않습니다. 실제 기록에서 형식을 확인했다면 내용을 바꿔 최소한으로 재현합니다.
 - 테스트는 실제 `~/.claude` 등에 의존하지 않습니다. 경로는 픽스처 디렉터리나 임시 디렉터리를 넘깁니다.
 - LLM 호출은 테스트에서 실제로 하지 않습니다 (가짜 제공자나 스텁 사용).
 
-## 9. plan.md 진행 상황
+## 9. 구현 상태
 
-설계 문서는 저장소 루트의 `plan.md` (코딩 에이전트 세션 기반 적응형 프로젝트 지식 위키). 작은 단계부터 순서대로 구현한다. 단계를 끝내면 여기를 갱신한다.
-
-- [x] M0 기준선 (Node ≥ 20, vitest ESM 경고 정리)
-- [x] shared 타입: `wiki.ts` · `learner.ts` · `assessment.ts`
-- [x] 개념 카탈로그 확장(위키 개념 13개 + 깊이 필드) · 선행관계 그래프(T13)
-- [x] 문항 은행(38개, 모두 candidate) · 서버 채점 · 정답 비노출(T30, T37, T38)
-- [x] 저장소 · 학습자 원장/reducer · revision 충돌(T01–T06, T16, T24, T25, T31)
-- [x] 규칙 기반 위키 빌더 · 출처 검사 · 설명 계획/예산(T07–T15, T20, T21)
-- [x] API: 세션 위키 · 내 이해 정보 · 출제/응답, 계정·학습자 격리(T29, T32)
-- [x] 웹: 프로젝트 위키 탭, 근거 열람, 설명 깊이 버튼, 이해 확인 카드, 객관식/OX, 내 이해 정보 열람·정정
-- [x] `.env` 읽기와 `.env.example` (AI 키 `ANTHROPIC_API_KEY`)
-- [x] AI 제공자 선택 UI (Claude Code 로그인 / API 키 / 자동 / 끔, 선택지별 사용 가능 여부), API 기본 모델 `claude-opus-5-5` + effort 설정 + 거절 시 서버 대체(fallbacks)
-- [x] OpenRouter·OpenAI 제공자 (fetch, SDK 없음), OpenRouter 모델 목록에서 고르기(기본 `openrouter/free`, 무료만 보기), `.env.example` 에 키 칸
-- [x] 위키 AI 보강 (M3 일부): 항목별 프로젝트 맞춤 설명·새 사실·새 항목·개념 제안, ID 검사·격리, 별도 레이어, 전송 미리 보기
-- [x] 통합 화면 "이번 세션 이해하기": 위키·만들어진 것·개념을 한 탭에 잇고 오른쪽 도움 패널(설명/질문/퀴즈), AI 버튼 하나로 합침
-- [x] 만들어진 것 탭 분리: 타임라인 + 바뀐 파일 폴더 트리
-- [x] 내 지식 위키 (사용자 전체, 개념마다 상태·이유·근거 세션·확인 버튼), learner 원장을 프로젝트별 → 사용자별로
-- [x] 레포 위키 (프로젝트 단위, 사용자 중심 / 기능·동작 중심, 저장소 읽기 전용 스캔 + 세션 누적, 갱신 필요 표시와 판 비교)
-- [x] 읽는 사람 수준(비개발자·입문·주니어·숙련, 기본 비개발자): 처음 한 번 묻기, 상단 단추로 바꾸기, 모든 AI 프롬프트에 문체 지침, 수준별 저장(레포 위키 text/<수준>, 위키 AI 레이어, 세션 분석 캐시, 내 지식 지문)
-- [x] AI 문장 기본화: 레포 위키 본문(작업·미리 보기·지문 캐시), 내 지식 설명 문장(자동 작업·검사·지문 캐시), 세션 위키를 만들면 AI 설명 자동 시작. 규칙 문장은 AI 를 쓸 수 없을 때만, 사유 표시. 설정 `llm.autoText`
-- [x] 도움 패널 질문 (M3): 대상별 근거로 답, 인용 검사, AI 없을 때 대체 답, 개인 기록, 재시도 중복 방지
-- [x] 쉬운 한국어 문장·문항, 자동 AI의 GPT 우선 선택, 보안 및 취약점 점검 섹션, 라이트·다크 모드와 읽기 접근성
-- [ ] Markdown 내보내기 (개인 정보 기본 제외, T22)
-- [ ] 프로젝트 단위 위키(여러 세션 통합) · 두 번째 세션의 `supersedes` / `resolved_in_scope` (사례 C, T17, T18, T27)
-- [ ] 프로젝트 확인(project_awareness) 문항 — 검증된 claim 으로만 생성
-- [ ] 브라우저 E2E 상시 자동화 (`npm run test:e2e` 미구현) — 테마·모바일·퀴즈 기본 동작은 합성 데이터로 브라우저 확인, 정규 실행 스크립트는 아직 없음
-- [ ] 기존 쓰기 API 전체에 JSON/Origin 정책 적용 (지금은 새 위키 API 에만 `requireJson`)
+`plan.md`는 초기 설계이며 현재의 AI 전용 생성 정책과 다른 고정 카탈로그·규칙 대체 제안이 들어 있다. 현재 사용자 지시와 이 문서의 AI 생성 정책을 우선한다. 남은 확장은 Markdown 내보내기, revision 간 프로젝트 사실 갱신, 브라우저 E2E 자동화다.
 
 ## 10. 커밋 메시지
 

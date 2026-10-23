@@ -12,7 +12,6 @@ import { ErrorBox, Loading } from './Notice';
 import { KnowledgeList } from './KnowledgeList';
 import { UnifiedAiPanel } from './UnifiedAiPanel';
 import { SessionSummaryCard, WikiBody, WikiCoverage, WikiHeader } from './WikiSections';
-import { ReadingGuide } from './ReadingGuide';
 import { SecurityReview } from './SecurityReview';
 
 /**
@@ -22,7 +21,6 @@ import { SecurityReview } from './SecurityReview';
 export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKey: string; projectId: string; onJump?: (i: number) => void }) {
   const enc = encodeURIComponent(sessionKey);
   const built = useApi<BuiltSummary>(`/api/sessions/${enc}/built`);
-  const catalogList = useApi<WikiConcept[]>('/api/catalog/concepts');
   const [concepts, setConcepts] = useState<ConceptHit[] | null>(null);
   const [conceptsErr, setConceptsErr] = useState<Error | null>(null);
   const [enrichment, setEnrichment] = useState<EnrichmentRecord | null>(null);
@@ -97,7 +95,7 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
     }
   };
 
-  const catalog = useMemo(() => Object.fromEntries((catalogList.data ?? []).map((c) => [c.id, c])), [catalogList.data]);
+  const catalog = useMemo(() => ({ ...Object.fromEntries((concepts ?? []).map((c) => [c.id, { ...c, summary: c.explanation, confusions: [], links: c.links ?? [] }])), ...wiki?.concepts }), [concepts, wiki]);
   const data: UnderstandData = { projectId, sessionKey, wiki, built: built.data, concepts: concepts ?? [], catalog, profile, learner, enrichment, onJump };
   const covered = useMemo(() => new Set(wiki?.snapshot.items.flatMap((i) => i.conceptIds) ?? []), [wiki]);
 
@@ -110,7 +108,6 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
               <a key={key} href={`#${key}`}><span aria-hidden="true">{index + 1}</span>{ko.reading[key]}</a>
             ))}
           </nav>
-          <ReadingGuide />
           <UnifiedAiPanel
             sessionKey={sessionKey}
             wiki={wiki}
@@ -119,7 +116,7 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
               setEnrichment(r);
               loadConcepts();
             }}
-            onWikiUpdated={() => loadWiki(true)}
+            onWikiUpdated={() => { loadWiki(true); loadConcepts(); }}
             onWikiWriting={setAiWriting}
           />
 
@@ -150,7 +147,7 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
             </>
           )}
           <h2 id="knowledge">{ko.knowledge.sessionTitle}</h2>
-          <KnowledgeList sessionKey={sessionKey} onProfile={onProfile} refreshKey={profile?.revision} showMeta={false} />
+          <KnowledgeList sessionKey={sessionKey} onProfile={onProfile} refreshKey={`${profile?.revision}|${wiki?.ai?.createdAt}|${enrichment?.createdAt}`} showMeta={false} />
         </div>
         <HelpPanel data={data} />
       </div>

@@ -9,7 +9,6 @@ import { ko } from '../i18n/ko';
 import { MiniMarkdown } from './MiniMarkdown';
 import { ErrorBox, Loading, Notice, fmtDate } from './Notice';
 import { ReaderLevelLine, ReaderLevelOptions } from './ReaderLevelPicker';
-import { ReadingGuide } from './ReadingGuide';
 import { Tabs } from './Tabs';
 import { RepoFlowView } from './RepoFlowView';
 import { RepoSourceViewer } from './RepoSourceViewer';
@@ -126,6 +125,7 @@ function AiPreview({ projectId }: { projectId: string }) {
       {preview && (
         <>
           <div className="small muted">{ko.repo.previewChars(preview.chars)}</div>
+          {preview.inspection && <p className="small muted">{ko.repo.previewInspection(preview.inspection.maxQuestions, preview.inspection.maxChars)}</p>}
           <pre className="wiki-ai-preview">{preview.user}</pre>
         </>
       )}
@@ -251,7 +251,6 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
 
   return (
     <SourceContext.Provider value={setSource}><div className="repo-wiki">
-      <ReadingGuide />
       <div className="card">
         <div className="concept-head">
           <span className="small muted grow">
@@ -291,7 +290,7 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
 
       <Tabs tabs={(['user', 'system', 'security'] as const).map((id) => ({ id, label: ko.repo.views[id]! }))} active={view} onChange={(id) => setView(id as typeof view)} />
       <p className="small muted">{ko.repo.viewNote[view]}</p>
-      {view === 'security' && !sections.length && <Notice kind="warn">{ko.security.oldRepo}</Notice>}
+      {view === 'security' && !sections.length && <Notice kind="warn">{wiki.generator.kind === 'llm' ? ko.security.repoEmpty : ko.security.generating}</Notice>}
       <nav className="repo-toc small" aria-label={ko.repo.contents}>
         {sections.map((s) => (
           <a key={s.id} href={`#repo-${s.id}`}>

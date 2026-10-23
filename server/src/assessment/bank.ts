@@ -1,6 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import type { Grade, PublicQuestion, ResponseStatus } from '@vibe-teacher/shared';
 
@@ -8,9 +5,6 @@ import type { Grade, PublicQuestion, ResponseStatus } from '@vibe-teacher/shared
  * 선택형 문항 은행. 정답(correctOptionIds)·해설은 서버에만 있고 toPublicQuestion() 이 걷어 낸다.
  * 채점은 서버 코드가 하며, 건너뛰기·모르겠어요는 오답이 아니라 채점 불가(unscorable)로 남긴다.
  */
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-export const DEFAULT_QUESTIONS_PATH = path.resolve(here, '../../data/questions.json');
 
 export const QuestionSchema = z.object({
   questionId: z.string().regex(/^q-[a-z0-9-]+$/),
@@ -81,15 +75,6 @@ export function buildQuestionBank(raw: unknown, conceptIds?: ReadonlySet<string>
     questions.set(parsed.data.questionId, { ...parsed.data, rubricVersion: file.rubricVersion });
   }
   return { version: file.version, rubricVersion: file.rubricVersion, questions, rejected };
-}
-
-let cached: QuestionBank | null = null;
-
-export function loadQuestionBank(conceptIds?: ReadonlySet<string>): QuestionBank {
-  if (cached) return cached;
-  cached = buildQuestionBank(JSON.parse(fs.readFileSync(DEFAULT_QUESTIONS_PATH, 'utf8')), conceptIds);
-  if (cached.rejected.length) console.warn(`[assessment] 검사에 걸린 문항 ${cached.rejected.length}개를 제외했습니다: ${cached.rejected.map((r) => r.questionId).join(', ')}`);
-  return cached;
 }
 
 export function toPublicQuestion(q: BankQuestion): PublicQuestion {

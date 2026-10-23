@@ -87,6 +87,8 @@ export function inspectCode(file: string, text: string, hash: string, files: Rea
 export function entryPaths(packages: PackageInfo[], files: ReadonlySet<string>): string[] {
   const out: string[] = [];
   for (const pkg of packages) {
+    const html = path.posix.join(path.posix.dirname(pkg.path), 'index.html');
+    if (files.has(html)) out.push(html);
     for (const [name, script] of Object.entries(pkg.scripts)) {
       if (!['start', 'dev', 'serve'].includes(name)) continue;
       const virtualRoot = '/__repo__';

@@ -20,6 +20,14 @@ export function maskSecrets(text: string): string {
   return out;
 }
 
+/** 구조화된 AI 출력의 문자열도 저장 전에 비밀값을 가린다. */
+export function maskOutput(value: unknown): unknown {
+  if (typeof value === 'string') return maskSecrets(value);
+  if (Array.isArray(value)) return value.map(maskOutput);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, v]) => [key, maskOutput(v)]));
+  return value;
+}
+
 export interface DigestOptions {
   maxChars?: number;
   maxUserMessages?: number;
@@ -55,7 +63,7 @@ export function buildDigest(session: NormalizedSession, built: BuiltSummary, con
     push(`${n}. ${prefix}${truncate(item.text.replace(/\s+/g, ' '), maxUserChars)}${item.interruptedNext ? ' [사용자가 중단함]' : ''}`);
   }
 
-  push('\n## 규칙 기반으로 뽑은 사실');
+  push('\n## 기록에서 수집한 파일·명령');
   const fileLine = (f: { relPath?: string; path: string; via: string }) => `- ${f.relPath ?? f.path}${f.via === 'shell' ? ' (셸 명령으로)' : ''}`;
   if (built.filesCreated.length) {
     push(`### 생성된 파일 (${built.filesCreated.length})`);
@@ -101,7 +109,7 @@ export function buildDigest(session: NormalizedSession, built: BuiltSummary, con
   });
 
   if (concepts.length) {
-    push('\n## 규칙 기반 개념 후보 (id · 이름 · 근거)');
+    push('\n## 이전 AI 분석의 개념 (재사용 후보이며 선정은 다시 판단)');
     concepts.slice(0, 20).forEach((c) => {
       push(`- ${c.id} · ${c.name}`);
       const context = c.contextKind === 'mention' ? '대화에서 언급됨. 실제 사용·실행은 미확인' : c.contextKind === 'activity' ? '파일·명령 등 작업 기록' : '제공된 기록에서 실제 사용 여부를 따로 확인해야 함';

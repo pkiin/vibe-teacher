@@ -76,7 +76,8 @@ export function WikiHeader({ wiki, building, error, onBuild }: { wiki: WikiRespo
       </div>
       <p className="small">{ko.wiki.intro}</p>
       {wiki.stale && <Notice kind="warn">{ko.wiki.stale}</Notice>}
-      {wiki.snapshot.status === 'partial' && <Notice kind="warn">{ko.wiki.statusPartial}</Notice>}
+      {wiki.snapshot.generator.kind === 'pending' && <Notice kind="info">{ko.wiki.aiPending}</Notice>}
+      {wiki.snapshot.generator.kind !== 'pending' && wiki.snapshot.status === 'partial' && <Notice kind="warn">{ko.wiki.statusPartial}</Notice>}
       {wiki.snapshot.status === 'failed' && <Notice kind="error">{ko.wiki.statusFailed}</Notice>}
       {error && <ErrorBox error={error} />}
     </div>

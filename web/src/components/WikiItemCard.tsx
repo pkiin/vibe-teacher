@@ -129,7 +129,7 @@ export function WikiItemCard({
           </a>
         ))}
       </div>
-      {/* AI 설명이 있으면 그것을, 쓰는 중이면 그 표시를, AI 를 쓸 수 없을 때만 규칙 문장을 보여 준다 */}
+      {/* 저장된 AI 설명을 보여 주고, 생성 중에는 진행 상태를 표시한다 */}
       {!narrative && aiWriting && <div className="concept-why muted knowledge-reason-pending">{ko.wikiAi.writing}</div>}
       {!narrative && !aiWriting && item.why && (
         <div className="concept-why">

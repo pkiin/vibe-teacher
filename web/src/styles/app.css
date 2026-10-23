@@ -542,11 +542,19 @@ summary::marker { color: var(--muted); }
 .repo-flow { margin: 8px 0 16px; }
 .repo-flow figcaption { font-size: var(--font-small); color: var(--muted); margin-bottom: 8px; }
 .flow-scroll { overflow: auto; max-height: 600px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
-.flow-canvas { position: relative; }
-.flow-canvas svg { position: absolute; inset: 0; color: var(--muted); }
-.flow-node { font: inherit; position: absolute; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; width: 210px; min-height: 58px; padding: 8px 10px; border: 1px solid var(--control-border); border-radius: 8px; color: var(--text); background: var(--panel); text-align: left; cursor: pointer; }
+.flow-canvas { position: relative; padding: 16px; }
+.flow-canvas svg { position: absolute; inset: 0; color: var(--muted); pointer-events: none; z-index: 1; }
+.flow-group { border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: var(--surface); }
+.flow-group + .flow-group { margin-top: 36px; }
+.flow-group-heading { position: relative; z-index: 2; background: var(--surface); margin-bottom: 18px; max-width: 70ch; }
+.flow-group-heading h4 { margin: 0 0 4px; }
+.flow-group-heading p { margin: 0; color: var(--muted); font-size: var(--font-small); }
+.flow-columns { display: grid; gap: 40px; align-items: start; }
+.flow-column { display: flex; flex-direction: column; gap: 28px; }
+.flow-node { font: inherit; position: relative; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; min-height: 100px; padding: 12px; border: 1px solid var(--control-border); border-radius: 8px; color: var(--text); background: var(--panel); text-align: left; cursor: pointer; }
 .flow-node:hover { border-color: var(--accent); background: var(--accent-soft); }
-.flow-node code { background: none; padding: 0; line-height: 1.4; font-size: var(--code-font-size); }
+.flow-node code { background: none; padding: 0; line-height: 1.4; font-size: var(--code-font-size); color: var(--muted); overflow-wrap: anywhere; }
+.flow-description { line-height: 1.6; }
 .flow-kind { color: var(--muted); font-size: var(--font-small); margin-bottom: 2px; }
 @media (max-width: 720px) { .source-modal { width: calc(100vw - 24px); } .source-document { padding: 10px; } }
 

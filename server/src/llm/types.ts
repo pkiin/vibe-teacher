@@ -2,6 +2,8 @@ import type { z } from 'zod';
 import type { LlmProviderId } from '@vibe-teacher/shared';
 
 export interface LlmRequest<T> {
+  /** research는 외부 문서 검색이 필요해 OpenRouter에서 실행한다. */
+  task?: 'text' | 'research' | 'repo-inspect';
   system: string;
   user: string;
   schema: z.ZodType<T>;
@@ -18,6 +20,7 @@ export interface LlmResult<T> {
   costUsd?: number;
   usage?: { input: number; output: number };
   durationMs: number;
+  sources?: { title: string; url: string; excerpt?: string }[];
 }
 
 export interface LlmAvailability {

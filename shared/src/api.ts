@@ -34,7 +34,7 @@ export interface ScanSettings {
 
 export type LlmProviderId = 'claude-cli' | 'anthropic-sdk' | 'openrouter' | 'openai';
 export type LlmProviderSetting = 'auto' | LlmProviderId | 'none';
-/** Anthropic API 요청의 생각 깊이·토큰 사용량 (claude CLI 에는 적용되지 않음) */
+/** 이전 설정 호환용. 직접 Anthropic API 호출은 사용하지 않는다 */
 export type LlmEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface LlmSettings {
@@ -44,23 +44,23 @@ export interface LlmSettings {
   maxBudgetUsd: number;
   timeoutMs: number;
   effort: LlmEffort;
-  /** OpenRouter 모델 ID (기본 openrouter/free) */
+  /** OpenRouter 모델 ID (기본 openai/gpt-5-mini) */
   openrouterModel: string;
-  /** OpenAI 모델 ID */
+  /** 이전 설정 파일과의 호환용 필드. API 호출에는 openrouterModel을 사용한다 */
   openaiModel: string;
   /** AI 를 쓸 수 있으면 위키 문장을 AI 로 만든다 (기본 켬) */
   autoText: boolean;
 }
 
-/** 문장을 누가 썼는지. rule 이면 reason 에 AI 를 쓰지 못한 사유 */
+/** AI 생성 상태. unavailable이면 reason에 생성하지 못한 사유. rule은 이전 형식 호환용 */
 export interface TextGenerator {
-  kind: 'llm' | 'rule';
+  kind: 'llm' | 'rule' | 'unavailable';
   provider?: LlmProviderId;
   model?: string;
   reason?: string;
 }
 
-/** 모델 선택 목록의 한 줄 (OpenRouter·OpenAI 의 모델 목록 API 에서 가져옴) */
+/** 모델 선택 목록의 한 줄 (OpenRouter 모델 목록 API에서 가져옴) */
 export interface LlmModelInfo {
   id: string;
   name: string;

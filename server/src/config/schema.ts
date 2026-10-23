@@ -18,16 +18,16 @@ export const ScanSchema = z.object({
 });
 
 export const LlmSchema = z.object({
-  provider: z.enum(['auto', 'claude-cli', 'anthropic-sdk', 'openrouter', 'openai', 'none']).default('auto'),
+  provider: z.enum(['auto', 'claude-cli', 'anthropic-sdk', 'openrouter', 'openai', 'none']).default('auto').transform((v) => v === 'openai' || v === 'anthropic-sdk' ? 'openrouter' as const : v),
   claudeCliPath: z.string().nullable().default(null),
   model: z.string().nullable().default(null),
   maxBudgetUsd: z.number().positive().default(0.5),
   timeoutMs: z.number().int().positive().default(180_000),
-  /** Anthropic API 요청의 effort. claude-opus-5-5 의 기본값과 같은 medium 으로 명시한다 */
+  /** 이전 설정과의 호환용 effort. 직접 Anthropic API 호출에는 사용하지 않는다 */
   effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
-  openrouterModel: z.string().min(1).default('openrouter/free'),
+  openrouterModel: z.string().min(1).default('openai/gpt-5-mini').transform((v) => v === 'openrouter/free' || v === 'gpt-5-mini' ? 'openai/gpt-5-mini' : v),
   openaiModel: z.string().min(1).default('gpt-5-mini'),
-  /** AI 를 쓸 수 있으면 위키 문장(레포 위키·내 지식 설명·세션 위키 설명)을 AI 로 만든다. 끄면 규칙 기반 문장만 쓴다 */
+  /** AI 를 쓸 수 있으면 위키 문장(레포 위키·내 지식 설명·세션 위키 설명)을 AI 로 만든다. 끄면 자동 생성을 중지하며 수동 생성은 유지한다 */
   autoText: z.boolean().default(true),
 });
 
@@ -64,7 +64,7 @@ export const ConfigSchema = z.object({
     maxBudgetUsd: 0.5,
     timeoutMs: 180_000,
     effort: 'medium',
-    openrouterModel: 'openrouter/free',
+    openrouterModel: 'openai/gpt-5-mini',
     openaiModel: 'gpt-5-mini',
     autoText: true,
   }),

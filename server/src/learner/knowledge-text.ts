@@ -15,10 +15,10 @@ import type { WikiStorage } from '../storage/store';
  * 내 지식 위키의 "왜 이 상태인지" 문장을 AI 로 쓴다.
  * - 사실(상태, 응답 수, 근거 세션, 요청, 언급)은 코드가 모으고, AI 는 그 사실로 문장만 쓴다.
  * - 항목의 사실과 읽는 사람 수준이 같으면(지문이 같으면) 다시 부르지 않는다: learners/<id>/knowledge-text.json
- * - 상태를 넘겨짚는 문장("모르십니다", 확인되지 않았는데 "이해하고 계십니다")은 버리고 규칙 문장을 쓴다.
+ * - 상태를 넘겨짚는 문장("모르십니다", 확인되지 않았는데 "이해하고 계십니다")은 버리고 생성 실패 상태를 표시한다.
  */
 
-export const KNOWLEDGE_TEXT_PROMPT_VERSION = 'knowledge-text-0.3';
+export const KNOWLEDGE_TEXT_PROMPT_VERSION = 'knowledge-text-1.0';
 const BATCH = 20;
 const MAX_PER_JOB = 100;
 const MAX_STORED = 1500;
@@ -40,7 +40,7 @@ export const KnowledgeTextOutputSchema = z.object({
 
 const STATE_LABEL: Record<string, string> = { unknown: '이해 미확인', partial: '일부 확인', demonstrated: '확인됨 (문항 범위)', conflicting: '판단 보류 (정답·오답 섞임)' };
 const SELF_LABEL: Record<string, string> = { known: "'알고 있어요'라고 답함 (문제로 확인된 것은 아님)", unsure: "'잘 모르겠어요'라고 답함", unfamiliar: "'처음 봐요'라고 답함" };
-const VIA_LABEL: Record<string, string> = { finding: '먼저 확인할 위험 항목', item: '위키 항목', concept_hit: '작업 흔적에서 자동 감지' };
+const VIA_LABEL: Record<string, string> = { finding: '먼저 확인할 위험 항목', item: '위키 항목', concept_hit: 'AI가 이번 작업에 필요하다고 선정' };
 
 /** 이 항목에 대해 AI 에 주는 사실. 지문도 이 문자열로 만든다 */
 export function entryFacts(e: KnowledgeEntry): string {
@@ -72,7 +72,7 @@ export function buildKnowledgeTextPrompt(entries: KnowledgeEntry[]): string {
 const OVERCLAIM_UNKNOWN = /(모르십니다|모르고\s*계|모르는\s*것으로|이해하지\s*못하)/;
 const OVERCLAIM_KNOWN = /(이해하고\s*계십니다|잘\s*알고\s*계|완전히\s*이해)/;
 
-/** AI 문장 검사. 통과하지 못하면 null (규칙 문장을 쓴다) */
+/** AI 문장 검사. 통과하지 못하면 null (대체 문장은 생성하지 않는다) */
 export function acceptKnowledgeText(entry: KnowledgeEntry, raw: string): string | null {
   const text = truncate(maskSecrets(raw ?? '').replace(/\s+/g, ' ').trim(), 400);
   if (text.length < 10) return null;
@@ -84,7 +84,7 @@ export function acceptKnowledgeText(entry: KnowledgeEntry, raw: string): string 
 
 interface StoredText {
   text: string;
-  /** 검사를 통과하지 못한 문장. 같은 사실로 다시 부르지 않고 규칙 문장을 쓴다 */
+  /** 검사를 통과하지 못한 문장. 같은 사실로 자동 재시도하지 않고 실패 상태를 표시한다 */
   rejected?: true;
   provider: LlmProviderId;
   model?: string;
@@ -141,7 +141,7 @@ export class KnowledgeTextService {
         missing.push(e);
         return { ...e, reasonOrigin: 'missing' as const };
       }
-      if (hit.rejected) return { ...e, reasonOrigin: 'rule' as const };
+      if (hit.rejected) return { ...e, reason: '', reasonOrigin: 'error' as const };
       generator ??= { provider: hit.provider, ...(hit.model ? { model: hit.model } : {}) };
       return { ...e, reason: hit.text, reasonOrigin: 'llm' as const };
     });

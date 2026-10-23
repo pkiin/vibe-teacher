@@ -33,6 +33,10 @@ export function learnerRoutes(deps: AppDeps): Hono<AppEnv> {
     const learnerId = me(c);
     const [profile, events] = await Promise.all([deps.learner.profile(learnerId), deps.learner.events(learnerId)]);
     const catalog = deps.wiki.catalog();
+    for (const s of deps.index.getSessions(p.id).slice(0, 40)) {
+      const snap = await deps.wiki.current(p.id, s.key);
+      for (const c of snap?.concepts ?? []) catalog.concepts.set(c.id, c);
+    }
     const conceptNames: Record<string, string> = {};
     for (const id of Object.keys(profile.concepts)) conceptNames[id] = catalog.concepts.get(id)?.name ?? id;
     const body: UnderstandingResponse = { profile, events: events.slice(-50).reverse(), conceptNames };
@@ -66,7 +70,14 @@ export function learnerRoutes(deps: AppDeps): Hono<AppEnv> {
       if (s.projectId !== p.id) throw notFound('세션');
       snapshot = await deps.wiki.current(p.id, s.key);
     }
-    return c.json(await deps.assessments.start(me(c), p.id, req, snapshot));
+    const allowed = deps.auth.canEnrich(currentUser(c));
+    if (!allowed.ok) throw Object.assign(new Error(allowed.reason ?? 'AI 사용 권한이 없습니다'), { status: 403, code: 'forbidden' });
+    const catalog = deps.wiki.catalog(snapshot);
+    if (!snapshot) for (const s of deps.index.getSessions(p.id).slice(0, 40)) {
+      const snap = await deps.wiki.current(p.id, s.key);
+      for (const c of snap?.concepts ?? []) catalog.concepts.set(c.id, c);
+    }
+    return c.json(await deps.assessments.start(me(c), p.id, req, snapshot, catalog.concepts, await deps.prefs.level(me(c))));
   });
 
   app.post('/:id/assessments/:assessmentId/responses', requireJson, async (c) => {

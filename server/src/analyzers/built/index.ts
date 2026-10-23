@@ -4,7 +4,6 @@ import { collectCommandFacts } from './commands';
 import { collectFileFacts } from './files';
 import { collectGitFacts } from './git';
 import { dedupePackages, packagesFromCommand, packagesFromWrittenPackageJson } from './packages';
-import { collectStack } from './stack';
 
 export function summarizeBuilt(session: NormalizedSession, home?: string): BuiltSummary {
   const files = collectFileFacts(session, home);
@@ -14,8 +13,7 @@ export function summarizeBuilt(session: NormalizedSession, home?: string): Built
     ...packagesFromWrittenPackageJson(session),
   ]);
   const git = collectGitFacts(cmd.classified);
-  const allFiles = [...files.created, ...files.modified];
-  const stack = collectStack(allFiles, packages, cmd.commands);
+  const stack: StackFact[] = [];
   const timeline = buildTurnGroups(session);
   const failedToolCalls = new Set(cmd.classified.filter((x) => x.failed).map((x) => x.tc.id));
   for (const tc of session.toolCalls) if (tc.category !== 'shell' && tc.result?.ok === false) failedToolCalls.add(tc.id);

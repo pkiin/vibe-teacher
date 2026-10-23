@@ -1,9 +1,10 @@
-import type { KnowledgeWikiResponse, SessionSummary } from '@vibe-teacher/shared';
+import type { KnowledgeWikiResponse, SessionSummary, WikiConcept } from '@vibe-teacher/shared';
 import type { AnalysisService } from '../analyzers/index';
-import { loadConceptDictionary } from '../analyzers/concepts/dictionary';
+import type { EnrichService } from '../llm/service';
+import { conceptFromHit } from '../llm/concepts';
 import type { SessionIndex } from '../index/session-index';
 import type { WikiService } from '../wiki/service';
-import { buildKnowledgeEntries, extractOccurrences, mentionPatterns, type SessionOccurrences } from './knowledge';
+import { buildKnowledgeEntries, extractOccurrences, type SessionOccurrences } from './knowledge';
 import type { LearnerService } from './service';
 
 const MAX_SESSIONS = 40;
@@ -15,7 +16,6 @@ const MAX_CACHE = 400;
  */
 export class KnowledgeService {
   private readonly cache = new Map<string, SessionOccurrences>();
-  private patterns: Map<string, RegExp[]> | null = null;
 
   constructor(
     private readonly opts: {
@@ -23,6 +23,7 @@ export class KnowledgeService {
       analysis: AnalysisService;
       wiki: WikiService;
       learner: LearnerService;
+      enrich?: EnrichService;
     },
   ) {}
 
@@ -38,23 +39,26 @@ export class KnowledgeService {
 
   private async occurrences(summary: SessionSummary): Promise<SessionOccurrences | null> {
     const snapshot = await this.opts.wiki.current(summary.projectId, summary.key);
-    const key = `${summary.key}|${summary.fileSize}|${summary.fileMtime}|${snapshot?.revision ?? ''}`;
+    const key = `${summary.key}|${summary.fileSize}|${summary.fileMtime}|${snapshot?.revision ?? ''}|${snapshot?.builtAt ?? ''}`;
     const hit = this.cache.get(key);
     if (hit) return hit;
     const session = await this.opts.index.loadSession(summary.key);
     if (!session) return null;
-    const { concepts } = await this.opts.analysis.analyze(session);
-    const catalog = this.opts.wiki.catalog();
-    this.patterns ??= mentionPatterns(loadConceptDictionary());
+    const cached = await this.opts.enrich?.getCached(session, 'any');
+    const hits = cached ? this.opts.enrich!.mergeConcepts([], cached) : [];
+    const catalog = this.opts.wiki.catalog(snapshot);
+    for (const hit of hits) if (!catalog.concepts.has(hit.id)) catalog.concepts.set(hit.id, conceptFromHit(hit));
     const occ = extractOccurrences({
       session,
       projectName: this.opts.index.getProject(summary.projectId)?.name ?? summary.projectId,
-      hits: concepts,
+      hits,
       snapshot,
-      patterns: this.patterns,
+      patterns: new Map(),
       knownConceptIds: new Set(catalog.concepts.keys()),
     });
-    this.cache.set(key, occ);
+    occ.catalog = [...catalog.concepts.values()];
+    // 세션 요약만 새로 생성되어도 개념이 달라질 수 있어 AI 분석 캐시의 시각을 포함한다.
+    if (!this.opts.enrich) this.cache.set(key, occ);
     while (this.cache.size > MAX_CACHE) {
       const oldest = this.cache.keys().next().value;
       if (oldest === undefined) break;
@@ -76,10 +80,12 @@ export class KnowledgeService {
       if (occ) sessions.push(occ);
     }
     const profile = await this.opts.learner.profile(input.learnerId);
+    const catalog = new Map<string, WikiConcept>();
+    for (const s of sessions) for (const c of s.catalog ?? []) if (!catalog.has(c.id)) catalog.set(c.id, c);
     const entries = buildKnowledgeEntries({
       sessions,
       profile,
-      catalog: this.opts.wiki.catalog().concepts,
+      catalog,
       ...(input.session ? { focusSessionKey: input.session.key } : {}),
       includeProfileOnly: !input.session && !input.projectId,
     });
@@ -87,6 +93,7 @@ export class KnowledgeService {
     return {
       profile,
       entries,
+      concepts: Object.fromEntries(catalog),
       projects: projectIds.map((id) => ({ id, name: this.opts.index.getProject(id)?.name ?? id })),
       scannedSessions: sessions.length,
       totalSessions: all.length,

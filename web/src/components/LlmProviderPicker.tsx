@@ -5,24 +5,23 @@ import { useAuth } from '../context/AuthContext';
 import { ko } from '../i18n/ko';
 import { ErrorBox, Loading, Notice, fmtDate } from './Notice';
 
-const CHOICES: LlmProviderSetting[] = ['claude-cli', 'anthropic-sdk', 'openrouter', 'openai', 'auto', 'none'];
+const CHOICES: LlmProviderSetting[] = ['auto', 'claude-cli', 'openrouter', 'none'];
 
 export interface ModelSettings {
-  /** Claude (CLI·API) 모델. 비우면 기본값 */
+  /** Claude CLI 모델. 비우면 기본값 */
   claude: string | null;
   openrouter: string;
-  openai: string;
 }
 
 /**
- * OpenRouter·OpenAI 모델 선택. 목록은 서버가 각 서비스의 모델 목록 API 에서 받아 온다 (관리자만).
- * OpenRouter 는 기본으로 무료 모델만 보여 준다.
+ * OpenRouter 모델 선택. 목록은 서버가 각 서비스의 모델 목록 API 에서 받아 온다 (관리자만).
+ * OpenRouter 는 설정된 모델을 포함한 모델 목록을 보여 준다.
  */
-export function LlmModelSelect({ provider, value, onChange, disabled }: { provider: 'openrouter' | 'openai'; value: string; onChange: (model: string) => void; disabled?: boolean }) {
+export function LlmModelSelect({ provider, value, onChange, disabled }: { provider: 'openrouter'; value: string; onChange: (model: string) => void; disabled?: boolean }) {
   const [data, setData] = useState<LlmModelsResponse | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [query, setQuery] = useState('');
-  const [freeOnly, setFreeOnly] = useState(provider === 'openrouter');
+  const [freeOnly, setFreeOnly] = useState(false);
 
   const load = (refresh = false) => {
     setError(null);
@@ -88,7 +87,7 @@ export function LlmModelSelect({ provider, value, onChange, disabled }: { provid
   );
 }
 
-/** 제공자 선택 라디오. 각 선택지가 지금 실제로 쓸 수 있는지(로그인·키 여부)를 함께 보여 주고, OpenRouter·OpenAI 는 모델도 고른다. */
+/** 제공자 선택 라디오. 각 선택지가 지금 실제로 쓸 수 있는지(로그인·키 여부)를 함께 보여 주고, OpenRouter 는 모델도 고른다. */
 export function LlmProviderChoice({
   value,
   onChange,
@@ -105,13 +104,13 @@ export function LlmProviderChoice({
   options: LlmProviderOption[];
   defaultModel: string;
   models: ModelSettings;
-  onModelChange?: (provider: 'openrouter' | 'openai', model: string) => void;
+  onModelChange?: (provider: 'openrouter', model: string) => void;
   envOverride?: string;
   disabled?: boolean;
   name?: string;
 }) {
   const option = (id: string) => options.find((o) => o.id === id);
-  const modelOf = (id: LlmProviderSetting) => (id === 'openrouter' ? models.openrouter : id === 'openai' ? models.openai : models.claude || defaultModel);
+  const modelOf = (id: LlmProviderSetting) => (id === 'openrouter' ? models.openrouter : models.claude || defaultModel);
   return (
     <div className="llm-choice" role="radiogroup" aria-label={ko.sources.llmTitle}>
       {envOverride && <Notice kind="warn">{ko.sources.llmEnvOverride(envOverride)}</Notice>}
@@ -134,8 +133,8 @@ export function LlmProviderChoice({
                 {o && !o.available && <span className="small llm-choice-reason">{ko.sources.llmNoKey[id] ?? o.reason}</span>}
               </span>
             </label>
-            {value === id && (id === 'openrouter' || id === 'openai') && onModelChange && (
-              <LlmModelSelect provider={id} value={id === 'openrouter' ? models.openrouter : models.openai} onChange={(m) => onModelChange(id, m)} disabled={disabled} />
+            {value === id && id === 'openrouter' && onModelChange && (
+              <LlmModelSelect provider={id} value={models.openrouter} onChange={(m) => onModelChange(id, m)} disabled={disabled} />
             )}
           </div>
         );
@@ -182,7 +181,7 @@ export function LlmQuickSwitch({ onChanged }: { onChanged?: () => void }) {
     <details className="llm-quick">
       <summary className="small">
         {ko.sources.llmCurrent}: <strong>{current === 'none' ? ko.sources.llmChoice.none.label : ko.sources.llmChoice[current].label}</strong>
-        {current === 'openrouter' ? ` (${settings.llm.openrouterModel})` : current === 'openai' ? ` (${settings.llm.openaiModel})` : ''} · {ko.sources.llmChange}
+        {current === 'openrouter' ? ` (${settings.llm.openrouterModel})` : ''} · {ko.sources.llmChange}
       </summary>
       <LlmProviderChoice
         name="llm-quick"
@@ -190,8 +189,8 @@ export function LlmQuickSwitch({ onChanged }: { onChanged?: () => void }) {
         onChange={(provider) => save({ provider })}
         options={settings.llmOptions}
         defaultModel={settings.llmDefaultModel}
-        models={{ claude: settings.llm.model, openrouter: settings.llm.openrouterModel, openai: settings.llm.openaiModel }}
-        onModelChange={(provider, model) => save(provider === 'openrouter' ? { openrouterModel: model } : { openaiModel: model })}
+        models={{ claude: settings.llm.model, openrouter: settings.llm.openrouterModel }}
+        onModelChange={(provider, model) => save({ openrouterModel: model })}
         envOverride={settings.llmEnvOverride}
         disabled={busy}
       />

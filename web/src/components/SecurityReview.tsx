@@ -14,15 +14,9 @@ export function SecurityReview({ wiki, onJump }: { wiki: WikiResponse | null; on
       <p className="muted">{ko.security.intro}</p>
       <div className="security-scope">{ko.security.scope}</div>
       {!wiki && <p className="card">{ko.security.missing}</p>}
-      {wiki && !findings.length && <p className="card">{ko.security.empty}</p>}
+      {wiki && !findings.length && <p className="card">{wiki.snapshot.generator.kind === 'pending' ? ko.security.generating : ko.security.empty}</p>}
       {wiki && findings.map((finding) => <WikiAlertCard key={finding.id} finding={finding} snapshot={wiki.snapshot} onJump={onJump} />)}
-      <details className="card security-checklist">
-        <summary>{ko.security.pending}</summary>
-        <p className="small muted">{ko.security.pendingNote}</p>
-        <dl className="term-grid">
-          {ko.security.checklist.map(({ title, detail }) => <div key={title}><dt>{title}</dt><dd>{detail}</dd></div>)}
-        </dl>
-      </details>
+
     </section>
   );
 }

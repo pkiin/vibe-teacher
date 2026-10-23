@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { defaultConfig } from '../../src/config/schema';
 import { ModelCatalog, parseOpenAiModels, parseOpenRouterModels } from '../../src/llm/models';
 import { OpenAiCompatProvider, toStrictJsonSchema } from '../../src/llm/openai-compat';
-import { modelFor, probeProviders, resolveLlm } from '../../src/llm/select';
-import { LlmError } from '../../src/llm/types';
+import { modelFor, probeProviders, resolveLlm, RoutedProvider } from '../../src/llm/select';
+import { LlmError, type LlmProvider } from '../../src/llm/types';
 
 const schema = z.object({ title: z.string(), note: z.string().nullable(), items: z.array(z.object({ name: z.string() })) });
 const req = { system: 'sys', user: 'u', schema, schemaName: 'test_output', maxTokens: 1000, timeoutMs: 5000 };
@@ -41,12 +41,13 @@ describe('OpenAI-compatible provider', () => {
     expect(calls[0]!.body).toMatchObject({ model: 'openrouter/free', max_tokens: 1000, response_format: { type: 'json_schema', json_schema: { name: 'test_output', strict: true } } });
   });
 
-  it('uses max_completion_tokens for OpenAI', async () => {
+  it('redirects legacy OpenAI calls through OpenRouter with the OpenRouter key', async () => {
     const { fn, calls } = fakeFetch([{ body: okBody('{"title":"t","note":"n","items":[]}') }]);
-    await new OpenAiCompatProvider({ id: 'openai', model: 'gpt-5-mini', env: { OPENAI_API_KEY: 'sk-x' }, fetch: fn }).complete(req);
-    expect(calls[0]!.url).toBe('https://api.openai.com/v1/chat/completions');
-    expect(calls[0]!.body.max_completion_tokens).toBe(1000);
-    expect(calls[0]!.body.max_tokens).toBeUndefined();
+    await new OpenAiCompatProvider({ id: 'openai', model: 'gpt-5-mini', env: { OPENROUTER_API_KEY: 'or-x', OPENAI_API_KEY: 'unused' }, fetch: fn }).complete(req);
+    expect(calls[0]!.url).toBe('https://openrouter.ai/api/v1/chat/completions');
+    expect(calls[0]!.body.max_tokens).toBe(1000);
+    expect(calls[0]!.body.model).toBe('openai/gpt-5-mini');
+    expect(calls[0]!.headers.authorization).toBe('Bearer or-x');
   });
 
   it('falls back to JSON mode or prompt instructions when the model cannot take a schema', async () => {
@@ -75,9 +76,9 @@ describe('OpenAI-compatible provider', () => {
 
   it('rejects truncated or schema-breaking answers', async () => {
     const truncated = fakeFetch([{ body: JSON.stringify({ choices: [{ message: { content: '{"title"' }, finish_reason: 'length' }] }) }]);
-    await expect(new OpenAiCompatProvider({ id: 'openai', model: 'm', env: { OPENAI_API_KEY: 'k' }, fetch: truncated.fn }).complete(req)).rejects.toMatchObject({ kind: 'parse' });
+    await expect(new OpenAiCompatProvider({ id: 'openai', model: 'm', env: { OPENROUTER_API_KEY: 'k' }, fetch: truncated.fn }).complete(req)).rejects.toMatchObject({ kind: 'parse' });
     const wrong = fakeFetch([{ body: okBody('{"title":3}') }]);
-    await expect(new OpenAiCompatProvider({ id: 'openai', model: 'm', env: { OPENAI_API_KEY: 'k' }, fetch: wrong.fn }).complete(req)).rejects.toMatchObject({ kind: 'parse' });
+    await expect(new OpenAiCompatProvider({ id: 'openai', model: 'm', env: { OPENROUTER_API_KEY: 'k' }, fetch: wrong.fn }).complete(req)).rejects.toMatchObject({ kind: 'parse' });
   });
 
   it('reports a missing key instead of calling the network', async () => {
@@ -99,7 +100,7 @@ describe('model catalog', () => {
 
   it('puts the free router first, then free models, and converts prices to $/1M', () => {
     const list = parseOpenRouterModels(orRaw);
-    expect(list.map((m) => m.id)).toEqual(['openrouter/free', 'a/free:free', 'openrouter/auto', 'b/paid']);
+    expect(list.map((m) => m.id)).toEqual(['a/free:free', 'openrouter/free', 'openrouter/auto', 'b/paid']);
     expect(list.find((m) => m.id === 'b/paid')).toMatchObject({ free: false, structured: false, promptPrice: 2, completionPrice: 8, contextLength: 1000 });
     expect(list.find((m) => m.id === 'openrouter/auto')?.promptPrice).toBeUndefined();
     expect(list[0]).toMatchObject({ free: true, structured: true });
@@ -123,39 +124,49 @@ describe('model catalog', () => {
     expect(await c.structured('openrouter', 'a/free:free')).toBe(true);
     expect(await c.structured('openrouter', 'b/paid')).toBe(false);
     expect(await c.structured('openrouter', 'unknown/model')).toBeNull();
-    await expect(new ModelCatalog({ env: {} }).list('openai')).rejects.toThrow('OPENAI_API_KEY');
+    await c.list('openai');
+    expect(n).toBe(2);
   });
 });
 
-describe('provider selection', () => {
+describe('provider routing', () => {
   const cfg = { ...defaultConfig().llm, claudeCliPath: '/nonexistent/claude' };
-  // 실제 홈의 Claude Code 확장을 찾지 않도록 없는 홈을 쓴다
   const env = (e: Record<string, string>) => ({ PATH: '', HOME: '/nonexistent-home', ...e });
-
-  it('defaults OpenRouter to the free router and picks providers by setting', async () => {
-    expect(cfg.openrouterModel).toBe('openrouter/free');
-    expect(modelFor('openrouter', cfg)).toBe('openrouter/free');
-    const r = await resolveLlm({ ...cfg, provider: 'openrouter' }, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k' }) });
-    expect(r.status).toMatchObject({ resolvedProvider: 'openrouter', available: true });
-    expect((await resolveLlm({ ...cfg, provider: 'openai' }, '/tmp', { env: env({}) })).status).toMatchObject({ resolvedProvider: 'openai', available: false });
-  });
-
-  it('auto prefers GPT when an OpenAI key is available, otherwise keeps existing fallbacks', async () => {
-    expect((await resolveLlm(cfg, '/tmp', { env: env({ ANTHROPIC_API_KEY: 'k', OPENROUTER_API_KEY: 'k', OPENAI_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openai');
-    expect((await resolveLlm(cfg, '/tmp', { env: env({ OPENAI_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openai');
-    expect((await resolveLlm(cfg, '/tmp', { env: env({ ANTHROPIC_API_KEY: 'k', OPENROUTER_API_KEY: 'k' }) })).status.resolvedProvider).toBe('anthropic-sdk');
+  it('defaults to GPT-5 Mini through OpenRouter, and never uses direct API keys', async () => {
+    expect(cfg.openrouterModel).toBe('openai/gpt-5-mini');
+    expect(modelFor('openai', cfg)).toBe('openai/gpt-5-mini');
+    expect((await resolveLlm(cfg, '/tmp', { env: env({ OPENAI_API_KEY: 'unused', ANTHROPIC_API_KEY: 'unused' }) })).status.available).toBe(false);
     expect((await resolveLlm(cfg, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openrouter');
+    expect((await resolveLlm({ ...cfg, provider: 'openai' }, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openrouter');
+    expect((await resolveLlm({ ...cfg, provider: 'anthropic-sdk' }, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openrouter');
+    expect((await probeProviders(cfg, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k' }) })).map((o) => o.id)).toEqual(['claude-cli', 'openrouter']);
   });
-
-  it('keeps explicit settings and environment overrides ahead of the GPT preference', async () => {
-    const keys = { ANTHROPIC_API_KEY: 'k', OPENROUTER_API_KEY: 'k', OPENAI_API_KEY: 'k' };
-    expect((await resolveLlm({ ...cfg, provider: 'anthropic-sdk' }, '/tmp', { env: env(keys) })).status.resolvedProvider).toBe('anthropic-sdk');
-    expect((await resolveLlm(cfg, '/tmp', { env: env({ ...keys, VIBE_TEACHER_LLM_PROVIDER: 'openrouter' }) })).status.resolvedProvider).toBe('openrouter');
+  it('prefers an available CLI even when API keys are present', async () => {
+    const result = await resolveLlm({ ...cfg, claudeCliPath: process.execPath }, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k', OPENAI_API_KEY: 'unused', ANTHROPIC_API_KEY: 'unused' }) });
+    expect(result.status.resolvedProvider).toBe('claude-cli');
   });
-
-  it('lists all four providers with their availability', async () => {
-    const opts = await probeProviders(cfg, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k' }) });
-    expect(opts.map((o) => `${o.id}:${o.available}`)).toEqual(['claude-cli:false', 'anthropic-sdk:false', 'openrouter:true', 'openai:false']);
-    expect(opts.find((o) => o.id === 'openrouter')?.detail).toBe('openrouter/free');
+  it('uses CLI for text, OpenRouter for research and CLI failures, and never retries cancellation', async () => {
+    let cliCalls = 0, apiCalls = 0, fail = false;
+    const cli: LlmProvider = { id: 'claude-cli', availability: async () => ({ ok: true }), complete: async <T,>() => {
+      cliCalls++; if (fail) throw new LlmError('spawn', 'CLI 실패');
+      return { data: {} as T, provider: 'claude-cli', durationMs: 1 };
+    } };
+    const api: LlmProvider = { id: 'openrouter', availability: async () => ({ ok: true }), complete: async <T,>() => { apiCalls++; return { data: {} as T, provider: 'openrouter', durationMs: 1 }; } };
+    const p = new RoutedProvider(cli, api);
+    expect((await p.complete(req)).provider).toBe('claude-cli');
+    expect((await p.complete({ ...req, task: 'research' })).provider).toBe('openrouter');
+    expect(cliCalls).toBe(1);
+    fail = true;
+    expect((await p.complete(req)).provider).toBe('openrouter');
+    const controller = new AbortController(); controller.abort();
+    await expect(p.complete({ ...req, signal: controller.signal })).rejects.toMatchObject({ kind: 'cancelled' });
+    expect(apiCalls).toBe(2);
+  });
+  it('enables web search only for research and retains actual citation metadata', async () => {
+    const f = fakeFetch([{ body: JSON.stringify({ choices: [{ message: { content: '{"title":"t","note":null,"items":[]}', annotations: [{ type: 'url_citation', url_citation: { url: 'https://docs.example.test/framework', title: '공식 문서' } }] } }] }) }]);
+    const p = new OpenAiCompatProvider({ id: 'openrouter', model: cfg.openrouterModel, env: { OPENROUTER_API_KEY: 'key' }, fetch: f.fn });
+    const result = await p.complete({ ...req, task: 'research' });
+    expect(f.calls[0]?.body.plugins).toEqual([{ id: 'web', max_results: 5 }]);
+    expect(result.sources).toEqual([{ title: '공식 문서', url: 'https://docs.example.test/framework' }]);
   });
 });
