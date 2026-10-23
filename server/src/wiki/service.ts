@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { BuiltSummary, ConceptHit, LearnerProfile, NormalizedSession, SessionSummary, WikiAiLayer, WikiConcept, WikiResponse, WikiSnapshot } from '@vibe-teacher/shared';
-import { loadQuestionBank } from '../assessment/bank';
+import { buildQuestionBank } from '../assessment/bank';
 import { AssessmentService } from '../assessment/service';
 import { LearnerService } from '../learner/service';
 import { PrefsService } from '../learner/prefs';
@@ -33,12 +33,12 @@ export class WikiService {
     private readonly store: ConfigStore,
   ) {}
 
-  catalog() {
-    return loadWikiCatalog();
+  catalog(snapshot?: WikiSnapshot | null) {
+    return loadWikiCatalog(snapshot);
   }
 
   bank() {
-    return loadQuestionBank(new Set(this.catalog().concepts.keys()));
+    return buildQuestionBank({ version: 'ai-generated', rubricVersion: 'ai-practice-1', questions: [] });
   }
 
   private snapshotFile(projectId: string, revision: string): string {
@@ -54,6 +54,11 @@ export class WikiService {
     const conceptIds = new Set(catalog.concepts.keys());
     const raw = buildWikiSnapshot({ session, built: analysis.built, concepts: analysis.concepts, catalogVersion: catalog.version, conceptIds });
     const { snapshot } = enforceSnapshot(raw, conceptIds, session);
+    await this.save(session, snapshot);
+    return snapshot;
+  }
+
+  async save(session: Pick<NormalizedSession, 'projectId' | 'key'>, snapshot: WikiSnapshot): Promise<void> {
     await this.storage.lock(`project:${session.projectId}`, async () => {
       await this.storage.writeJson(this.snapshotFile(session.projectId, snapshot.revision), snapshot);
       const indexFile = this.indexFile(session.projectId, session.key);
@@ -61,14 +66,13 @@ export class WikiService {
       const history = [...(await this.history(session.projectId, session.key)).filter((h) => h.revision !== snapshot.revision), entry];
       await this.storage.writeJson(indexFile, { sessionKey: session.key, current: snapshot.revision, history } satisfies SessionWikiIndex);
     });
-    return snapshot;
   }
 
   async current(projectId: string, sessionKey: string): Promise<WikiSnapshot | null> {
     for (const entry of (await this.history(projectId, sessionKey)).reverse()) {
       for (const file of this.storage.projectFiles(projectId, 'snapshots', `${entry.revision}.json`)) {
         const snapshot = await this.storage.readJson<WikiSnapshot>(file);
-        if (snapshot?.sessionKey === sessionKey) return { ...snapshot, projectId };
+        if (snapshot?.sessionKey === sessionKey && snapshot.generator.rulesVersion === RULES_VERSION) return { ...snapshot, projectId };
       }
     }
     return null;
@@ -84,13 +88,13 @@ export class WikiService {
   }
 
   isStale(snapshot: WikiSnapshot, summary: SessionSummary): boolean {
-    return snapshot.revision !== snapshotRevision(summary);
+    return snapshot.generator.rulesVersion !== RULES_VERSION || snapshot.revision !== snapshotRevision(summary);
   }
 
   /** 프로젝트 원장 + 개인 상태 → 화면용 응답. profile 이 null 이면 개인화 없이 계획한다. */
   view(base: WikiSnapshot, profile: LearnerProfile | null, answeredQuestionIds: ReadonlySet<string>, stale: boolean, aiLayer: WikiAiLayer | null = null): WikiResponse {
-    const catalog = this.catalog();
-    const { snapshot, ai } = mergeWikiAi(base, aiLayer, new Set(catalog.concepts.keys()));
+    const { snapshot, ai } = mergeWikiAi(base, aiLayer);
+    const catalog = this.catalog(snapshot);
     const plan = planWiki({ snapshot, profile, concepts: catalog.concepts, graph: catalog.graph, settings: this.store.get().wiki, bank: this.bank(), answeredQuestionIds });
     const ids = new Set<string>();
     for (const item of snapshot.items) for (const c of item.conceptIds) ids.add(c);
@@ -120,5 +124,5 @@ export function createWikiServices(
   const learner = new LearnerService(storage);
   const wiki = new WikiService(storage, store);
   const wikiAi = new WikiAiService({ storage, store, wiki, resolveProvider });
-  return { wiki, learner, assessments: new AssessmentService(learner, () => wiki.bank()), wikiAi, help: new HelpService({ storage, store, wiki, wikiAi, resolveProvider }), prefs: new PrefsService(storage) };
+  return { wiki, learner, assessments: new AssessmentService(learner, () => wiki.bank(), { resolveProvider, timeoutMs: () => store.get().llm.timeoutMs }), wikiAi, help: new HelpService({ storage, store, wiki, wikiAi, resolveProvider }), prefs: new PrefsService(storage) };
 }

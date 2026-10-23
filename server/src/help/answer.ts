@@ -23,7 +23,7 @@ import type { WikiCatalog } from '../wiki/catalog';
  * 도움 패널 답변의 재료와 검사 (plan §13.3, §16).
  * - 질문 대상(focus)에 맞는 검증된 주장·위험·개념만 골라 보낸다.
  * - AI 가 지어낸 claim ID 를 인용하거나 근거 없이 프로젝트 연결을 쓰면 그 부분을 숨긴다.
- * - AI 를 쓸 수 없으면 카탈로그 설명과 검증된 주장으로 대체 답을 만든다.
+ * - AI를 쓸 수 없으면 대체 답을 만들지 않고 실패 사유를 반환한다.
  */
 
 export interface HelpContext {
@@ -222,32 +222,5 @@ export function acceptHelpOutput(output: HelpOutput, claimIds: ReadonlySet<strin
       conceptIds: output.conceptIds.filter((id) => conceptIds.has(id)).slice(0, 6),
     },
     notices,
-  };
-}
-
-/** AI 없이 만드는 대체 답: 카탈로그 설명 + 검증된 주장. 자유 질문 자체에 대한 답이 아님을 알린다 */
-export function buildFallbackAnswer(ctx: HelpContext, reason: string): { answer: HelpAnswer; notices: string[] } {
-  const c = ctx.concepts[0];
-  const item = ctx.items[0];
-  const finding = ctx.findings[0];
-  const file = ctx.files[0];
-  let answer: string;
-  if (ctx.focusLabel.startsWith('개념') && c) answer = c.explanation;
-  else if (ctx.focusLabel.startsWith('항목') && item) answer = `${item.question} ${item.why}`.trim();
-  else if (ctx.focusLabel.startsWith('먼저 확인할 것') && finding) answer = finding.statement;
-  else if (file) answer = `${file.relPath ?? file.path} 은(는) 이 세션 기록에서 ${file.count}번 바뀐 파일입니다.`;
-  else answer = ctx.items.length ? `이 세션에서 살펴볼 항목: ${ctx.items.map((i) => i.title).join(' / ')}` : (c?.explanation ?? '이 질문에 쓸 수 있는 정리된 설명이 아직 없습니다.');
-  const claims = ctx.claims.filter((x) => x.origin !== 'llm').slice(0, 3);
-  return {
-    answer: {
-      answer,
-      projectConnection: claims.length ? `이 세션 기록에서 확인된 것: ${claims.map((x) => x.statement).join(' ')}` : '',
-      claimIds: claims.map((x) => x.id),
-      generalNote: [c?.example, c?.confusions[0]].filter(Boolean).join(' '),
-      unverified: [...(item?.unverified ?? []), ...(finding?.missingContext ?? [])].slice(0, 5),
-      followUps: [],
-      conceptIds: ctx.concepts.map((x) => x.id).slice(0, 6),
-    },
-    notices: [reason, 'AI 없이 정리된 설명과 확인된 사실을 보여 드립니다. 자유 질문 자체에 대한 답은 아닙니다.'],
   };
 }

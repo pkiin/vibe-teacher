@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import type { NormalizedSession } from '@vibe-teacher/shared';
 import { claudeCodeAdapter } from '../../src/adapters/claude-code/index';
 import { summarizeBuilt } from '../../src/analyzers/built/index';
-import { detectConcepts } from '../../src/analyzers/concepts/index';
 import { buildDigest, maskSecrets } from '../../src/llm/digest';
+import { fakeSession } from '../wiki/helpers';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FIX = path.resolve(here, '../fixtures/claude/sess-1.jsonl');
@@ -22,12 +22,12 @@ describe('digest', () => {
     const draft = await claudeCodeAdapter.load({ filePath: FIX, size: 1, mtimeMs: 1 }, source, { account, extra: { liveSessionIds: new Set(), knownCwds: [] } });
     const session: NormalizedSession = { ...draft, key: 'k', provider: 'claude-code', sourceId: 's', accountId: 'a', projectId: 'p' };
     const built = summarizeBuilt(session, '/home/tester');
-    const concepts = detectConcepts(session, built);
+    const concepts: [] = [];
     const d = buildDigest(session, built, concepts, { maxChars: 3000 });
     expect(d).toContain('리액트 프로젝트 만들어줘');
     expect(d).toContain('web/.env.sample');
     expect(d).toContain('feat: 첫 커밋');
-    expect(d).toContain('env-variables');
+    expect(d).not.toContain('규칙 기반 개념');
     expect(d).not.toContain('3 files changed');
     expect(d.length).toBeLessThanOrEqual(3100);
   });

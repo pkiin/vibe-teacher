@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { ConfigSchema } from '../src/config/schema';
 import { ConfigStore, resolveHome, resolvePaths } from '../src/config/store';
 import { isLoopbackHost, parseServerArgs, readServerEnv } from '../src/config/env';
 
@@ -25,6 +26,14 @@ describe('config store', () => {
     expect((await fs.readdir(home)).some((f) => f.endsWith('.tmp'))).toBe(false);
   });
 
+  it('migrates legacy API choices and the free-router default without discarding other settings', () => {
+    for (const provider of ['openai', 'anthropic-sdk']) {
+      const cfg = ConfigSchema.parse({ llm: { provider, openrouterModel: 'openrouter/free' }, scan: { mode: 'list', homes: ['/tmp/fixture'] } });
+      expect(cfg.llm.provider).toBe('openrouter');
+      expect(cfg.llm.openrouterModel).toBe('openai/gpt-5-mini');
+      expect(cfg.scan.homes).toEqual(['/tmp/fixture']);
+    }
+  });
   it('resolves home from env', () => {
     expect(resolveHome({ VIBE_TEACHER_HOME: '/x/y' })).toBe('/x/y');
     expect(resolveHome({})).toBe(path.join(os.homedir(), '.vibe-teacher'));

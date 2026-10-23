@@ -48,7 +48,7 @@ describe('claude-cli provider', () => {
     const args = buildArgs({ schemaJson: '{}', system: 'sys', model: 'sonnet', maxBudgetUsd: 0.25 });
     expect(args).toEqual(expect.arrayContaining(['-p', '--output-format', 'json', '--json-schema', '{}', '--system-prompt', 'sys', '--no-session-persistence', '--tools', '', '--restricted', '--strict-mcp-config', '--disable-slash-commands', '--max-budget-usd', '0.25', '--model', 'sonnet']));
     expect(args).not.toContain('--bare');
-    const env = childEnv({ PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'x', CLAUDE_CONFIG_DIR: '/cfg', HOME: '/h', ANTHROPIC_API_KEY: 'sk-ant-x', ANTHROPIC_AUTH_TOKEN: 't' });
+    const env = childEnv({ PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'x', CLAUDE_CONFIG_DIR: '/cfg', HOME: '/h', ANTHROPIC_API_KEY: 'sk-ant-x', ANTHROPIC_AUTH_TOKEN: 't', OPENAI_API_KEY: 'unused', OPENROUTER_API_KEY: 'unused' });
     expect(env).toEqual({ PATH: '/bin', CLAUDE_CONFIG_DIR: '/cfg', HOME: '/h' });
   });
 
@@ -69,6 +69,19 @@ describe('claude-cli provider', () => {
     const budget = fakeSpawn({ stdout: JSON.stringify({ type: 'result', subtype: 'error_max_budget_usd', is_error: true, result: 'budget' }) });
     const p2 = new ClaudeCliProvider({ binaryPath: bin, cwd: '/tmp', maxBudgetUsd: 0.5, env: { PATH: '' }, spawn: budget.spawn });
     await expect(p2.complete({ system: 's', user: 'u', schema, schemaName: 'x', maxTokens: 10, timeoutMs: 5000 })).rejects.toMatchObject({ kind: 'budget' });
+  });
+
+  it('uses Haiku with low effort only for targeted repository questions', async () => {
+    const { spawn, calls } = fakeSpawn({ stdout: JSON.stringify({ subtype: 'success', structured_output: { title: '확인 결과' } }) });
+    const p = new ClaudeCliProvider({ binaryPath: bin, cwd: '/tmp', model: 'opus', maxBudgetUsd: 0.5, env: { PATH: '' }, spawn });
+    const req = { system: 's', user: '질문', schema, schemaName: 'x', maxTokens: 100, timeoutMs: 5000 };
+    const result = await p.complete({ ...req, task: 'repo-inspect' });
+    expect(calls[0]?.args.slice(-4)).toEqual(['--model', 'haiku', '--effort', 'low']);
+    expect(calls[0]?.args[calls[0].args.indexOf('--tools') + 1]).toBe('');
+    expect(result.model).toBe('haiku');
+    await p.complete(req);
+    expect(calls[1]?.args.slice(-2)).toEqual(['--model', 'opus']);
+    expect(calls[1]?.args).not.toContain('--effort');
   });
 
   it('kills the child on timeout', async () => {

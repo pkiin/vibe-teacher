@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { OPENAI_BASE_URL, OPENROUTER_BASE_URL } from './models';
+import { maskSecrets, maskOutput } from './digest';
+import { OPENROUTER_BASE_URL } from './models';
 import { LlmError, extractJson, type LlmAvailability, type LlmProvider, type LlmRequest, type LlmResult } from './types';
 
 /**
- * OpenAI 호환 Chat Completions 제공자 (OpenRouter, OpenAI). SDK 없이 fetch 로 부른다.
+ * OpenAI 호환 Chat Completions 프로토콜을 쓰는 OpenRouter 제공자. SDK 없이 fetch 로 부른다.
  * 출력 형식은 모델이 지원하는 만큼 강제한다: JSON 스키마(structured outputs) → JSON 모드 → 프롬프트 지시.
  * 어느 쪽이든 받은 결과는 zod 스키마로 다시 검사한다.
  */
@@ -11,9 +12,9 @@ import { LlmError, extractJson, type LlmAvailability, type LlmProvider, type Llm
 export type OpenAiCompatId = 'openrouter' | 'openai';
 type OutputMode = 'json_schema' | 'json_object' | 'prompt';
 
-const SETUP: Record<OpenAiCompatId, { baseUrl: string; keyEnv: 'OPENROUTER_API_KEY' | 'OPENAI_API_KEY'; label: string }> = {
+const SETUP: Record<OpenAiCompatId, { baseUrl: string; keyEnv: 'OPENROUTER_API_KEY'; label: string }> = {
   openrouter: { baseUrl: OPENROUTER_BASE_URL, keyEnv: 'OPENROUTER_API_KEY', label: 'OpenRouter' },
-  openai: { baseUrl: OPENAI_BASE_URL, keyEnv: 'OPENAI_API_KEY', label: 'OpenAI' },
+  openai: { baseUrl: OPENROUTER_BASE_URL, keyEnv: 'OPENROUTER_API_KEY', label: 'OpenRouter' },
 };
 
 export interface OpenAiCompatOptions {
@@ -45,16 +46,15 @@ export function toStrictJsonSchema(schema: z.ZodType): Record<string, unknown> {
 
 interface ChatResponse {
   model?: string;
-  choices?: { message?: { content?: string | null; refusal?: string | null }; finish_reason?: string }[];
+  choices?: { message?: { content?: string | null; refusal?: string | null; annotations?: { type: string; url_citation?: { url: string; title?: string; content?: string } }[] }; finish_reason?: string }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
   error?: { message?: string; code?: number | string };
 }
 
 export class OpenAiCompatProvider implements LlmProvider {
-  readonly id: OpenAiCompatId;
+  readonly id = 'openrouter' as const;
 
   constructor(private readonly opts: OpenAiCompatOptions) {
-    this.id = opts.id;
   }
 
   private get setup() {
@@ -93,20 +93,21 @@ export class OpenAiCompatProvider implements LlmProvider {
         ? req.system
         : `${req.system}\n\n반드시 아래 JSON 스키마에 맞는 JSON 객체 하나만 출력하세요. 코드 블록이나 설명 글은 쓰지 마세요.\n${JSON.stringify(schema)}`;
     const body: Record<string, unknown> = {
-      model: this.opts.model,
+      model: this.opts.model === 'gpt-5-mini' ? 'openai/gpt-5-mini' : this.opts.model,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: req.user },
       ],
       // OpenAI 의 추론 모델은 max_tokens 대신 max_completion_tokens 를 받는다
-      ...(this.opts.id === 'openai' ? { max_completion_tokens: req.maxTokens } : { max_tokens: req.maxTokens }),
+      max_tokens: req.maxTokens,
+      ...(req.task === 'research' ? { plugins: [{ id: 'web', max_results: 5 }] } : {}),
     };
     if (mode === 'json_schema') body.response_format = { type: 'json_schema', json_schema: { name: req.schemaName, strict: true, schema } };
     if (mode === 'json_object') body.response_format = { type: 'json_object' };
 
     const signal = req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs)]) : AbortSignal.timeout(req.timeoutMs);
     const headers: Record<string, string> = { authorization: `Bearer ${this.key}`, 'content-type': 'application/json' };
-    if (this.opts.id === 'openrouter') headers['x-title'] = 'vibe-teacher';
+    headers['x-title'] = 'vibe-teacher';
 
     let res: Response;
     try {
@@ -131,15 +132,16 @@ export class OpenAiCompatProvider implements LlmProvider {
     if (choice?.message?.refusal) throw new LlmError('unknown', '모델이 요청을 거절했습니다', choice.message.refusal);
     if (choice?.finish_reason === 'length') throw new LlmError('parse', '응답이 최대 토큰 수에서 잘렸습니다');
     if (!content) throw new LlmError('parse', `${this.setup.label} 응답에 내용이 없습니다`);
-    const validated = req.schema.safeParse(extractJson(content));
+    const validated = req.schema.safeParse(maskOutput(extractJson(content)));
     if (!validated.success) throw new LlmError('parse', 'LLM 응답이 스키마와 맞지 않습니다', validated.error.message.slice(0, 500));
     return {
       data: validated.data,
-      provider: this.opts.id,
+      provider: 'openrouter',
       model: data.model ?? this.opts.model,
       ...(typeof data.usage?.cost === 'number' ? { costUsd: data.usage.cost } : {}),
       ...(data.usage ? { usage: { input: data.usage.prompt_tokens ?? 0, output: data.usage.completion_tokens ?? 0 } } : {}),
       durationMs: Date.now() - started,
+      ...(choice?.message?.annotations ? { sources: choice.message.annotations.flatMap((a) => a.type === 'url_citation' && a.url_citation ? [{ title: a.url_citation.title ?? a.url_citation.url, url: a.url_citation.url, ...(a.url_citation.content ? { excerpt: maskSecrets(a.url_citation.content).slice(0, 1200) } : {}) }] : []) } : {}),
     };
   }
 

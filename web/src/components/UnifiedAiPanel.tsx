@@ -32,7 +32,7 @@ export function UnifiedAiPanel({
   enrichment: EnrichmentRecord | null;
   onEnrichment: (r: EnrichmentRecord) => void;
   onWikiUpdated: () => void;
-  /** 위키 항목 설명을 쓰는 중인지 (항목 카드가 규칙 문장 대신 "쓰는 중"을 보여 준다) */
+  /** 위키 항목 설명을 쓰는 중인지 (항목 카드가 "쓰는 중"을 보여 준다) */
   onWikiWriting?: (writing: boolean) => void;
 }) {
   const enc = encodeURIComponent(sessionKey);
@@ -46,6 +46,9 @@ export function UnifiedAiPanel({
   const enrichJob = useJob<EnrichmentRecord>(enrichJobId ? `/api/jobs/${enrichJobId}` : null).job;
   const wikiJob = useJob<WikiAiJobResult>(wikiJobId ? `/api/sessions/${enc}/wiki/ai/jobs/${wikiJobId}` : null).job;
   const wikiReady = !!wiki && !wiki.stale;
+  useEffect(() => {
+    if (wiki?.generation?.jobId) setWikiJobId(wiki.generation.jobId);
+  }, [wiki?.generation?.jobId]);
 
   useEffect(() => {
     if (enrichJob?.state === 'done' && enrichJob.result) onEnrichment(enrichJob.result);

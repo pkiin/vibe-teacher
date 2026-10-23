@@ -304,6 +304,8 @@ export interface ConceptHit {
   level: 'beginner' | 'intermediate';
   explanation: string;
   whyHere: string;
+  /** 단순 대화 언급과 실제 파일·명령 등의 기록을 구분한다. AI 추가 개념은 생략 가능. */
+  contextKind?: 'activity' | 'mention';
   score: number;
   evidence: Evidence[];
   links?: ConceptLink[];

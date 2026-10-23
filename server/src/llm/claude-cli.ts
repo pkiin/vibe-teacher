@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
+import { maskOutput } from './digest';
 import { LlmError, extractJson, type LlmAvailability, type LlmProvider, type LlmRequest, type LlmResult } from './types';
 
 export interface ClaudeCliOptions {
@@ -80,13 +81,13 @@ export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(env)) {
     if (/^CLAUDE/i.test(k) && k !== 'CLAUDE_CONFIG_DIR') continue;
-    if (k === 'ANTHROPIC_API_KEY' || k === 'ANTHROPIC_AUTH_TOKEN') continue;
+    if (['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY'].includes(k)) continue;
     out[k] = v;
   }
   return out;
 }
 
-export function buildArgs(opts: { schemaJson: string; system: string; model?: string | null; maxBudgetUsd: number }): string[] {
+export function buildArgs(opts: { schemaJson: string; system: string; model?: string | null; effort?: 'low'; maxBudgetUsd: number }): string[] {
   const args = [
     '-p',
     '--output-format',
@@ -105,6 +106,7 @@ export function buildArgs(opts: { schemaJson: string; system: string; model?: st
     String(opts.maxBudgetUsd),
   ];
   if (opts.model) args.push('--model', opts.model);
+  if (opts.effort) args.push('--effort', opts.effort);
   return args;
 }
 
@@ -171,7 +173,8 @@ export class ClaudeCliProvider implements LlmProvider {
     if (!bin) throw new LlmError('spawn', 'claude CLI를 찾지 못했습니다');
     const spawn = this.opts.spawn ?? nodeSpawn;
     const schemaJson = JSON.stringify(toCliJsonSchema(req.schema));
-    const args = buildArgs({ schemaJson, system: req.system, model: this.opts.model, maxBudgetUsd: this.opts.maxBudgetUsd });
+    const model = req.task === 'repo-inspect' ? 'haiku' : this.opts.model;
+    const args = buildArgs({ schemaJson, system: req.system, model, ...(req.task === 'repo-inspect' ? { effort: 'low' as const } : {}), maxBudgetUsd: this.opts.maxBudgetUsd });
     const started = Date.now();
 
     const { stdout, stderr, code, timedOut, cancelled } = await new Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean; cancelled: boolean }>(
@@ -239,12 +242,12 @@ export class ClaudeCliProvider implements LlmProvider {
       if (typeof parsed.result === 'string') raw = extractJson(parsed.result);
       else raw = parsed.result;
     }
-    const validated = req.schema.safeParse(raw);
+    const validated = req.schema.safeParse(maskOutput(raw));
     if (!validated.success) throw new LlmError('parse', 'LLM 응답이 스키마와 맞지 않습니다', validated.error.message.slice(0, 500));
     return {
       data: validated.data,
       provider: 'claude-cli',
-      model: this.opts.model ?? firstModel(parsed.modelUsage),
+      model: model ?? firstModel(parsed.modelUsage),
       costUsd: typeof parsed.total_cost_usd === 'number' ? parsed.total_cost_usd : undefined,
       usage: parsed.usage ? { input: parsed.usage.input_tokens ?? 0, output: parsed.usage.output_tokens ?? 0 } : undefined,
       durationMs: Date.now() - started,

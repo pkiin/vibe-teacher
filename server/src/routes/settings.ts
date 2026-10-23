@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { LlmModelsResponse, SettingsResponse, SettingsUpdateRequest } from '@vibe-teacher/shared';
-import { DEFAULT_SDK_MODEL } from '../llm/anthropic-sdk';
+import { LlmSchema } from '../config/schema';
 import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENROUTER_MODEL } from '../llm/models';
 import { HttpError, requireAdmin, type AppDeps, type AppEnv } from './deps';
 
@@ -49,7 +49,7 @@ export function settingsRoutes(deps: AppDeps): Hono<AppEnv> {
       llmStatus: await deps.enrich.status(),
       llmOptions: await deps.enrich.providerOptions(),
       ...(envOverride ? { llmEnvOverride: envOverride } : {}),
-      llmDefaultModel: DEFAULT_SDK_MODEL,
+      llmDefaultModel: 'Claude CLI 기본 모델',
       llmDefaultModels: { openrouter: DEFAULT_OPENROUTER_MODEL, openai: DEFAULT_OPENAI_MODEL },
       home: deps.paths.home,
     };
@@ -81,7 +81,7 @@ export function settingsRoutes(deps: AppDeps): Hono<AppEnv> {
     const scanChanged = !!parsed.data.scan;
     await deps.store.update((cfg) => {
       if (parsed.data.scan) cfg.scan = { ...cfg.scan, ...stripUndefined(parsed.data.scan) };
-      if (parsed.data.llm) cfg.llm = { ...cfg.llm, ...stripUndefined(parsed.data.llm) };
+      if (parsed.data.llm) cfg.llm = LlmSchema.parse({ ...cfg.llm, ...stripUndefined(parsed.data.llm) });
       if (parsed.data.auth) cfg.auth = { ...cfg.auth, ...stripUndefined(parsed.data.auth) };
     });
     deps.enrich.invalidate();

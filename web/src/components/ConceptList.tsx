@@ -16,6 +16,7 @@ export function ConceptList({ concepts, onJump, coveredIds }: { concepts: Concep
             <span className="pill pill-outline">{c.category}</span>
             <span className={`pill ${c.level === 'beginner' ? 'pill-green' : 'pill-yellow'}`}>{ko.concepts.level[c.level]}</span>
             {c.llm && <span className="pill pill-blue">AI</span>}
+            {c.contextKind === 'mention' && <span className="pill pill-outline">{ko.concepts.mentionOnly}</span>}
             {coveredIds?.has(c.id) && <span className="pill pill-gray">{ko.understand.covered}</span>}
           </div>
           <p className="concept-exp">{c.llm?.explanation ?? c.explanation}</p>
@@ -30,7 +31,7 @@ export function ConceptList({ concepts, onJump, coveredIds }: { concepts: Concep
           {c.evidence.length > 0 && (
             <details className="evidence">
               <summary>
-                {ko.common.evidence} ({c.evidence.length})
+                {ko.concepts.relatedRecords} ({c.evidence.length})
               </summary>
               <ul>
                 {c.evidence.map((e, i) => (
@@ -38,7 +39,7 @@ export function ConceptList({ concepts, onJump, coveredIds }: { concepts: Concep
                     <code>{e.snippet}</code>
                     {e.messageIndex != null && onJump && (
                       <button className="link" onClick={() => onJump(e.messageIndex as number)}>
-                        #{e.messageIndex}
+                        {ko.concepts.openMessage}
                       </button>
                     )}
                   </li>

@@ -62,12 +62,10 @@ describe('prerequisite graph (T13)', () => {
   });
 });
 
-describe('shipped catalog', () => {
-  it('has no quarantined prerequisite edges and every concept has a summary', () => {
+describe('session catalog', () => {
+  it('has no predefined concepts or prerequisites', () => {
     const catalog = loadWikiCatalog();
-    expect(catalog.graph.quarantined).toEqual([]);
-    expect(catalog.graph.active.length).toBeGreaterThan(10);
-    for (const c of catalog.concepts.values()) expect(c.summary.length).toBeGreaterThan(5);
-    expect(catalog.concepts.get('authorization')?.confusions.length).toBeGreaterThan(0);
+    expect(catalog.concepts.size).toBe(0);
+    expect(catalog.graph.active).toEqual([]);
   });
 });

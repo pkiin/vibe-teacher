@@ -43,7 +43,10 @@ export function accountsRoutes(deps: AppDeps): Hono<AppEnv> {
         row.humanMessages += summary.counts.human;
         const session = await deps.index.loadSession(summary.key);
         if (!session) continue;
-        const { built, concepts } = await deps.analysis.analyze(session);
+        const { built } = await deps.analysis.analyze(session);
+        const snapshot = await deps.wiki.current(session.projectId, session.key);
+        const cached = await deps.enrich.getCached(session, 'any');
+        const concepts = snapshot?.concepts ?? (cached ? deps.enrich.mergeConcepts([], cached) : []);
         row.filesCreated += built.filesCreated.length;
         row.filesModified += built.filesModified.length;
         row.packages += built.packagesInstalled.length;

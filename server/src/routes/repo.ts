@@ -2,8 +2,9 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { learnerIdFor } from '../learner/service';
 import { RepoWikiService } from '../repo/service';
+import { repoFileView } from '../repo/source';
 import { WikiStorage } from '../storage/store';
-import { assertAccount, currentUser, notFound, parseBody, requireJson, type AppDeps, type AppEnv } from './deps';
+import { assertAccount, currentUser, HttpError, notFound, parseBody, requireJson, type AppDeps, type AppEnv } from './deps';
 
 const TextSchema = z.object({ force: z.boolean().default(false) });
 
@@ -21,6 +22,16 @@ export function repoRoutes(deps: AppDeps): Hono<AppEnv> {
   };
   const level = (c: Context<AppEnv>) => deps.prefs.level(learnerIdFor(currentUser(c).username));
   const allowed = (c: Context<AppEnv>) => deps.auth.canEnrich(currentUser(c));
+
+  app.get('/:id/repo-wiki/source', async (c) => {
+    const p = await project(c);
+    const query = z.object({ path: z.string().min(1).max(1000), line: z.coerce.number().int().min(1).max(1_000_000).default(1) }).safeParse(c.req.query());
+    if (!query.success) throw new HttpError(422, 'invalid_query', '파일 경로와 줄 번호를 확인해 주세요');
+    const source = await repoFileView(p.rootPath, query.data.path, query.data.line);
+    if (!source) throw notFound('근거 파일');
+    c.header('Cache-Control', 'no-store');
+    return c.json(source);
+  });
 
   app.get('/:id/repo-wiki', async (c) => c.json(await service.get(await project(c), await level(c), allowed(c))));
   app.get('/:id/repo-wiki/ai/preview', async (c) => c.json(await service.preview(await project(c), await level(c), allowed(c))));

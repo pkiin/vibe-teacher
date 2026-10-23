@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** LLM이 돌려주는 세션 보강 결과의 스키마. CLI(--json-schema)와 SDK(zodOutputFormat) 양쪽에 그대로 쓰인다. */
+/** LLM이 돌려주는 세션 보강 결과의 스키마. CLI와 OpenRouter 구조화 응답에서 사용한다. */
 export const EnrichmentSchema = z.object({
   summary: z.object({
     title: z.string().describe('세션을 한 줄로 부르는 짧은 제목 (한국어, 40자 이내)'),
@@ -26,12 +26,15 @@ export const EnrichmentSchema = z.object({
         id: z
           .string()
           .nullable()
-          .describe('제공된 규칙 기반 개념 후보의 id를 다듬는 경우 그 id, 새 개념이면 null'),
+          .describe('개념을 식별할 영문 소문자 slug. 같은 개념에는 같은 id를 사용. 정하기 어렵다면 null'),
         name: z.string().describe('개념 이름 (한국어, 영어 용어는 괄호로)'),
         explanation: z.string().describe('읽는 사람 수준에 맞춘 설명 2~4문장 (한국어 존댓말)'),
-        whyHere: z.string().describe('이 세션에서 왜 이 개념이 중요했는지, 근거를 들어 1~3문장'),
+        whyHere: z.string().describe('이번 작업의 사실과 알아둘 이유를 잇는 짧은 설명. 대화 인용·언급 횟수 나열 없이, 단순 언급과 실제 실행을 구분'),
         example: z.string().nullable().describe('이 세션의 실제 파일/명령을 활용한 짧은 예시, 없으면 null'),
         level: z.enum(['beginner', 'intermediate']),
+        category: z.string().default('이번 작업의 개념'),
+        links: z.array(z.object({ title: z.string(), url: z.string() })).default([]),
+        evidence: z.array(z.string()).describe('필요성을 뒷받침하는 실제 파일 경로나 명령. 제공된 자료에서 그대로 인용').default([]),
       }),
     )
     .describe('사용자가 알아야 할 개념 (중요한 순서, 최대 12개)'),
@@ -39,5 +42,5 @@ export const EnrichmentSchema = z.object({
 
 export type Enrichment = z.infer<typeof EnrichmentSchema>;
 
-/** 2: 읽는 사람 수준(ReaderLevel)별로 문체를 맞추고 수준별로 캐시 */
-export const ENRICH_PROMPT_VERSION = 2;
+/** 4: 개념의 작업 맥락과 실용적인 이유를 연결하고 발췌문 나열을 막는다. */
+export const ENRICH_PROMPT_VERSION = 5;

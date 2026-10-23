@@ -46,7 +46,7 @@ function ProjectSessions({ projectId }: { projectId: string }) {
       />
       {tab === 'wiki' && (
         <div className="tab-body">
-          <RepoWikiView projectId={projectId} />
+          <RepoWikiView key={projectId} projectId={projectId} />
         </div>
       )}
       {tab === 'knowledge' && (

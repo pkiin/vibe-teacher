@@ -107,7 +107,7 @@ describe('multi-account discovery through the HTTP app', () => {
     const built = (await (await app.request(`/api/sessions/${key}/built`, { headers })).json()) as BuiltSummary;
     expect(built.filesCreated.map((f) => f.relPath)).toContain('web/.env.sample');
     const concepts = (await (await app.request(`/api/sessions/${key}/concepts`, { headers })).json()) as ConceptHit[];
-    expect(concepts.map((c) => c.id)).toContain('env-variables');
+    expect(concepts).toEqual([]);
     const summary = (await (await app.request(`/api/accounts/${alice.id}/summary`, { headers })).json()) as AccountSummaryResponse;
     expect(summary.totals.sessions).toBe(1);
     expect(summary.projects[0]?.commits).toBe(1);

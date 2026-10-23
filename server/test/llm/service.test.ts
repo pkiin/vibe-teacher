@@ -27,7 +27,7 @@ describe('EnrichService', () => {
         expect(req.user).toContain('리액트 프로젝트 만들어줘');
         return {
           data: req.schema.parse({
-            summary: { title: 't', oneLiner: 'o', narrative: 'n', features: [], outcome: 'completed', nextSteps: [] },
+            summary: { title: 't', oneLiner: '키 sk-abcdefghijklmnopqrstuvwxyz12345', narrative: 'n', features: [], outcome: 'completed', nextSteps: [] },
             concepts: [
               { id: 'env-variables', name: '환경 변수', explanation: 'e', whyHere: 'w', example: null, level: 'beginner' },
               { id: null, name: '새 개념', explanation: 'e2', whyHere: 'w2', example: 'x', level: 'intermediate' },
@@ -56,6 +56,7 @@ describe('EnrichService', () => {
     expect(calls).toBe(1);
     const cached = await svc.getCached(session);
     expect(cached?.data.summary.title).toBe('t');
+    expect(JSON.stringify(cached)).not.toContain('sk-abcdefghijklmnopqrstuvwxyz12345');
     const again = await svc.start(session, [], false);
     expect(again.status).toBe('done');
     expect(calls).toBe(1);

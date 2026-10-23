@@ -5,12 +5,13 @@ import { JobQueue } from '../llm/jobs';
 import { withReader } from '../llm/reader';
 import type { ResolvedLlm } from '../llm/select';
 import { LlmError } from '../llm/types';
+import { conceptFromHit } from '../llm/concepts';
 import type { ConfigStore } from '../config/store';
 import type { WikiStorage } from '../storage/store';
 import { mergeWikiAi } from '../wiki/ai';
 import type { WikiAiService } from '../wiki/ai-service';
 import type { WikiService } from '../wiki/service';
-import { HELP_SYSTEM_PROMPT, HelpOutputSchema, acceptHelpOutput, buildFallbackAnswer, buildHelpContext, buildHelpPrompt } from './answer';
+import { HELP_SYSTEM_PROMPT, HelpOutputSchema, acceptHelpOutput, buildHelpContext, buildHelpPrompt } from './answer';
 
 /**
  * 도움 패널 질문·답변. 개인 기록으로만 남는다:
@@ -72,8 +73,8 @@ export class HelpService {
   private async snapshot(projectId: string, sessionKey: string, level: ReaderLevel): Promise<WikiSnapshot | null> {
     const base = await this.opts.wiki.current(projectId, sessionKey);
     if (!base) return null;
-    const layer = await this.opts.wikiAi.layer(projectId, base.revision, level);
-    return mergeWikiAi(base, layer, new Set(this.opts.wiki.catalog().concepts.keys())).snapshot;
+    const layer = await this.opts.wikiAi.layer(projectId, base.revision, level, base.generationId);
+    return mergeWikiAi(base, layer, new Set(this.opts.wiki.catalog(base).concepts.keys())).snapshot;
   }
 
   async ask(input: {
@@ -95,7 +96,8 @@ export class HelpService {
       if (existing) return existing;
 
       const snapshot = await this.snapshot(projectId, session.key, level);
-      const catalog = this.opts.wiki.catalog();
+      const catalog = this.opts.wiki.catalog(snapshot);
+      for (const h of input.hits) if (!catalog.concepts.has(h.id)) catalog.concepts.set(h.id, conceptFromHit(h));
       const ctx = buildHelpContext({ focus: req.focus, snapshot, built: input.built, hits: input.hits, catalog });
       const base: HelpMessage = {
         id: `h_${randomUUID()}`,
@@ -114,8 +116,7 @@ export class HelpService {
       const { provider, status } = input.allowed.ok ? await this.opts.resolveProvider() : { provider: null, status: { reason: input.allowed.reason } };
       if (!provider) {
         const reason = input.allowed.ok ? `AI 제공자를 쓸 수 없습니다 (${status.reason ?? '설정 확인'})` : `AI 질문을 쓸 수 없습니다 (${input.allowed.reason ?? '권한 없음'})`;
-        const { answer, notices } = buildFallbackAnswer(ctx, reason);
-        const done: HelpMessage = { ...base, status: 'done', mode: 'fallback', answer, notices, answeredAt: new Date().toISOString() };
+        const done: HelpMessage = { ...base, status: 'error', error: { kind: 'unavailable', message: reason }, answeredAt: new Date().toISOString() };
         await this.append(learnerId, projectId, done);
         return done;
       }

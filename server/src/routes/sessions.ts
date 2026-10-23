@@ -42,7 +42,15 @@ export function sessionsRoutes(deps: AppDeps): Hono<AppEnv> {
     const session = await load(c);
     const { concepts } = await deps.analysis.analyze(session);
     const cached = await deps.enrich.getCached(session, await level(c));
-    return c.json(cached ? deps.enrich.mergeConcepts(concepts, cached) : concepts);
+    const snapshot = await deps.wiki.current(session.projectId, session.key);
+    const layer = snapshot ? await deps.wikiAi.layer(session.projectId, snapshot.revision, await level(c), snapshot.generationId) : null;
+    if (layer?.concepts) {
+      const evidence = new Map(layer.evidence.map((e) => [e.id, e]));
+      return c.json(layer.concepts.map((x) => ({ id: x.id, name: x.name, category: x.category, level: x.level ?? 'beginner', explanation: x.explanation, whyHere: x.whyHere ?? '', score: 0, links: x.links,
+        evidence: (x.evidenceIds ?? []).flatMap((id) => { const e = evidence.get(id); return e ? [{ snippet: e.excerpt, messageIndex: e.messageIndex, toolCallId: e.toolCallId }] : []; }),
+        llm: { explanation: x.explanation, whyHere: x.whyHere ?? '', example: x.example ?? null } })));
+    }
+    return c.json(cached ? deps.enrich.mergeConcepts([], cached) : []);
   });
 
   app.get('/:key/enrichment', async (c) => {

@@ -10,7 +10,7 @@ import { learnerIdFor, type EventDraft } from '../learner/service';
 import { WikiStorage } from '../storage/store';
 import { assertAccount, currentUser, notFound, parseBody, requireJson, sessionSummaryFor, type AppDeps, type AppEnv } from './deps';
 
-const ScopeSchema = z.object({ projectId: z.string().max(200).optional(), sessionKey: z.string().max(2000).optional() });
+const ScopeSchema = z.object({ projectId: z.string().max(200).optional(), sessionKey: z.string().max(2000).optional(), force: z.boolean().default(false) });
 
 /**
  * /api/me — 로그인한 사용자 본인의 지식 위키와 이해 정보 (프로젝트를 가리지 않음).
@@ -18,7 +18,7 @@ const ScopeSchema = z.object({ projectId: z.string().max(200).optional(), sessio
  */
 export function meRoutes(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
-  const knowledge = new KnowledgeService({ index: deps.index, analysis: deps.analysis, wiki: deps.wiki, learner: deps.learner });
+  const knowledge = new KnowledgeService({ index: deps.index, analysis: deps.analysis, wiki: deps.wiki, learner: deps.learner, enrich: deps.enrich });
   const texts = new KnowledgeTextService({ storage: new WikiStorage(deps.paths.home), store: deps.store });
   const me = (c: Context<AppEnv>) => learnerIdFor(currentUser(c).username);
   const gate = (c: Context<AppEnv>) => textGate({ store: deps.store, resolveProvider: () => deps.enrich.resolveProvider(), allowed: deps.auth.canEnrich(currentUser(c)) });
@@ -52,12 +52,12 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
     const sessionKey = c.req.query('sessionKey') || undefined;
     const { base, entries, missing, generator: used } = await knowledgeFor(c, { ...(projectId ? { projectId } : {}), ...(sessionKey ? { sessionKey } : {}) });
     const g = await gate(c);
-    // AI 를 쓸 수 없으면 아직 문장이 없는 항목은 규칙 문장으로 남고, 그 사유를 함께 보낸다
+    // AI를 쓸 수 없으면 생성하지 않은 상태와 사유를 함께 보낸다
     let generator: TextGenerator;
     if (g.ok) generator = { kind: 'llm', provider: used?.provider ?? g.provider.id, ...(used?.model ? { model: used.model } : {}) };
     else if (used && !missing.length) generator = { kind: 'llm', ...used };
-    else generator = { kind: 'rule', reason: g.reason };
-    const res: KnowledgeWikiResponse = { ...base, entries, text: { generator, missing: missing.length, canGenerate: g.ok && missing.length > 0 } };
+    else generator = { kind: 'unavailable', reason: g.reason };
+    const res: KnowledgeWikiResponse = { ...base, entries, text: { generator, missing: missing.length, canGenerate: g.ok && deps.store.get().llm.autoText && missing.length > 0 } };
     return c.json(res);
   });
 
@@ -66,9 +66,10 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
     const scope = await parseBody(c, ScopeSchema);
     const g = await gate(c);
     if (!g.ok) return c.json({ status: 'done' } satisfies KnowledgeTextStartResponse);
-    const { missing, level } = await knowledgeFor(c, scope);
-    if (!missing.length) return c.json({ status: 'done' } satisfies KnowledgeTextStartResponse);
-    const job = texts.start(me(c), g.provider, missing, level);
+    const { missing, entries, level } = await knowledgeFor(c, scope);
+    const targets = scope.force ? [...missing, ...entries.filter((e) => e.reasonOrigin === 'error')] : missing;
+    if (!targets.length) return c.json({ status: 'done' } satisfies KnowledgeTextStartResponse);
+    const job = texts.start(me(c), g.provider, targets, level);
     return c.json({ status: job.state === 'running' ? 'running' : 'queued', jobId: job.id } satisfies KnowledgeTextStartResponse, 202);
   });
   const textJob = (c: Context<AppEnv>) => {
@@ -105,7 +106,10 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
   app.post('/assessments', requireJson, async (c) => {
     const req = await parseBody(c, AssessmentRequestSchema);
     const { projectId, snapshot } = await sessionContext(c, req.sessionKey);
-    return c.json(await deps.assessments.start(me(c), projectId, req, snapshot));
+    const allowed = deps.auth.canEnrich(currentUser(c));
+    if (!allowed.ok) throw Object.assign(new Error(allowed.reason ?? 'AI 사용 권한이 없습니다'), { status: 403, code: 'forbidden' });
+    const { base, level } = await knowledgeFor(c, req.sessionKey ? { sessionKey: req.sessionKey } : {});
+    return c.json(await deps.assessments.start(me(c), projectId, req, snapshot, new Map(Object.entries(base.concepts ?? {})), level));
   });
 
   app.post('/assessments/:assessmentId/responses', requireJson, async (c) => {

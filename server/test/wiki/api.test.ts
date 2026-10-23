@@ -12,6 +12,7 @@ import { ConfigStore, resolvePaths } from '../../src/config/store';
 import { SessionIndex } from '../../src/index/session-index';
 import { EnrichService } from '../../src/llm/service';
 import { createWikiServices } from '../../src/wiki/service';
+import { fakeAi } from './helpers';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FIX = path.resolve(here, '../fixtures');
@@ -67,12 +68,12 @@ describe('wiki / understanding / assessment API', () => {
     await store.load();
     await store.update((c) => {
       c.scan = { mode: 'all', homes: [], homeRoots: [homes] };
-      c.auth = { mode: 'home-token', admins: ['bob'], sessionTtlHours: 1, enrichFor: 'admins' };
+      c.auth = { mode: 'home-token', admins: ['bob'], sessionTtlHours: 1, enrichFor: 'everyone' };
     });
     const index = new SessionIndex({ adapters: allAdapters(), store, cacheDir: paths.indexCacheDir, hiddenRoot: paths.home, currentHome: path.join(homes, 'svc'), env: {} });
     const auth = new AuthService({ store, paths, index, serviceUser: 'svc', bearerToken: 'master', isLoopback: true });
     await auth.init();
-    const enrich = new EnrichService({ store, paths, providerOverride: null });
+    const enrich = new EnrichService({ store, paths, providerOverride: fakeAi });
     app = createApp({ deps: { store, index, paths, analysis: new AnalysisService('/home/tester'), enrich, auth, ...createWikiServices(paths.home, store, () => enrich.resolveProvider()), version: 'test' }, quiet: true });
     await index.rescan();
   });
@@ -90,10 +91,18 @@ describe('wiki / understanding / assessment API', () => {
     expect((await app.request(`/api/sessions/${key}/wiki/build`, { method: 'POST', headers: h })).status).toBe(415);
     const built = await post(`/api/sessions/${key}/wiki/build`, h, {});
     expect(built.status).toBe(200);
-    const wiki = (await built.json()) as WikiResponse;
+    let wiki = (await built.json()) as WikiResponse;
+    if (wiki.generation) {
+      for (let i = 0; i < 100; i++) {
+        const job = await (await app.request(`/api/sessions/${key}/wiki/ai/jobs/${wiki.generation.jobId}`, { headers: h })).json() as { state: string };
+        if (job.state === 'done') break;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      wiki = await (await app.request(`/api/sessions/${key}/wiki`, { headers: h })).json() as WikiResponse;
+    }
     expect(wiki.snapshot.sessionKey).toBe(session.key);
-    expect(wiki.plan.personalized).toBe(true);
-    expect(wiki.snapshot.generator.kind).toBe('rule-based');
+    expect(wiki.plan.personalized).toBe(false);
+    expect(wiki.snapshot.generator.kind).toBe('llm');
     const again = (await (await app.request(`/api/sessions/${key}/wiki`, { headers: h })).json()) as WikiResponse;
     expect(again.stale).toBe(false);
     expect(again.snapshot.revision).toBe(wiki.snapshot.revision);
@@ -107,6 +116,7 @@ describe('wiki / understanding / assessment API', () => {
     const alice = await sessionOf('alice');
     expect((await post(`/api/sessions/${bob.key}/wiki/build`, h, {})).status).toBe(404);
     expect((await app.request(`/api/projects/${bob.project.id}/understanding`, { headers: h })).status).toBe(404);
+    expect((await app.request(`/api/projects/${bob.project.id}/repo-wiki/source?path=README.md`, { headers: h })).status).toBe(404);
     expect((await post(`/api/projects/${alice.project.id}/assessments`, h, { sessionKey: bob.session.key, conceptId: 'auth' })).status).toBe(404);
   });
 

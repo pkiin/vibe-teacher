@@ -48,12 +48,12 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
         {s.selfReport && <span className="pill pill-outline">{ko.knowledge.selfReport[s.selfReport]}</span>}
         <span className="pill pill-outline">{entry.category}</span>
       </div>
-      {writing && entry.reasonOrigin === 'missing' ? (
+      {writing && entry.reasonOrigin !== 'llm' ? (
         <p className="knowledge-reason knowledge-reason-pending muted">{ko.knowledge.writing}</p>
       ) : (
         <p className="knowledge-reason">
           {entry.reason}
-          {entry.reasonOrigin && entry.reasonOrigin !== 'llm' && <span className="pill pill-outline small knowledge-rule-tag">{ko.knowledge.ruleTag}</span>}
+          {!entry.reason && <span className="muted">{entry.reasonOrigin === 'error' ? ko.knowledge.aiError : ko.knowledge.aiMissing}</span>}
         </p>
       )}
       {sources.length > 0 && (
@@ -148,8 +148,7 @@ function groupOf(e: KnowledgeEntry): Group {
 export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, showMeta = true }: { sessionKey?: string; projectId?: string; onProfile?: (p: LearnerProfile) => void; refreshKey?: unknown; showMeta?: boolean }) {
   const [data, setData] = useState<KnowledgeWikiResponse | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const catalog = useApi<WikiConcept[]>('/api/catalog/concepts');
-  const concepts = useMemo(() => new Map((catalog.data ?? []).map((c) => [c.id, c])), [catalog.data]);
+  const concepts = useMemo(() => new Map(Object.entries(data?.concepts ?? {})), [data?.concepts]);
   const query = new URLSearchParams({ ...(sessionKey ? { sessionKey } : {}), ...(projectId ? { projectId } : {}) }).toString();
   // 설명 문장은 읽는 사람 수준별로 저장된다. 수준이 바뀌면 다시 받고, 고르기 전에는 AI 작성을 시작하지 않는다
   const reader = useReader();
@@ -181,10 +180,10 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
   const [textError, setTextError] = useState<string | null>(null);
   const runs = useRef({ scope: '', count: 0, stalled: false });
   const { job, error: jobError } = useJob<{ written: number; remaining: number }>(jobId ? `/api/me/knowledge/text/jobs/${jobId}` : null);
-  const startText = useCallback(async () => {
+  const startText = useCallback(async (force = false) => {
     setTextError(null);
     try {
-      const res = await apiPost<KnowledgeTextStartResponse>('/api/me/knowledge/text', { ...(sessionKey ? { sessionKey } : {}), ...(projectId ? { projectId } : {}) });
+      const res = await apiPost<KnowledgeTextStartResponse>('/api/me/knowledge/text', { force, ...(sessionKey ? { sessionKey } : {}), ...(projectId ? { projectId } : {}) });
       if (res.status === 'done') load();
       else setJobId(res.jobId);
     } catch (e) {
@@ -213,7 +212,7 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
   }, [jobError]);
   const retryText = () => {
     runs.current = { scope: `${query}|${reader.level}`, count: 0, stalled: false };
-    setTextError(null);
+    void startText(true);
   };
 
   if (error) return <ErrorBox error={error} onRetry={load} />;
@@ -237,7 +236,9 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
           </button>
         </Notice>
       )}
-      {textError === null && !jobId && data.text.generator.kind === 'rule' && data.entries.some((e) => e.reasonOrigin === 'missing') && <Notice kind="warn">{ko.knowledge.ruleNotice(data.text.generator.reason)}</Notice>}
+      {textError === null && !jobId && data.text.generator.kind === 'unavailable' && data.entries.some((e) => e.reasonOrigin === 'missing') && <Notice kind="warn">{ko.knowledge.ruleNotice(data.text.generator.reason)}</Notice>}
+      {!jobId && !textError && data.entries.some((e) => e.reasonOrigin === 'error') && <Notice kind="warn"><span>{ko.knowledge.aiError}</span><button className="btn btn-small" onClick={retryText}>{ko.knowledge.retryText}</button></Notice>}
+      {!jobId && data.text.missing > 0 && data.text.generator.kind === 'llm' && <button className="btn btn-small" onClick={() => void startText()}>{ko.knowledge.writeAi}</button>}
       {!data.entries.length && <div className="muted">{ko.knowledge.empty}</div>}
       {(['check', 'confirmed', 'background'] as Group[]).map((g) =>
         groups[g].length ? (

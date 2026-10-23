@@ -5,7 +5,7 @@ import { assertAccount, currentUser, notFound, parseBody, requireJson, sessionSu
 
 /**
  * /api/projects/:id/help — 도움 패널 질문. 본인 질문만 보이고, 학습자는 인증 주체에서 정한다.
- * AI 를 쓸 수 없거나 권한이 없으면 카탈로그 설명과 확인된 사실로 대체 답을 준다.
+ * AI를 쓸 수 없거나 권한이 없으면 생성하지 않고 사유를 표시한다.
  */
 export function helpRoutes(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -38,7 +38,9 @@ export function helpRoutes(deps: AppDeps): Hono<AppEnv> {
     const session = await deps.index.loadSession(s.key);
     if (!session) throw notFound('세션');
     const { built, concepts } = await deps.analysis.analyze(session);
-    const message = await deps.help.ask({ learnerId: me(c), projectId: p.id, session, built, hits: concepts, req, allowed: deps.auth.canEnrich(currentUser(c)), level: await deps.prefs.level(me(c)) });
+    const cached = await deps.enrich.getCached(session, await deps.prefs.level(me(c)));
+    const hits = cached ? deps.enrich.mergeConcepts([], cached) : concepts;
+    const message = await deps.help.ask({ learnerId: me(c), projectId: p.id, session, built, hits, req, allowed: deps.auth.canEnrich(currentUser(c)), level: await deps.prefs.level(me(c)) });
     return c.json({ message }, message.status === 'pending' ? 202 : 200);
   });
 

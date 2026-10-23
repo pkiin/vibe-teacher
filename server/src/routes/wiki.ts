@@ -34,25 +34,31 @@ export function wikiRoutes(deps: AppDeps): Hono<AppEnv> {
     const snapshot = await deps.wiki.current(summary.projectId, summary.key);
     if (!snapshot) throw new HttpError(404, 'wiki_not_built', '아직 이 세션의 위키를 만들지 않았습니다');
     const { profile, answered } = await personal(c, summary);
-    const ai = await deps.wikiAi.layer(summary.projectId, snapshot.revision, await level(c));
+    const ai = await deps.wikiAi.layer(summary.projectId, snapshot.revision, await level(c), snapshot.generationId);
     return c.json(deps.wiki.view(snapshot, profile, answered, deps.wiki.isStale(snapshot, summary), ai));
   });
 
   app.post('/:key/wiki/build', requireJson, async (c) => {
     const summary = await sessionSummaryFor(c, deps, c.req.param('key'));
+    const allowed = deps.auth.canEnrich(currentUser(c));
+    if (!allowed.ok) throw new HttpError(403, 'forbidden', allowed.reason ?? 'AI 사용 권한이 없습니다');
+    const status = await deps.enrich.status();
+    if (!status.available) throw new HttpError(409, 'llm_unavailable', status.reason ?? 'AI 제공자를 설정해 주세요');
     const session = await deps.index.loadSession(summary.key);
     if (!session) throw notFound('세션');
-    const snapshot = await deps.wiki.build(session, await deps.analysis.analyze(session));
+    const analysis = await deps.analysis.analyze(session);
+    const snapshot = await deps.wiki.build(session, analysis);
+    const started = await deps.wikiAi.start(session, analysis, snapshot, true, await level(c));
     const { profile, answered } = await personal(c, summary);
-    const ai = await deps.wikiAi.layer(summary.projectId, snapshot.revision, await level(c));
-    return c.json(deps.wiki.view(snapshot, profile, answered, false, ai));
+    const ai = await deps.wikiAi.layer(summary.projectId, snapshot.revision, await level(c), snapshot.generationId);
+    return c.json({ ...deps.wiki.view(snapshot, profile, answered, false, ai), ...(started.status !== 'done' ? { generation: { jobId: started.jobId, status: started.status } } : {}) });
   });
 
   /** AI 보강은 현재 기록으로 만든 위키에만 붙인다 */
   const currentSnapshot = async (summary: SessionSummary): Promise<WikiSnapshot> => {
     const snapshot = await deps.wiki.current(summary.projectId, summary.key);
     if (!snapshot) throw new HttpError(404, 'wiki_not_built', '먼저 위키를 만들어 주세요');
-    if (deps.wiki.isStale(snapshot, summary)) throw new HttpError(409, 'wiki_stale', '세션 기록이 바뀌었습니다. 위키를 다시 만든 뒤 AI 보강을 실행해 주세요');
+    if (deps.wiki.isStale(snapshot, summary)) throw new HttpError(409, 'wiki_stale', '세션 기록이나 설명 기준이 바뀌었습니다. 위키를 다시 만든 뒤 AI 설명을 작성해 주세요');
     return snapshot;
   };
 

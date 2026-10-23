@@ -7,7 +7,26 @@ import type { LlmProviderId, LlmStatus } from './api';
 import type { ReaderLevel } from './reader';
 import type { Readable } from './domain';
 
-export type RepoSource = { kind: 'file'; path: string } | { kind: 'session'; key: string; title: string };
+export type RepoSource = { kind: 'file'; path: string; startLine?: number; endLine?: number; hash?: string } | { kind: 'session'; key: string; title: string };
+
+export interface RepoFileView {
+  path: string;
+  lines: string[];
+  startLine: number;
+  endLine: number;
+  lineCount: number;
+  hash: string;
+  truncated: boolean;
+  masked: boolean;
+}
+
+export interface RepoFlow {
+  /** 파일 역할과 영역은 코드 근거를 읽은 AI가 채운다. */
+  groups?: { id: string; label: string; description: string }[];
+  nodes: { id: string; label: string; column: number; source: Extract<RepoSource, { kind: 'file' }>; description?: string; groupId?: string }[];
+  edges: { from: string; to: string; label: string; source: Extract<RepoSource, { kind: 'file' }> }[];
+  limited: boolean;
+}
 
 export interface RepoListItem {
   text: string;
@@ -19,6 +38,7 @@ export type RepoBlock =
   | { kind: 'text'; text: string }
   | { kind: 'list'; items: RepoListItem[] }
   | { kind: 'code'; text: string; lang?: string }
+  | { kind: 'flow'; graph: RepoFlow }
   | { kind: 'table'; head: string[]; rows: string[][] };
 
 export interface RepoSection {
@@ -28,8 +48,8 @@ export interface RepoSection {
   sources: RepoSource[];
   /** 이 절의 한계 (예: "코드를 정적으로 읽어 추정함") */
   note?: string;
-  /** llm: AI 가 쓴 문장 (표·코드는 저장소에서 그대로), rule: 규칙 기반 문장 */
-  origin?: 'llm' | 'rule';
+  /** llm: AI 설명, source: 원문 자료. rule은 이전 저장 형식 호환용 */
+  origin?: 'llm' | 'rule' | 'source';
 }
 
 export interface RepoWikiInputs {
@@ -44,13 +64,13 @@ export interface RepoWiki {
   rootPath: string;
   revision: string;
   builtAt: string;
-  /** llm: AI 가 문장을 씀, rule: AI 를 쓸 수 없어 규칙 기반 (reason 에 사유) */
+  /** llm: AI 결과, pending: 생성 대기, unavailable: 생성 불가. rule은 이전 형식 호환용 */
   generator: {
-    kind: 'llm' | 'rule';
+    kind: 'llm' | 'rule' | 'pending' | 'unavailable';
     version: string;
     provider?: LlmProviderId;
     model?: string;
-    /** 규칙 기반으로 만든 사유 (제공자 없음, 권한 없음, 호출 실패, 설정에서 끔) */
+    /** 생성하지 못한 사유 (제공자 없음, 권한 없음, 호출 실패) */
     reason?: string;
     durationMs?: number;
     costUsd?: number;
@@ -67,6 +87,7 @@ export interface RepoWiki {
   warnings: string[];
   /** 다음 갱신 때 달라진 점을 계산하려고 남기는 요약 (화면에는 쓰지 않음) */
   facts: RepoFacts;
+  previousFacts?: RepoFacts;
 }
 
 export interface RepoFacts {
@@ -88,11 +109,13 @@ export interface RepoWikiHistoryEntry {
 
 export interface RepoWikiAiPreview {
   llmStatus: LlmStatus;
-  /** AI 를 쓸 수 없는 사유 (이 경우 규칙 기반으로 만든다) */
+  /** AI를 쓸 수 없는 사유 (이 경우 생성하지 않는다) */
   fallbackReason?: string;
   chars: number;
   system: string;
   user: string;
+  /** 생성 중 AI가 추가로 확인할 수 있는 코드 발췌의 상한. */
+  inspection?: { maxQuestions: number; maxChars: number };
 }
 
 export type RepoWikiBuildResponse = { status: 'done'; response: RepoWikiResponse } | { status: 'running' | 'queued'; jobId: string };

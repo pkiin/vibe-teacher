@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AssessmentResult, AssessmentStartResponse, ResponseStatus } from '@vibe-teacher/shared';
 import { ApiError, apiPost } from '../api/client';
 import type { LearnerActions } from '../hooks/useLearner';
@@ -38,9 +38,11 @@ export function QuizCard({
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState(false);
   const [seen, setSeen] = useState<string[]>([]);
+  const request = useRef(0);
 
   /** 처음에는 지정한 문항/개념, "다른 문제"는 같은 개념에서 이미 본 문항을 빼고 고른다 */
   const load = (exclude: string[], conceptId?: string) => {
+    const current = ++request.current;
     setStart(null);
     setResult(null);
     setSelected(null);
@@ -50,14 +52,16 @@ export function QuizCard({
     const body = exclude.length ? { ...ctx, conceptId: target.conceptId ?? conceptId, excludeQuestionIds: exclude } : { ...ctx, ...target };
     apiPost<AssessmentStartResponse>('/api/me/assessments', body)
       .then((s) => {
+        if (request.current !== current) return;
         setStart(s);
         setSeen((xs) => [...new Set([...xs, s.question.questionId])]);
       })
-      .catch((e: Error) => setError(e));
+      .catch((e: Error) => { if (request.current === current) setError(e); });
   };
 
   useEffect(() => {
     load([]);
+    return () => { request.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionKey, target.conceptId, target.questionId]);
 
@@ -92,12 +96,14 @@ export function QuizCard({
   const name = `quiz-${start.assessmentId}`;
 
   return (
-    <div className="quiz card" role="group" aria-label={ko.quiz.title}>
+    <div className="quiz card" role="group" aria-label={ko.quiz.title} aria-busy={busy}>
       <div className="concept-head">
         <strong>{ko.quiz.title}</strong>
-        <span className="pill pill-outline">{q.format === 'true_false' ? 'OX' : '객관식'}</span>
+        <span className="pill pill-outline">{ko.quiz.format[q.format]}</span>
         {q.reviewStatus === 'candidate' && <span className="pill pill-yellow">{ko.quiz.candidate}</span>}
       </div>
+      <p className="small muted">{ko.quiz.intro}</p>
+      {q.reviewStatus === 'candidate' && <p className="small muted">{ko.quiz.candidateNote}</p>}
       {!start.firstAttempt && !result && <div className="small muted">{ko.quiz.retry}</div>}
       <p className="quiz-prompt">{q.prompt}</p>
       <fieldset className="quiz-options" disabled={!!result || busy}>
@@ -106,7 +112,7 @@ export function QuizCard({
           const isAnswer = result?.correctOptionIds.includes(o.id);
           const isMine = selected === o.id;
           return (
-            <label key={o.id} className={`quiz-option ${result && isAnswer ? 'is-answer' : ''} ${result && isMine && !isAnswer ? 'is-wrong' : ''}`}>
+            <label key={o.id} className={`quiz-option ${!result && isMine ? 'is-selected' : ''} ${result && isAnswer ? 'is-answer' : ''} ${result && isMine && !isAnswer ? 'is-wrong' : ''}`}>
               <input type="radio" name={name} value={o.id} checked={isMine} onChange={() => setSelected(o.id)} />
               <span>{o.text}</span>
               {result && isAnswer && <span className="pill pill-green">{ko.quiz.answerMark}</span>}
@@ -117,13 +123,16 @@ export function QuizCard({
       </fieldset>
       {!result && (
         <>
-          <label className="small muted quiz-reason">
-            {ko.quiz.reason}
-            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={1000} />
-          </label>
+          <details className="quiz-reason-disclosure">
+            <summary className="small muted">{ko.quiz.showReason}</summary>
+            <label className="small muted quiz-reason">
+              {ko.quiz.reason}
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={1000} />
+            </label>
+          </details>
           <div className="quiz-actions">
             <button className="btn btn-primary btn-small" disabled={!selected || busy} onClick={() => submit('answered')}>
-              {ko.quiz.submit}
+              {busy ? ko.quiz.sending : ko.quiz.submit}
             </button>
             <button className="btn btn-small" disabled={busy} onClick={() => submit('dont_know')}>
               {ko.quiz.dontKnow}

@@ -18,6 +18,7 @@ import { scanRepo } from '../../src/repo/scan';
 import { buildRepoWiki } from '../../src/repo/wiki';
 import { WikiStorage } from '../../src/storage/store';
 import { createWikiServices } from '../../src/wiki/service';
+import { fakeAi } from '../wiki/helpers';
 
 describe('같은 실제 폴더의 프로젝트 통합', () => {
   let tmp: string;
@@ -74,7 +75,7 @@ describe('같은 실제 폴더의 프로젝트 통합', () => {
     await index.rescan();
     canonicalId = projectIdFor(accountIdFor(alice), root);
     legacyId = projectIdFor(accountIdFor(alice), alias);
-    enrich = new EnrichService({ store, paths, providerOverride: null });
+    enrich = new EnrichService({ store, paths, providerOverride: fakeAi });
     services = createWikiServices(home, store, () => enrich.resolveProvider(), (id) => index.getProjectIds(id));
     legacy = createWikiServices(home, store, () => enrich.resolveProvider());
     const auth = new AuthService({ store, paths, index, serviceUser: 'alice', bearerToken: null, isLoopback: true });
@@ -190,7 +191,13 @@ describe('같은 실제 폴더의 프로젝트 통합', () => {
     expect(before.history.map((h) => h.revision)).toEqual(['newer', 'older']);
     expect(before.stale).toBe(true);
     const res = await app.request(`/api/projects/${legacyId}/repo-wiki/build`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
+    const started = await res.json() as { jobId: string };
+    for (let i = 0; i < 100; i++) {
+      const job = await (await app.request(`/api/projects/${canonicalId}/repo-wiki/jobs/${started.jobId}`)).json() as { state: string };
+      if (job.state === 'done') break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
     const after = await get();
     expect(after.wiki?.inputs.sessions).toHaveLength(2);
     expect(after.history.map((h) => h.revision)).toEqual([after.wiki!.revision, 'newer', 'older']);

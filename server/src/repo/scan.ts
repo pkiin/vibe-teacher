@@ -4,6 +4,8 @@ import path from 'node:path';
 import type { Readable } from '@vibe-teacher/shared';
 import { sha1 } from '../lib/hash';
 import { maskSecrets } from '../llm/digest';
+import { entryPaths, inspectCode, selectCode, type CodeFile } from './code';
+import { readRepoText } from './source';
 
 /**
  * 저장소 읽기 전용 스캔. 아무것도 쓰거나 실행하지 않는다 (git 명령도 쓰지 않고 .git/HEAD 만 읽음).
@@ -15,7 +17,7 @@ import { maskSecrets } from '../llm/digest';
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt', '.cache', 'coverage', '__pycache__', '.venv', 'venv', '.pytest_cache', '.turbo', '.parcel-cache', 'target', 'vendor', '.idea', '.vscode', '.svelte-kit', '.mypy_cache', '.gradle']);
 const SECRET_FILE_RE = /^(\.env(\..+)?|.*\.(pem|key|p12|pfx)|id_rsa.*|id_ed25519.*|credentials.*|secrets?\..*)$/i;
 const ENV_EXAMPLE_RE = /^\.env\.(example|sample|template|dist)$/i;
-const SOURCE_RE = /\.(ts|tsx|js|jsx|mjs|cjs|py)$/;
+const SOURCE_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|py)$/;
 const MAX_FILES = 4000;
 const MAX_DEPTH = 10;
 const MAX_SOURCE_SCAN = 400;
@@ -36,6 +38,10 @@ export interface RouteInfo {
   file: string;
   method: string;
   path: string;
+  line?: number;
+  endLine?: number;
+  code?: string;
+  hash?: string;
 }
 
 export interface RepoScan {
@@ -53,6 +59,9 @@ export interface RepoScan {
   envExample?: { path: string; keys: string[] };
   docker: boolean;
   routes: RouteInfo[];
+  code?: CodeFile[];
+  entries?: string[];
+  codeLimited?: boolean;
 }
 
 async function readText(file: string, max: number): Promise<string | null> {
@@ -94,7 +103,7 @@ export function extractRoutes(file: string, text: string): RouteInfo[] {
   for (const { re, lang } of ROUTE_RES) {
     if (lang === 'py' && !file.endsWith('.py')) continue;
     if (lang === 'js' && file.endsWith('.py')) continue;
-    for (const m of text.matchAll(re)) out.push({ file, method: (m[1] === 'route' ? 'ANY' : m[1] ?? '').toUpperCase(), path: m[2] ?? '' });
+    for (const m of text.matchAll(re)) out.push({ file, method: (m[1] === 'route' ? 'ANY' : m[1] ?? '').toUpperCase(), path: m[2] ?? '', line: text.slice(0, m.index).split('\n').length });
   }
   return out;
 }
@@ -198,14 +207,39 @@ export async function scanRepo(root: string, opts: { light?: boolean } = {}): Pr
   scan.docker = files.some((f) => /(^|\/)(Dockerfile|docker-compose\.ya?ml|compose\.ya?ml)$/.test(f.path));
 
   let scanned = 0;
-  for (const f of files) {
+  let routeCodeBudget = 40_000;
+  const code: CodeFile[] = [];
+  const fileSet = new Set(files.map((file) => file.path));
+  scan.entries = entryPaths(scan.packages, fileSet);
+  const entrySet = new Set(scan.entries);
+  const priority = (file: string) => entrySet.has(file) ? 0 : /(^|\/)(app|main|index)\.[cm]?[jt]sx?$/.test(file) ? 1 : /(^|\/)(routes?|services?|handlers?|core|domain|store|storage)\//.test(file) ? 2 : 3;
+  for (const f of files.slice().sort((a, b) => priority(a.path) - priority(b.path))) {
     if (scanned >= MAX_SOURCE_SCAN) break;
-    if (!SOURCE_RE.test(f.path) || f.size > MAX_SOURCE_BYTES || SECRET_FILE_RE.test(path.basename(f.path)) || /(^|\/)(test|tests|__tests__)\//.test(f.path)) continue;
+    if (!(SOURCE_RE.test(f.path) || /(^|\/)index\.html$/.test(f.path)) || f.size > MAX_SOURCE_BYTES || SECRET_FILE_RE.test(path.basename(f.path)) || /(^|\/)(test|tests|__tests__|fixtures)\/|\.(?:test|spec)\.[jt]sx?$/.test(f.path)) continue;
     scanned += 1;
-    const text = await readText(path.join(root, f.path), MAX_SOURCE_BYTES);
-    if (text) scan.routes.push(...extractRoutes(f.path, text));
-    if (scan.routes.length > 300) break;
+    const source = await readRepoText(root, f.path);
+    if (source) {
+      const routes = extractRoutes(f.path, source.text).slice(0, Math.max(0, 300 - scan.routes.length));
+      const lines = source.text.split('\n');
+      scan.routes.push(...routes.map((route, index) => {
+        const start = (route.line ?? 1) - 1;
+        const end = Math.min(start + 40, (routes[index + 1]?.line ?? lines.length + 1) - 1);
+        const excerpt: string[] = [];
+        let chars = 0;
+        for (const line of lines.slice(start, end)) {
+          if (chars + line.length + 1 > Math.min(2400, routeCodeBudget)) break;
+          excerpt.push(line); chars += line.length + 1;
+        }
+        routeCodeBudget -= chars;
+        return { ...route, hash: source.hash, ...(excerpt.length ? { code: excerpt.join('\n'), endLine: start + excerpt.length } : {}) };
+      }));
+      code.push(inspectCode(f.path, source.text, source.hash, fileSet));
+    }
   }
+
+  scan.code = selectCode(code, scan.entries);
+  scan.codeLimited = code.length > scan.code.length || scanned >= MAX_SOURCE_SCAN;
+  scan.routes.sort((a, b) => a.file.localeCompare(b.file) || (a.line ?? 0) - (b.line ?? 0));
 
   scan.signature = signature;
   return scan;

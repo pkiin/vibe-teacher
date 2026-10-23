@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import type { ReaderLevel, RepoBlock, RepoSection, RepoSource, RepoWiki, RepoWikiAiPreview, RepoWikiBuildResponse, RepoWikiResponse } from '@vibe-teacher/shared';
 import { api, apiDelete, apiPost } from '../api/client';
@@ -9,27 +9,39 @@ import { ko } from '../i18n/ko';
 import { MiniMarkdown } from './MiniMarkdown';
 import { ErrorBox, Loading, Notice, fmtDate } from './Notice';
 import { ReaderLevelLine, ReaderLevelOptions } from './ReaderLevelPicker';
+import { Tabs } from './Tabs';
+import { RepoFlowView } from './RepoFlowView';
+import { RepoSourceViewer } from './RepoSourceViewer';
+
+type FileSource = Extract<RepoSource, { kind: 'file' }>;
+const SourceContext = createContext<(source: FileSource) => void>(() => {});
 
 function SourceChips({ sources }: { sources?: RepoSource[] }) {
+  const open = useContext(SourceContext);
   if (!sources?.length) return null;
   return (
-    <span className="repo-sources">
-      {sources.map((s, i) =>
-        s.kind === 'file' ? (
-          <code key={i} className="repo-source">
-            {s.path}
-          </code>
-        ) : (
-          <Link key={i} className="pill pill-outline repo-source" to={`/sessions/${encodeURIComponent(s.key)}?tab=understand`}>
-            {ko.repo.session}: {s.title.length > 30 ? `${s.title.slice(0, 30)}…` : s.title}
-          </Link>
-        ),
-      )}
-    </span>
+    <details className="repo-evidence">
+      <summary>{ko.reading.evidence(sources.length)}</summary>
+      <span className="repo-sources">
+        {sources.map((s, i) =>
+          s.kind === 'file' ? (
+            <button key={i} type="button" className="repo-source source-link mono" onClick={() => open(s)} title={ko.source.open(s.path)}>
+              {s.path}{s.startLine ? `:${s.startLine}${s.endLine && s.endLine !== s.startLine ? `–${s.endLine}` : ''}` : ''}
+            </button>
+          ) : (
+            <Link key={i} className="pill pill-outline repo-source" to={`/sessions/${encodeURIComponent(s.key)}?tab=understand`}>
+              {ko.repo.session}: {s.title.length > 30 ? `${s.title.slice(0, 30)}…` : s.title}
+            </Link>
+          ),
+        )}
+      </span>
+    </details>
   );
 }
 
 function Block({ b }: { b: RepoBlock }) {
+  const open = useContext(SourceContext);
+  if (b.kind === 'flow') return <RepoFlowView graph={b.graph} onOpen={open} />;
   if (b.kind === 'text') return <MiniMarkdown text={b.text} />;
   if (b.kind === 'code') return <pre className="repo-code">{b.text}</pre>;
   if (b.kind === 'table') {
@@ -113,6 +125,7 @@ function AiPreview({ projectId }: { projectId: string }) {
       {preview && (
         <>
           <div className="small muted">{ko.repo.previewChars(preview.chars)}</div>
+          {preview.inspection && <p className="small muted">{ko.repo.previewInspection(preview.inspection.maxQuestions, preview.inspection.maxChars)}</p>}
           <pre className="wiki-ai-preview">{preview.user}</pre>
         </>
       )}
@@ -125,7 +138,8 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
   const [data, setData] = useState<RepoWikiResponse | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<'user' | 'system'>('user');
+  const [source, setSource] = useState<FileSource | null>(null);
+  const [view, setView] = useState<'user' | 'system' | 'security'>('user');
   const [jobId, setJobId] = useState<string | null>(null);
   const jobPath = jobId ? `/api/projects/${projectId}/repo-wiki/jobs/${jobId}` : null;
   const { job, error: jobError } = useJob<unknown>(jobPath);
@@ -231,12 +245,12 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
     );
   }
   const canAi = !!me?.canEnrich && !!me?.llmStatus?.available;
-  const sections = view === 'user' ? wiki.user : wiki.system;
+  const sections = view === 'system' ? wiki.system : wiki.user.filter((s) => view === 'security' ? s.id === 'security' : s.id !== 'security');
   const gen = generatorLine(wiki.generator);
   const git = ko.repo.git(wiki.inputs.repo.branch, wiki.inputs.repo.head);
 
   return (
-    <div className="repo-wiki">
+    <SourceContext.Provider value={setSource}><div className="repo-wiki">
       <div className="card">
         <div className="concept-head">
           <span className="small muted grow">
@@ -274,14 +288,9 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
         <AiPreview key={reader.level} projectId={projectId} />
       </div>
 
-      <div className="tabs" role="tablist">
-        {(['user', 'system'] as const).map((v) => (
-          <button key={v} role="tab" aria-selected={view === v} className={`tab ${view === v ? 'active' : ''}`} onClick={() => setView(v)}>
-            {ko.repo.views[v]}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={(['user', 'system', 'security'] as const).map((id) => ({ id, label: ko.repo.views[id]! }))} active={view} onChange={(id) => setView(id as typeof view)} />
       <p className="small muted">{ko.repo.viewNote[view]}</p>
+      {view === 'security' && !sections.length && <Notice kind="warn">{wiki.generator.kind === 'llm' ? ko.security.repoEmpty : ko.security.generating}</Notice>}
       <nav className="repo-toc small" aria-label={ko.repo.contents}>
         {sections.map((s) => (
           <a key={s.id} href={`#repo-${s.id}`}>
@@ -310,6 +319,7 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
           </ul>
         </details>
       )}
-    </div>
+      <RepoSourceViewer projectId={projectId} source={source} onClose={() => setSource(null)} />
+    </div></SourceContext.Provider>
   );
 }

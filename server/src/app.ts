@@ -57,8 +57,6 @@ export function createApp({ deps, distDir, quiet = false }: CreateAppOptions): H
   api.route('/sessions', wikiRoutes(deps));
   api.route('/settings', settingsRoutes(deps));
   api.route('/jobs', jobsRoutes(deps));
-  // 개념 카탈로그 (일반 배경 지식 — 도움 패널의 설명에 쓴다)
-  api.get('/catalog/concepts', (c) => c.json([...deps.wiki.catalog().concepts.values()]));
   app.route('/api', api);
   app.notFound((c) => (c.req.path.startsWith('/api/') ? c.json({ error: { code: 'not_found', message: '없는 API 경로입니다' } }, 404) : c.text('Not Found', 404)));
 
