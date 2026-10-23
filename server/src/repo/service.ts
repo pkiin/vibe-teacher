@@ -14,7 +14,7 @@ import type { WikiService } from '../wiki/service';
 import { ownWords } from '../learner/knowledge';
 import { shortId } from '../lib/hash';
 import { truncate } from '../lib/text';
-import { REPO_AI_SYSTEM_PROMPT, REPO_FLOW_SYSTEM_PROMPT, RepoAiOutputSchema, applyRepoAi, assertRepoFlowComplete, buildRepoAiPrompt, missingRepoFlowNodes, repoFlowOutputSchema, type RepoAiOutput } from './ai';
+import { REPO_AI_SYSTEM_PROMPT, REPO_FLOW_SYSTEM_PROMPT, RepoAiOutputSchema, applyRepoAi, assertRepoFlowComplete, buildRepoAiPrompt, dropRepeatedBlocks, missingRepoFlowNodes, repoFlowOutputSchema, type RepoAiOutput } from './ai';
 import { scanRepo, type RepoScan } from './scan';
 import { buildRepoWiki, REPO_WIKI_VERSION, type RepoSessionDigest } from './wiki';
 import { inspectRepo, REPO_INSPECTION_LIMITS } from './inspect';
@@ -144,7 +144,8 @@ export class RepoWikiService {
   private compose(draft: RepoWiki, layer: TextLayer | null, gate: TextGate): { wiki: RepoWiki; canGenerate: boolean } {
     const fresh = layer && layer.revision === draft.revision && layer.promptVersion === REPO_TEXT_VERSION ? layer : null;
     if (fresh && !fresh.failed && fresh.user && fresh.system) {
-      return { wiki: { ...draft, user: fresh.user, system: fresh.system, warnings: [...draft.warnings, ...(fresh.warnings ?? [])], generator: fresh.generator }, canGenerate: false };
+      // 예전 레이어에는 같은 그림이 두 절에 들어 있을 수 있어 읽을 때 한 번만 남긴다
+      return { wiki: { ...draft, user: dropRepeatedBlocks(fresh.user), system: dropRepeatedBlocks(fresh.system), warnings: [...draft.warnings, ...(fresh.warnings ?? [])], generator: fresh.generator }, canGenerate: false };
     }
     const reason = fresh?.failed ?? (gate.ok ? undefined : gate.reason);
     return { wiki: { ...draft, user: [], system: [], generator: { kind: reason ? 'unavailable' : 'pending', version: draft.generator.version, ...(reason ? { reason } : {}) } }, canGenerate: gate.ok && !fresh?.failed };

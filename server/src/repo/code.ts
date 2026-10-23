@@ -28,6 +28,16 @@ function localTarget(file: string, specifier: string, files: ReadonlySet<string>
   return null;
 }
 
+/** `import` 뒤의 이름 목록. 괄호로 여러 줄에 걸친 목록과 줄 끝 `\` 이어 쓰기를 따라가고 `as` 별칭·주석·`*` 는 뺀다. */
+function pythonImportNames(rest: string, lines: string[], index: number): string[] {
+  const strip = (text: string) => text.replace(/#.*$/, '');
+  let text = strip(rest);
+  for (let next = index + 1; next < lines.length && next <= index + 40 && (text.includes('(') ? !text.includes(')') : /\\\s*$/.test(text)); next++) {
+    text = `${text.replace(/\\\s*$/, ' ')} ${strip(lines[next]!)}`;
+  }
+  return text.replace(/[()\\]/g, ' ').split(',').map((part) => /^\s*(\w+)/.exec(part)?.[1]).filter((name): name is string => !!name);
+}
+
 export function inspectCode(file: string, text: string, hash: string, files: ReadonlySet<string>): CodeFile {
   const imports: CodeFile['imports'] = [];
   const symbols: CodeFile['symbols'] = [];
@@ -62,12 +72,15 @@ export function inspectCode(file: string, text: string, hash: string, files: Rea
     lines.forEach((line, index) => {
       const symbol = /^\s*(?:async\s+)?(?:def|class)\s+(\w+)/.exec(line);
       if (symbol) symbols.push({ name: symbol[1]!, line: index + 1 });
-      const from = /^\s*from\s+(\.*)([\w.]+)\s+import\b/.exec(line);
-      if (from) {
-        const dots = from[1]!.length;
-        const base = dots ? `${'../'.repeat(Math.max(0, dots - 1))}./` : '/';
-        addImport(base + from[2]!.replaceAll('.', '/'), index + 1);
-      }
+      const from = /^\s*from\s+(\.*)([\w.]*)\s+import\s+(.*)$/.exec(line);
+      if (!from || (!from[1] && !from[2])) return;
+      const dots = from[1]!.length;
+      const base = dots ? `${'../'.repeat(Math.max(0, dots - 1))}./` : '/';
+      const module = base + from[2]!.replaceAll('.', '/');
+      // `from . import a` 는 자기 패키지가 아니라 하위 모듈 a 를 가져오므로 모듈 자체는 잇지 않는다
+      if (from[2]) addImport(module, index + 1);
+      // `from .steps import load` 처럼 가져온 이름이 실제 하위 모듈 파일이면 그 파일도 잇는다 (함수·클래스 이름은 파일이 없어 걸러진다)
+      for (const name of pythonImportNames(from[3]!, lines, index)) addImport(`${module.endsWith('/') ? module : `${module}/`}${name}`, index + 1);
     });
   }
   const anchors = [...new Set([1, symbols[0]?.line ?? 1])].filter((line, index, all) => index === 0 || line > all[0]! + 20);
@@ -131,18 +144,44 @@ export function selectCode(all: CodeFile[], entries: string[], max = 18): CodeFi
   return selected;
 }
 
+/** 폴더 안에서 시작 파일 역할을 하는 이름 (패키지 실행·초기화 파일, 모듈 진입 파일) */
+const FOLDER_ENTRY = /^(?:__main__|__init__|main|app)\.py$|^(?:index|main)\.[cm]?[jt]sx?$|^index\.html$/;
+
 export function codeFlow(code: CodeFile[], entries: string[]): RepoFlow {
   const byPath = new Map(code.map((file) => [file.path, file]));
   const columns = new Map<string, number>();
-  const queue = entries.filter((entry) => byPath.has(entry)).map((file) => ({ file, column: 0 }));
-  if (!queue.length && code[0]) queue.push({ file: code[0].path, column: 0 });
-  while (queue.length) {
-    const { file, column } = queue.shift()!;
-    if (columns.has(file)) continue;
-    columns.set(file, Math.min(column, 3));
-    for (const link of byPath.get(file)?.imports ?? []) if (byPath.has(link.path)) queue.push({ file: link.path, column: column + 1 });
+  const layer = (starts: string[], first: number) => {
+    const queue = starts.map((file) => ({ file, column: first }));
+    while (queue.length) {
+      const { file, column } = queue.shift()!;
+      if (columns.has(file)) continue;
+      columns.set(file, Math.min(column, 3));
+      for (const link of byPath.get(file)?.imports ?? []) if (byPath.has(link.path)) queue.push({ file: link.path, column: column + 1 });
+    }
+  };
+  const starts = entries.filter((entry) => byPath.has(entry));
+  layer(starts.length ? starts : code.slice(0, 1).map((file) => file.path), 0);
+  // 시작 파일에서 닿지 않는 파일만 모인 폴더는 그 폴더의 __main__.py·__init__.py·index.ts 같은 파일을 시작 파일(0열)로 본다.
+  // 바깥 폴더부터 하나씩 정하고, 이미 닿은 파일이 들어 있는 폴더는 건너뛴다.
+  const folderEntries = (rest: CodeFile[]): string[] => {
+    const candidates = rest.filter((file) => FOLDER_ENTRY.test(path.posix.basename(file.path))).sort((a, b) => a.path.split('/').length - b.path.split('/').length);
+    for (const candidate of candidates) {
+      const dir = path.posix.dirname(candidate.path);
+      const prefix = dir === '.' ? '' : `${dir}/`;
+      if (code.some((file) => columns.has(file.path) && file.path.startsWith(prefix))) continue;
+      return candidates.filter((file) => path.posix.dirname(file.path) === dir).map((file) => file.path);
+    }
+    return [];
+  };
+  // 그래도 남은 파일은 한 열에 몰지 않고, 남은 파일끼리 불려오지 않는 파일부터 다시 층을 나눈다.
+  // 0열은 시작 파일 자리이므로 1열부터 쓰고, 순환만 남으면 가장 많이 불러오는 파일에서 시작한다.
+  for (let rest = code.filter((file) => !columns.has(file.path)); rest.length; rest = rest.filter((file) => !columns.has(file.path))) {
+    const local = folderEntries(rest);
+    if (local.length) { layer(local, 0); continue; }
+    const imported = new Set(rest.flatMap((file) => file.imports.map((link) => link.path)));
+    const roots = rest.filter((file) => !imported.has(file.path));
+    layer((roots.length ? roots : [rest.reduce((a, b) => (b.imports.length > a.imports.length ? b : a))]).map((file) => file.path), 1);
   }
-  for (const file of code) if (!columns.has(file.path)) columns.set(file.path, 3);
   const nodes = code.map((file) => ({ id: file.path, label: file.path, column: columns.get(file.path) ?? 0, source: file.excerpts[0]!.source }));
   const edges = code.flatMap((file) => file.imports.filter((link) => byPath.has(link.path)).map((link) => ({ from: file.path, to: link.path, label: '불러옴', source: { kind: 'file' as const, path: file.path, startLine: link.line, endLine: link.line, hash: file.hash } })));
   return { nodes, edges, limited: code.some((file) => file.imports.some((link) => !byPath.has(link.path))) };

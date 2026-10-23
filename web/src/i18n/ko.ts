@@ -307,7 +307,7 @@ export const ko = {
     flowTitle: '코드 연결 흐름도', flowNote: '각 파일의 동작과 영역을 함께 보여 줍니다. 화살표는 코드를 불러오는 관계이며 실행 순서를 뜻하지 않습니다. 상자를 누르면 근거 코드를 읽을 수 있습니다.',
     flowDescriptionMissing: '이 파일의 동작 설명이 아직 없습니다. 위키를 업데이트해 주세요.', ungrouped: '영역 미확인',
     flowLimited: '그림이 너무 커지지 않도록 주요 파일 18개까지만 보여 줍니다. 표시하지 못한 연결도 있을 수 있습니다.',
-    entry: '시작 파일', module: '연결된 코드', connections: '연결을 목록으로 보기',
+    entry: (name: string) => `시작 파일 - ${name}`, connections: '연결을 목록으로 보기',
   },
   theme: {
     label: '화면 색상',
