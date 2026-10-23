@@ -76,6 +76,7 @@ export function matchConcepts(session: NormalizedSession, built: BuiltSummary, d
       level: c.level,
       explanation: c.explanation,
       whyHere: renderWhyHere(c, evidence),
+      contextKind: evidence.some((h) => h.kind !== 'text') ? 'activity' : 'mention',
       score,
       evidence: evidence.map((h) => h.evidence),
       links: c.links,
@@ -89,7 +90,6 @@ function renderWhyHere(c: CompiledConcept, hits: Hit[]): string {
   const files = hits.filter((h) => h.kind === 'file').map((h) => h.evidence.snippet);
   const commands = hits.filter((h) => h.kind === 'command').map((h) => h.evidence.snippet);
   const packages = hits.filter((h) => h.kind === 'package').map((h) => h.evidence.snippet.replace(/^[^:]+: /, ''));
-  const texts = hits.filter((h) => h.kind === 'text').map((h) => h.evidence.snippet);
   const stack = hits.filter((h) => h.kind === 'stack').map((h) => h.evidence.snippet.replace(/^기술 스택: /, ''));
   const list = (arr: string[], n = 3) => arr.slice(0, n).map((s) => `‘${truncate(s, 60)}’`).join(', ') + (arr.length > n ? ` 외 ${arr.length - n}개` : '');
   if (c.whyHereTemplate) {
@@ -97,13 +97,14 @@ function renderWhyHere(c: CompiledConcept, hits: Hit[]): string {
       .replace('{files}', files.length ? list(files) : '(파일 없음)')
       .replace('{commands}', commands.length ? list(commands) : '(명령 없음)')
       .replace('{packages}', packages.length ? list(packages) : '(패키지 없음)')
-      .replace('{textHits}', texts.length ? list(texts, 2) : '(언급 없음)');
+      .replace('{textHits}', `‘${c.name}’ 관련 대화`);
   }
-  const parts: string[] = [];
-  if (files.length) parts.push(`${list(files)} 파일 생성·수정`);
-  if (commands.length) parts.push(`${list(commands)} 명령 실행`);
-  if (packages.length) parts.push(`${list(packages)} 패키지 설치`);
-  if (stack.length) parts.push(`${list(stack)} 기술 사용`);
-  if (texts.length) parts.push(`대화 중 ${list(texts, 2)} 언급`);
-  return `이 세션에서 ${parts.join(', ')} 등이 나타났습니다.`;
+  // 발췌문은 근거 목록에만 둔다. 본문은 확인한 사실 한 가지와 알아둘 이유를 잇는다.
+  let context: string;
+  if (files[0]) context = `${files[0]} 파일의 변경 기록이 있습니다.`;
+  else if (commands[0]) context = commands[0].length <= 80 ? `${commands[0]} 명령을 실행한 기록이 있습니다.` : '관련 명령을 실행한 기록이 있습니다.';
+  else if (packages[0]) context = `${packages[0]} 패키지를 설치한 기록이 있습니다.`;
+  else if (stack[0]) context = `이 작업의 도구·기술 목록에 ${stack[0]}가 있습니다.`;
+  else context = `대화에서 ‘${c.name}’ 관련 내용이 나왔습니다. 실제 사용 여부는 확인되지 않았습니다.`;
+  return c.whyItMatters ? `${context} ${c.whyItMatters}` : context;
 }

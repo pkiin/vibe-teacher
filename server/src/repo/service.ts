@@ -16,10 +16,11 @@ import { shortId } from '../lib/hash';
 import { truncate } from '../lib/text';
 import { REPO_AI_SYSTEM_PROMPT, RepoAiOutputSchema, applyRepoAi, buildRepoAiPrompt } from './ai';
 import { scanRepo, type RepoScan } from './scan';
-import { buildRepoWiki, type RepoSessionDigest } from './wiki';
+import { buildRepoWiki, REPO_WIKI_VERSION, type RepoSessionDigest } from './wiki';
 
 const MAX_SESSIONS = 60;
 const MAX_HISTORY = 30;
+const REPO_TEXT_VERSION = 3;
 
 type Allowed = { ok: boolean; reason?: string };
 
@@ -40,6 +41,7 @@ interface Materials {
 
 /** 읽는 사람 수준별 AI 문장 */
 interface TextLayer {
+  promptVersion?: number;
   revision: string;
   level: ReaderLevel;
   inputHash: string;
@@ -119,7 +121,7 @@ export class RepoWikiService {
   private async layer(projectId: string, revision: string, level: ReaderLevel): Promise<TextLayer | null> {
     for (const id of this.opts.index.getProjectIds(projectId)) {
       const layer = await this.opts.storage.readJson<TextLayer>(this.files(id).text(level));
-      if (layer?.revision === revision) return layer;
+      if (layer?.revision === revision && layer.promptVersion === REPO_TEXT_VERSION) return layer;
     }
     return null;
   }
@@ -138,7 +140,7 @@ export class RepoWikiService {
 
   /** 사실 초안에 이 수준의 AI 문장을 입힌다. 없으면 규칙 문장과 사유 */
   private compose(draft: RepoWiki, layer: TextLayer | null, gate: TextGate): { wiki: RepoWiki; canGenerate: boolean } {
-    const fresh = layer && layer.revision === draft.revision ? layer : null;
+    const fresh = layer && layer.revision === draft.revision && layer.promptVersion === REPO_TEXT_VERSION ? layer : null;
     if (fresh && !fresh.failed && fresh.user && fresh.system) {
       return { wiki: { ...draft, user: fresh.user, system: fresh.system, warnings: [...draft.warnings, ...(fresh.warnings ?? [])], generator: fresh.generator }, canGenerate: false };
     }
@@ -152,6 +154,7 @@ export class RepoWikiService {
     const history = await this.history(project.id);
     if (!draft) return { wiki: null, stale: false, staleReasons: [], history };
     const reasons: string[] = [];
+    if (draft.generator.version !== REPO_WIKI_VERSION) reasons.push('새 설명 형식과 보안 점검을 반영하려면 업데이트가 필요합니다');
     const known = new Map(draft.inputs.sessions.map((s) => [s.key, s]));
     const now = this.sessions(project.id);
     const added = now.filter((s) => !known.has(s.key));
@@ -186,6 +189,7 @@ export class RepoWikiService {
         features: enrichment?.data.summary.features.map((x) => ({ name: x.name, detail: x.detail })) ?? [],
         built,
         findings: snapshot?.findings ?? [],
+        securityReviewed: !!snapshot,
       });
     }
     const previous = (await this.saved(project.id))?.draft ?? null;
@@ -242,10 +246,10 @@ export class RepoWikiService {
     const system = withReader(REPO_AI_SYSTEM_PROMPT, level);
     const inputHash = shortId(`${system}|${materials.user}|${provider.id}|${modelFor(provider.id, cfg) ?? ''}`, 16);
     const layer = await this.layer(project.id, draft.revision, level);
-    if (!force && layer?.revision === draft.revision && layer.inputHash === inputHash) return done();
+    if (!force && layer?.revision === draft.revision && layer.promptVersion === REPO_TEXT_VERSION && layer.inputHash === inputHash) return done();
 
     const job = this.jobs.enqueue(key, async (signal) => {
-      const base = { revision: draft.revision, level, inputHash, at: new Date().toISOString() };
+      const base = { promptVersion: REPO_TEXT_VERSION, revision: draft.revision, level, inputHash, at: new Date().toISOString() };
       try {
         const res = await provider.complete({ system, user: materials.user, schema: RepoAiOutputSchema, schemaName: 'repo_wiki_text', maxTokens: 32_000, timeoutMs: Math.max(cfg.timeoutMs, 300_000), signal });
         const { data, ...meta } = res;

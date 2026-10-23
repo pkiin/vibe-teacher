@@ -175,6 +175,23 @@ describe('AI-first text over the API', () => {
     expect(wiki.generator.kind).toBe('llm');
   });
 
+  it('does not serve an older writing guide as current text and regenerates it once', async () => {
+    const file = path.join(tmp, 'state', 'wiki', 'projects', project.id, 'repo', 'text', 'non-dev.json');
+    const layer = JSON.parse(await fs.readFile(file, 'utf8')) as Record<string, unknown>;
+    delete layer.promptVersion;
+    await fs.writeFile(file, JSON.stringify(layer));
+    const before = fake.state.calls.length;
+    const view = (await (await app.request(`/api/projects/${project.id}/repo-wiki`)).json()) as RepoWikiResponse;
+    expect(view.wiki!.generator.kind).toBe('rule');
+    expect(view.text?.canGenerate).toBe(true);
+    expect(fake.state.calls.length).toBe(before);
+    expect((await repoPost('text')).wiki.generator.kind).toBe('llm');
+    expect(fake.state.calls.length).toBe(before + 1);
+    expect(fake.state.systems.at(-1)).toContain('한국어 작성 원칙');
+    expect((await repoPost('text')).text.canGenerate).toBe(false);
+    expect(fake.state.calls.length).toBe(before + 1);
+  });
+
   it('writes the text separately for each reader level, using the reader guide', async () => {
     // 기본(비개발자) 지침으로 썼다
     const firstSystem = fake.state.systems[0]!;

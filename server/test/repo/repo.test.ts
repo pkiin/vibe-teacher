@@ -84,13 +84,14 @@ describe('repo wiki pages', () => {
     features: [{ name: '관리자 회원 목록', detail: '관리자가 회원을 봅니다' }],
     built: summarizeBuilt(session, '/home/tester'),
     findings: snapshotOf(session).findings,
+    securityReviewed: true,
     ...over,
   });
 
   it('builds a user-facing page from README, scripts, settings, risks and history', async () => {
     const wiki = buildRepoWiki({ project: { id: 'p', name: 'demo', rootPath: root }, scan: await scanRepo(root), sessions: [digest()], previous: null });
     const sec = (id: string) => wiki.user.find((s) => s.id === id)!;
-    expect(wiki.user.map((s) => s.id)).toEqual(['overview', 'features', 'usage', 'config', 'cautions', 'history']);
+    expect(wiki.user.map((s) => s.id)).toEqual(['overview', 'features', 'usage', 'config', 'cautions', 'security', 'history']);
     expect(JSON.stringify(sec('overview').blocks)).toContain('할 일을 기록하고 마감일을 알려 주는 앱입니다.');
     expect(JSON.stringify(sec('overview').blocks)).not.toContain('badge.svg');
     expect(JSON.stringify(sec('features').blocks)).toContain('마감 알림');
@@ -105,7 +106,7 @@ describe('repo wiki pages', () => {
   it('builds a behavior page: structure, stack, entry points, routes, data, tests, risks', async () => {
     const wiki = buildRepoWiki({ project: { id: 'p', name: 'demo', rootPath: root }, scan: await scanRepo(root), sessions: [digest()], previous: null });
     const sec = (id: string) => JSON.stringify(wiki.system.find((s) => s.id === id)?.blocks ?? []);
-    expect(wiki.system.map((s) => s.id)).toEqual(['structure', 'stack', 'entry', 'api', 'data', 'quality', 'risks']);
+    expect(wiki.system.map((s) => s.id)).toEqual(['structure', 'stack', 'entry', 'mechanism', 'api', 'data', 'quality', 'risks']);
     expect(sec('structure')).toContain('src/');
     expect(sec('stack')).toContain('React — 화면 구성');
     expect(sec('entry')).toContain('시작 파일: src/server.ts');
@@ -174,5 +175,44 @@ describe('repo wiki pages', () => {
     const md = parseMarkdown('# T\n\nintro\n\n## A\n```\n# not a heading\n```\n## B\n');
     expect(md.title).toBe('T');
     expect(md.sections.map((s) => s.heading)).toEqual(['A', 'B']);
+  });
+
+  it('keeps security concerns from each session and distinguishes missing review coverage', async () => {
+    const scan = await scanRepo(root);
+    const first = digest();
+    const second = digest({ key: 'second-session', title: '새 작업' });
+    const wiki = buildRepoWiki({ project: { id: 'p', name: 'demo', rootPath: root }, scan, sessions: [first, second, digest({ key: 'unreviewed', findings: [], securityReviewed: false })], previous: null });
+    const security = wiki.user.find((s) => s.id === 'security')!;
+    expect(JSON.stringify(security)).toContain('3개 중 위키가 만들어진 2개');
+    const findings = security.blocks.find((b) => b.kind === 'list');
+    expect(findings?.kind === 'list' && findings.items.flatMap((item) => item.sources ?? [])).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: first.key }), expect.objectContaining({ key: second.key }),
+    ]));
+    expect(JSON.stringify(security)).toContain('확인 방법:');
+    expect(JSON.stringify(security)).toContain('더 필요한 자료:');
+    expect(JSON.stringify(security)).toContain('공개된 보안 공지');
+
+    const out = applyRepoAi({ draft: wiki, output: { sections: [{ id: 'security', paragraphs: ['모든 보안 검사를 통과했습니다.'], items: [] }] }, handles: new Map(), fileSet: new Set(), result: { provider: 'openai', durationMs: 1 } });
+    expect(out.user.find((s) => s.id === 'security')).toEqual(security);
+  });
+
+  it('does not describe an empty or resolved finding list as a clean vulnerability scan', async () => {
+    const first = digest();
+    const wiki = buildRepoWiki({ project: { id: 'p', name: 'demo', rootPath: root }, scan: await scanRepo(root), sessions: [digest({ findings: first.findings.map((f) => ({ ...f, lifecycle: 'resolved_in_scope' })) })], previous: null });
+    const security = wiki.user.find((s) => s.id === 'security')!;
+    const text = JSON.stringify(security);
+    expect(text).toContain('안전하다는 뜻은 아닙니다');
+    expect(text).toContain('자동으로 검사하지 않습니다');
+    expect(text).not.toContain('접근 권한 검사 위치 미확인');
+  });
+
+  it('changes the revision when review coverage or finding details change without a source file change', async () => {
+    const scan = await scanRepo(root);
+    const build = (session: RepoSessionDigest) => buildRepoWiki({ project: { id: 'p', name: 'demo', rootPath: root }, scan, sessions: [session], previous: null });
+    const first = build(digest({ securityReviewed: false, findings: [] }));
+    const reviewed = build(digest({ findings: [] }));
+    const concerns = build(digest());
+    const recheck = build(digest({ findings: digest().findings.map((f) => ({ ...f, lifecycle: 'recheck_required' })) }));
+    expect(new Set([first.revision, reviewed.revision, concerns.revision, recheck.revision]).size).toBe(4);
   });
 });

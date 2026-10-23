@@ -9,6 +9,7 @@ export interface RolloutLine {
 export interface SessionMetaPayload {
   id?: string;
   session_id?: string;
+  parent_thread_id?: string | null;
   timestamp?: string;
   cwd?: string;
   originator?: string;

@@ -32,7 +32,7 @@ function contextFor(focus: Parameters<typeof buildHelpContext>[0]['focus'], with
 describe('help context', () => {
   it('collects verified claims, risks and prerequisites for a concept', () => {
     const ctx = contextFor({ kind: 'concept', id: 'authorization' });
-    expect(ctx.focusLabel).toBe('개념: 권한 검사 (인가)');
+    expect(ctx.focusLabel).toBe('개념: 이 기능을 써도 되는지 확인하기 (권한 검사)');
     expect(ctx.claims.map((c) => c.id)).toContain('c_access-files-changed');
     expect(ctx.findings.map((f) => f.ruleId)).toContain('security-access-control-unverified');
     expect(ctx.concepts.map((c) => c.id)).toEqual(expect.arrayContaining(['authorization', 'auth']));
@@ -157,7 +157,7 @@ describe('help API', () => {
     // 읽는 사람 수준을 고르지 않았으면 기본(비개발자) 지침이 붙는다
     expect(calls[0]?.system).toBe(withReader(HELP_SYSTEM_PROMPT, 'non-dev'));
     expect(calls[0]?.system).toContain('읽는 사람: 개발을 전혀 모르는 사람');
-    expect(calls[0]?.user).toContain('=== 질문 대상 ===\n개념: 권한 검사 (인가)');
+    expect(calls[0]?.user).toContain('=== 질문 대상 ===\n개념: 이 기능을 써도 되는지 확인하기 (권한 검사)');
 
     const again = (await (await app.request(`/api/projects/${project.id}/help`, { method: 'POST', headers: json, body: JSON.stringify(body) })).json()) as { message: HelpMessage };
     expect(again.message.id).toBe(message.id);

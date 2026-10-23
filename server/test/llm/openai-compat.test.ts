@@ -140,10 +140,17 @@ describe('provider selection', () => {
     expect((await resolveLlm({ ...cfg, provider: 'openai' }, '/tmp', { env: env({}) })).status).toMatchObject({ resolvedProvider: 'openai', available: false });
   });
 
-  it('auto falls through to OpenRouter, then OpenAI, when there is no Anthropic key or Claude login', async () => {
-    expect((await resolveLlm(cfg, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k', OPENAI_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openrouter');
+  it('auto prefers GPT when an OpenAI key is available, otherwise keeps existing fallbacks', async () => {
+    expect((await resolveLlm(cfg, '/tmp', { env: env({ ANTHROPIC_API_KEY: 'k', OPENROUTER_API_KEY: 'k', OPENAI_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openai');
     expect((await resolveLlm(cfg, '/tmp', { env: env({ OPENAI_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openai');
     expect((await resolveLlm(cfg, '/tmp', { env: env({ ANTHROPIC_API_KEY: 'k', OPENROUTER_API_KEY: 'k' }) })).status.resolvedProvider).toBe('anthropic-sdk');
+    expect((await resolveLlm(cfg, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openrouter');
+  });
+
+  it('keeps explicit settings and environment overrides ahead of the GPT preference', async () => {
+    const keys = { ANTHROPIC_API_KEY: 'k', OPENROUTER_API_KEY: 'k', OPENAI_API_KEY: 'k' };
+    expect((await resolveLlm({ ...cfg, provider: 'anthropic-sdk' }, '/tmp', { env: env(keys) })).status.resolvedProvider).toBe('anthropic-sdk');
+    expect((await resolveLlm(cfg, '/tmp', { env: env({ ...keys, VIBE_TEACHER_LLM_PROVIDER: 'openrouter' }) })).status.resolvedProvider).toBe('openrouter');
   });
 
   it('lists all four providers with their availability', async () => {

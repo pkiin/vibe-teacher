@@ -21,6 +21,8 @@ export const REPO_AI_SYSTEM_PROMPT = `당신은 저장소를 처음 보는 사�
 - 기능·동작 중심(page=system) 절은 구성 요소가 무엇이고 서로 어떻게 연결되어 어떻게 동작하는지 중심으로 씁니다.
 - 설명의 쉬운 정도는 맨 아래 "읽는 사람" 지침을 따릅니다. 한국어 존댓말로 자연스럽고 간결하게 씁니다. 같은 말을 반복하거나 "~입니다. ~입니다."를 기계적으로 늘어놓지 않습니다.
 - "주의할 점"류는 기록에서 확인된 범위만 말하고, 위험이 없다고 단정하지 않습니다.
+- id=security 절은 코드가 확인 범위와 점검 사항을 보존하므로 다시 쓰지 말고 응답에서 생략합니다.
+- 동작 원리는 제공한 실제 코드 발췌에 근거해 설명하고 해당 F:파일#L시작-L끝 표시를 sources에 붙입니다. 기능과 처리 흐름을 설명할 때 가능한 한 실제 함수·처리 코드 근거를 함께 인용합니다. README에서만 확인한 기능과 코드에서 확인한 처리를 구분합니다. 파일을 불러오는 관계를 실제 실행 순서라고 단정하지 않습니다.
 - 요청된 JSON 스키마로만 답합니다.`;
 
 export const RepoAiOutputSchema = z.object({
@@ -34,7 +36,7 @@ export const RepoAiOutputSchema = z.object({
             z.object({
               text: z.string().describe('목록 한 줄'),
               detail: z.string().describe('덧붙일 설명, 없으면 빈 문자열'),
-              sources: z.array(z.string()).describe('근거 표시 (F:경로, S1 …)'),
+              sources: z.array(z.string()).describe('제공된 근거 표시 (F:경로, F:경로#L시작-L끝, S1 …)'),
             }),
           )
           .describe('목록이 어울리는 절만 (아니면 빈 배열)'),
@@ -46,7 +48,7 @@ export const RepoAiOutputSchema = z.object({
 export type RepoAiOutput = z.infer<typeof RepoAiOutputSchema>;
 
 function srcLabel(s: RepoSource, sessionHandle: Map<string, string>): string {
-  return s.kind === 'file' ? `F:${s.path}` : (sessionHandle.get(s.key) ?? '');
+  return s.kind === 'file' ? `F:${s.path}${s.startLine ? `#L${s.startLine}-L${s.endLine ?? s.startLine}` : ''}` : (sessionHandle.get(s.key) ?? '');
 }
 
 function draftText(sec: RepoSection, handles: Map<string, string>): string {
@@ -55,6 +57,7 @@ function draftText(sec: RepoSection, handles: Map<string, string>): string {
     if (b.kind === 'text') out.push(b.text);
     else if (b.kind === 'code') out.push(`[코드 블록 — 그대로 유지됨]\n${b.text}`);
     else if (b.kind === 'table') out.push(`[표 — 그대로 유지됨] ${b.head.join(' | ')}\n${b.rows.slice(0, 25).map((r) => r.join(' | ')).join('\n')}${b.rows.length > 25 ? `\n… 외 ${b.rows.length - 25}행` : ''}`);
+    else if (b.kind === 'flow') out.push(`[코드 연결도 — 그대로 유지됨] ${b.graph.edges.map((edge) => `${edge.from} → ${edge.to}`).join(', ')}`);
     else out.push(b.items.map((i) => `- ${i.text}${i.detail ? ` — ${i.detail}` : ''}${i.sources?.length ? ` [${i.sources.map((s) => srcLabel(s, handles)).filter(Boolean).join(', ')}]` : ''}`).join('\n'));
   }
   if (sec.sources.length) out.push(`근거: ${sec.sources.map((s) => srcLabel(s, handles)).filter(Boolean).join(', ')}`);
@@ -67,7 +70,11 @@ export function buildRepoAiPrompt(input: { draft: RepoWiki; scan: RepoScan; sess
   const handles = new Map(sessions.map((s, i) => [s.key, `S${i + 1}`]));
   const lines: string[] = [];
   lines.push(`=== 저장소 ===\n이름: ${draft.projectName}\n경로: ${draft.rootPath}\n파일 ${scan.files.length}개${scan.truncated ? ' (일부만)' : ''}${scan.branch ? ` · 브랜치 ${scan.branch}` : ''}`);
-  if (scan.readme) lines.push(`\n=== README (F:${scan.readme.path}, 앞부분) ===\n${truncate(scan.readme.text, 6000)}`);
+  if (scan.readme) lines.push(`\n=== README (F:${scan.readme.path}, 앞부분) ===\n${truncate(scan.readme.text, 4000)}`);
+  for (const file of scan.code ?? []) {
+    lines.push(`\n=== 실제 동작 코드 F:${file.path} ===\n선언: ${file.symbols.map((symbol) => `${symbol.name}(L${symbol.line})`).join(', ') || '-'}\n불러오는 파일: ${file.imports.map((item) => item.path).join(', ') || '-'}`);
+    for (const excerpt of file.excerpts) lines.push(`${srcLabel(excerpt.source, handles)}\n${excerpt.text}`);
+  }
   for (const p of scan.packages.slice(0, 4)) {
     lines.push(`\n=== F:${p.path} ===\n이름: ${p.name ?? '-'} · 설명: ${p.description ?? '-'}\nscripts: ${Object.entries(p.scripts).map(([k, v]) => `${k}=${v}`).join(' ; ') || '-'}\ndependencies: ${p.dependencies.join(', ') || '-'}\ndevDependencies: ${p.devDependencies.join(', ') || '-'}`);
   }
@@ -108,9 +115,13 @@ export function applyRepoAi(input: {
   const byHandle = new Map([...input.handles.entries()].map(([key, h]) => [h, key]));
   const titles = new Map(draft.inputs.sessions.map((s) => [s.key, s.title]));
   const ai = new Map(output.sections.map((s) => [s.id, s]));
+  const sources = [...draft.user, ...draft.system].flatMap((section) => [...section.sources, ...section.blocks.flatMap((block) => block.kind === 'list' ? block.items.flatMap((item) => item.sources ?? []) : [])]);
+  const knownRefs = new Map(sources.filter((source) => source.kind === 'file').map((source) => [srcLabel(source, new Map()), source]));
   let dropped = 0;
   const toSource = (ref: string): RepoSource | null => {
     const r = ref.trim();
+    const known = knownRefs.get(r);
+    if (known?.kind === 'file' && input.fileSet.has(known.path)) return known;
     if (r.startsWith('F:')) {
       const p = r.slice(2).trim();
       if (input.fileSet.has(p)) return { kind: 'file', path: p };
@@ -122,6 +133,7 @@ export function applyRepoAi(input: {
     return null;
   };
   const rewrite = (sec: RepoSection): RepoSection => {
+    if (sec.id === 'security') return { ...sec, origin: 'rule' };
     const a = ai.get(sec.id);
     if (!a || (!a.paragraphs.some((p) => p.trim()) && !a.items.length)) return { ...sec, origin: 'rule' };
     const blocks: RepoBlock[] = a.paragraphs.map((p) => clean(p, 1500)).filter(Boolean).map((text) => ({ kind: 'text' as const, text }));
@@ -131,8 +143,11 @@ export function applyRepoAi(input: {
     });
     if (items.length) blocks.push({ kind: 'list', items: items.filter((i) => i.text) });
     // 사실 블록은 초안 그대로
-    blocks.push(...sec.blocks.filter((b) => b.kind === 'code' || b.kind === 'table'));
-    return { ...sec, blocks, origin: 'llm' };
+    blocks.push(...sec.blocks.filter((b) => b.kind === 'code' || b.kind === 'table' || b.kind === 'flow'));
+    // 출처와 줄 번호는 코드가 만든 범위를 보존한다. AI가 README만 인용해도 실행 코드 근거를 잃지 않는다.
+    const sources = [...sec.sources, ...sec.blocks.flatMap((block) => block.kind === 'list' ? block.items.flatMap((item) => item.sources ?? []) : [])];
+    const deduped = [...new Map(sources.map((source) => [JSON.stringify(source), source])).values()];
+    return { ...sec, sources: deduped, blocks, origin: 'llm' };
   };
   const user = draft.user.map(rewrite);
   const system = draft.system.map(rewrite);

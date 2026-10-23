@@ -3,6 +3,7 @@ import { truncate } from '../lib/text';
 import { extractUserMessages } from '../analyzers/user-messages';
 
 const SECRET_PATTERNS: RegExp[] = [
+  /-----BEGIN ([A-Z ]*PRIVATE KEY)-----[\s\S]*?-----END \1-----/g,
   /sk-[A-Za-z0-9_-]{16,}/g,
   /sk-ant-[A-Za-z0-9_-]{16,}/g,
   /ghp_[A-Za-z0-9]{20,}/g,
@@ -15,7 +16,7 @@ const SECRET_PATTERNS: RegExp[] = [
 
 export function maskSecrets(text: string): string {
   let out = text;
-  for (const re of SECRET_PATTERNS) out = out.replace(re, '***');
+  for (const re of SECRET_PATTERNS) out = out.replace(re, (match) => `***${'\n'.repeat((match.match(/\n/g) ?? []).length)}`);
   return out;
 }
 
@@ -101,7 +102,12 @@ export function buildDigest(session: NormalizedSession, built: BuiltSummary, con
 
   if (concepts.length) {
     push('\n## 규칙 기반 개념 후보 (id · 이름 · 근거)');
-    concepts.slice(0, 20).forEach((c) => push(`- ${c.id} · ${c.name} · ${c.evidence[0]?.snippet ?? ''}`));
+    concepts.slice(0, 20).forEach((c) => {
+      push(`- ${c.id} · ${c.name}`);
+      const context = c.contextKind === 'mention' ? '대화에서 언급됨. 실제 사용·실행은 미확인' : c.contextKind === 'activity' ? '파일·명령 등 작업 기록' : '제공된 기록에서 실제 사용 여부를 따로 확인해야 함';
+      push(`  - 연결 근거: ${context}`);
+      push(`  - 알아둘 이유: ${c.whyHere}`);
+    });
   }
 
   let text = maskSecrets(lines.join('\n'));

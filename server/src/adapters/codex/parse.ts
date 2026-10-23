@@ -1,28 +1,35 @@
 import path from 'node:path';
 import type { Message, ToolCall } from '@vibe-teacher/shared';
 import { readJsonl } from '../../lib/jsonl';
-import { capStrings, stripTagBlock, toIso, truncate } from '../../lib/text';
+import { capStrings, toIso, truncate } from '../../lib/text';
 import { emptyCounts, type NormalizedDraft } from '../types';
 import { parseApplyPatch } from './apply-patch';
+import { cleanCodexUserText, isCodexSubagentSession } from './classify';
 import type { EventMsgPayload, ResponseItemPayload, RolloutLine, SessionMetaPayload, TurnContextPayload } from './records';
 
-const WRAPPER_TAGS = ['environment_context', 'user_instructions', 'permissions instructions', 'permissions_instructions', 'turn_context', 'AGENTS.md'];
-
-export function cleanCodexUserText(text: string): string {
-  let t = text;
-  for (const tag of WRAPPER_TAGS) t = stripTagBlock(t, tag.replace(/ /g, '[ _]'));
-  return t.trim();
-}
-
 function strip(value: unknown): unknown {
+  // 자동 문맥이 길어도 뒤쪽 요청이 잘리지 않도록 분류한 다음 길이를 제한한다.
+  if (value && typeof value === 'object') {
+    const line = value as RolloutLine;
+    const payload = line.payload as Record<string, unknown> | undefined;
+    if (payload && typeof payload === 'object') {
+      if (line.type === 'event_msg' && payload.type === 'user_message') {
+        value = { ...line, payload: { ...payload, message: cleanCodexUserText(typeof payload.message === 'string' ? payload.message : '') } };
+      } else if (line.type === 'response_item' && payload.type === 'message' && payload.role === 'user') {
+        const content = payload.content;
+        const images = Array.isArray(content) ? content.filter((part) => part?.type === 'input_image').map(() => ({ type: 'input_image' })) : [];
+        value = { ...line, payload: { ...payload, content: [{ type: 'input_text', text: cleanCodexUserText(partsText(content)) }, ...images] } };
+      }
+    }
+  }
   return capStrings(value, 4000);
 }
 
-function partsText(content: ResponseItemPayload extends { content?: infer C } ? C : unknown): string {
+function partsText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   return content
-    .map((p) => (p && typeof p === 'object' && typeof (p as { text?: unknown }).text === 'string' ? ((p as { text: string }).text) : ''))
+    .map((p) => (p && typeof p === 'object' && (p.type === 'input_text' || p.type === 'output_text') && typeof p.text === 'string' ? p.text : ''))
     .filter(Boolean)
     .join('\n');
 }
@@ -95,12 +102,14 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
   let gitBranch: string | undefined;
   let firstPrompt: string | undefined;
   let hasUserEvent = false;
+  let isSubagent = false;
   const fallbackHumans: Message[] = [];
   let seenAssistantIds = new Set<string>();
   let lastAgentMessageText: string | undefined;
 
   const push = (m: Omit<Message, 'index' | 'id'> & { id?: string }): Message => {
     const msg: Message = { ...m, id: m.id ?? `${messages.length}`, index: messages.length };
+    if (isSubagent) msg.meta = { ...msg.meta, subagentId: sessionId || path.basename(filePath, '.jsonl') };
     messages.push(msg);
     return msg;
   };
@@ -121,6 +130,7 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
       case 'session_meta': {
         const p = (payload ?? {}) as SessionMetaPayload;
         sessionId = p.id ?? p.session_id ?? sessionId;
+        isSubagent = isSubagent || isCodexSubagentSession(p);
         cwd = cwd ?? p.cwd;
         if (p.timestamp) noteTs(p.timestamp);
         cliVersion = p.cli_version ?? cliVersion;
@@ -136,12 +146,13 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
       case 'event_msg': {
         const p = (payload ?? {}) as EventMsgPayload;
         if (p.type === 'user_message') {
+          hasUserEvent = true;
+          if (isSubagent) break;
           const ev = p as { message?: string; images?: string[]; local_images?: string[] };
-          let text = cleanCodexUserText(ev.message ?? '');
+          let text = ev.message ?? '';
           const imgs = (ev.images?.length ?? 0) + (ev.local_images?.length ?? 0);
           if (imgs) text = text ? `${text}\n[이미지 ${imgs}장]` : `[이미지 ${imgs}장]`;
           if (!text) break;
-          hasUserEvent = true;
           counts.human += 1;
           if (!firstPrompt) firstPrompt = text;
           push({ role: text.startsWith('/') ? 'slash-command' : 'human', text: text.startsWith('/') ? text.slice(1) : text, timestamp: ts, meta: text.startsWith('/') ? { commandName: text.slice(1).split(/\s+/)[0] } : undefined });
@@ -162,11 +173,14 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
         const p = (payload ?? {}) as ResponseItemPayload;
         if (p.type === 'message') {
           const msg = p as { role: string; content?: unknown; id?: string };
-          const text = partsText(msg.content as never);
+          const text = partsText(msg.content);
           if (msg.role === 'user') {
-            const cleaned = cleanCodexUserText(text);
+            if (isSubagent) break;
+            const imgs = Array.isArray(msg.content) ? msg.content.filter((part) => part?.type === 'input_image').length : 0;
+            const cleaned = imgs ? `${text}${text ? '\n' : ''}[이미지 ${imgs}장]` : text;
             if (!cleaned) break;
-            const m: Omit<Message, 'index' | 'id'> = { role: 'human', text: cleaned, timestamp: ts };
+            const command = cleaned.startsWith('/');
+            const m: Omit<Message, 'index' | 'id'> = { role: command ? 'slash-command' : 'human', text: command ? cleaned.slice(1) : cleaned, timestamp: ts, meta: command ? { commandName: cleaned.slice(1).split(/\s+/)[0] } : undefined };
             if (!hasUserEvent) fallbackHumans.push({ ...m, id: `fb-${fallbackHumans.length}`, index: -1 });
           } else if (msg.role === 'assistant') {
             if (!text.trim()) break;
@@ -259,8 +273,10 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
       if (m.toolCall) m.toolCall.messageIndex = i;
       messages.push(m);
     });
-    counts.human = fallbackHumans.length;
-    firstPrompt = fallbackHumans[0]?.text;
+    counts.human = fallbackHumans.filter((m) => m.role === 'human').length;
+    counts.slashCommands = fallbackHumans.filter((m) => m.role === 'slash-command').length;
+    const first = fallbackHumans[0];
+    firstPrompt = first?.role === 'slash-command' ? `/${first.text}` : first?.text;
   }
   if (!messages.some((m) => m.role === 'assistant') && lastAgentMessageText) {
     counts.assistant += 1;

@@ -28,6 +28,8 @@ export const ConceptEntrySchema = z.object({
   confusions: z.array(z.string()).default([]),
   /** D3: 구현 원리 */
   deep: z.string().optional(),
+  /** 이 개념을 알면 어떤 판단이나 작업에 도움이 되는지 */
+  whyItMatters: z.string().optional(),
   whyHereTemplate: z.string().optional(),
   links: z.array(z.object({ title: z.string(), url: z.string() })).default([]),
 });

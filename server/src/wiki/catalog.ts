@@ -7,7 +7,7 @@ import { loadConceptDictionary, type ConceptEntry } from '../analyzers/concepts/
 import { buildPrerequisiteGraph, type PrerequisiteGraph } from './graph';
 
 /** 위키가 쓰는 개념 카탈로그 버전. concepts.ko.json 의 위키용 필드를 바꾸면 올린다. */
-export const CATALOG_VERSION = 'catalog-0.1';
+export const CATALOG_VERSION = 'catalog-0.2';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PREREQUISITES_PATH = path.resolve(here, '../../data/prerequisites.json');

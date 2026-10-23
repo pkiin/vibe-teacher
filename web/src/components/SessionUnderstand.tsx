@@ -12,6 +12,8 @@ import { ErrorBox, Loading } from './Notice';
 import { KnowledgeList } from './KnowledgeList';
 import { UnifiedAiPanel } from './UnifiedAiPanel';
 import { SessionSummaryCard, WikiBody, WikiCoverage, WikiHeader } from './WikiSections';
+import { ReadingGuide } from './ReadingGuide';
+import { SecurityReview } from './SecurityReview';
 
 /**
  * "이번 세션 이해하기" — 프로젝트 위키·만들어진 것·알아야 할 개념을 한 화면에 잇고,
@@ -103,6 +105,12 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
     <FocusProvider>
       <div className="understand">
         <div className="understand-main">
+          <nav className="reading-path" aria-label={ko.reading.path}>
+            {(['summary', 'security', 'wiki', 'concepts', 'knowledge'] as const).map((key, index) => (
+              <a key={key} href={`#${key}`}><span aria-hidden="true">{index + 1}</span>{ko.reading[key]}</a>
+            ))}
+          </nav>
+          <ReadingGuide />
           <UnifiedAiPanel
             sessionKey={sessionKey}
             wiki={wiki}
@@ -115,11 +123,12 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
             onWikiWriting={setAiWriting}
           />
 
-          <section className="card">
+          <section className="card" id="summary">
             <h3 className="section-title">{ko.understand.summary}</h3>
             <SessionSummaryCard enrichment={enrichment} />
           </section>
 
+          <SecurityReview wiki={wiki} onJump={onJump} />
           <h2 id="wiki">{ko.understand.wiki}</h2>
           {wikiState === 'loading' && <Loading />}
           {wikiState === 'error' && wikiErr && <ErrorBox error={wikiErr} onRetry={() => loadWiki()} />}
@@ -134,8 +143,10 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
 
           {wiki && (
             <>
-              <h2>{ko.wiki.coverage}</h2>
-              <WikiCoverage wiki={wiki} />
+              <details className="section-disclosure">
+                <summary>{ko.wiki.coverage}</summary>
+                <WikiCoverage wiki={wiki} />
+              </details>
             </>
           )}
           <h2 id="knowledge">{ko.knowledge.sessionTitle}</h2>

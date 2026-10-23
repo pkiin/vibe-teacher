@@ -189,7 +189,7 @@ export interface WikiResponse {
 // ---- AI 보강 레이어 (규칙 기반 원장과 따로 저장) ----
 
 /** 2: 읽는 사람 수준별 문체, 레이어도 수준별로 저장 */
-export const WIKI_AI_PROMPT_VERSION = 2;
+export const WIKI_AI_PROMPT_VERSION = 3;
 
 /** 기존 지식 항목을 이 프로젝트에 맞춰 풀어 쓴 설명. 근거 주장이 없으면 싣지 않는다 */
 export interface WikiNarrative {

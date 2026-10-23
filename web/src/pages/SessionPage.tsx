@@ -13,6 +13,7 @@ import { ko } from '../i18n/ko';
 type TabId = 'messages' | 'understand' | 'built';
 /** 예전 탭 주소(?tab=concepts 등)는 통합 화면의 해당 절로 연다 */
 const LEGACY_SECTIONS: Record<string, string> = { concepts: 'concepts', wiki: 'wiki' };
+const scrollBehavior = (): ScrollBehavior => window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
 export function SessionPage() {
   const { sessionKey = '' } = useParams();
@@ -32,7 +33,7 @@ export function SessionPage() {
 
   useEffect(() => {
     if (!legacy) return;
-    const t = setTimeout(() => document.getElementById(legacy)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400);
+    const t = setTimeout(() => document.getElementById(legacy)?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }), 400);
     return () => clearTimeout(t);
   }, [legacy]);
 
@@ -41,7 +42,7 @@ export function SessionPage() {
     setTimeout(() => {
       const el = document.getElementById(`msg-${index}`);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
         el.classList.add('flash');
         setTimeout(() => el.classList.remove('flash'), 1500);
       }
@@ -121,7 +122,7 @@ export function SessionPage() {
           )}
           {tab === 'understand' && (
             <div className="tab-body">
-              <SessionUnderstand sessionKey={key} projectId={s.projectId} onJump={jump} />
+              <SessionUnderstand key={s.key} sessionKey={key} projectId={s.projectId} onJump={jump} />
             </div>
           )}
         </>

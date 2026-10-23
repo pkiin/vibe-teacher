@@ -28,10 +28,10 @@ import { maskSecrets } from '../llm/digest';
  * - 에이전트의 완료 보고(agent_reported)와 실제 실행 기록(observed_artifact)을 섞지 않는다.
  * - 이 단계는 사용자 이해 증거를 만들지 않는다 (learner_modeling 허용 전에는 개인 증거를 추출하지 않음).
  */
-export const RULES_VERSION = 'rules-0.1';
+export const RULES_VERSION = 'rules-0.2';
 
 export function snapshotRevision(s: { key: string; fileSize: number; fileMtime: number }): string {
-  return `s_${shortId(`${s.key}|${s.fileSize}|${s.fileMtime}`, 16)}`;
+  return `s_${shortId(`${s.key}|${s.fileSize}|${s.fileMtime}|${RULES_VERSION}`, 16)}`;
 }
 
 const SESSION_SCOPE = '이 세션 기록 안에서만 확인한 내용입니다';
@@ -658,8 +658,9 @@ export function buildWikiSnapshot(input: BuildInput): WikiSnapshot {
     if (bg >= 3 || covered.has(hit.id) || !input.conceptIds.has(hit.id)) continue;
     const ids = b.factEv(hit, 3);
     if (!ids.length) continue;
-    const c = b.claim(`concept-${hit.id}`, { statement: `이 세션 기록에 ${hit.name} 관련 흔적이 있습니다.`, kind: 'observed_artifact', support: 'supported', evidenceIds: ids });
-    b.item(`bg-${hit.id}`, { title: `${hit.name}`, question: `이 세션에서 쓰인 ${hit.name}, 무엇인가요?`, why: hit.whyHere, relevance: 'background', conceptIds: [hit.id], claimIds: [c], findingIds: [], actions: [], unverified: [] });
+    const mentionOnly = hit.contextKind === 'mention';
+    const c = b.claim(`concept-${hit.id}`, { statement: mentionOnly ? `대화에 ${hit.name} 관련 내용이 나옵니다. 실제 사용 여부는 확인되지 않았습니다.` : `이 세션 기록에 ${hit.name} 관련 작업이 있습니다.`, kind: 'observed_artifact', support: 'supported', evidenceIds: ids });
+    b.item(`bg-${hit.id}`, { title: `${hit.name}`, question: '이 개념을 알아두면 어떤 도움이 되나요?', why: hit.whyHere, relevance: 'background', conceptIds: [hit.id], claimIds: [c], findingIds: [], actions: [], unverified: mentionOnly ? ['관련 파일 변경·명령 실행 여부'] : [] });
     bg += 1;
   }
 

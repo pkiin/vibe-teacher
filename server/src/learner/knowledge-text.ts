@@ -18,7 +18,7 @@ import type { WikiStorage } from '../storage/store';
  * - 상태를 넘겨짚는 문장("모르십니다", 확인되지 않았는데 "이해하고 계십니다")은 버리고 규칙 문장을 쓴다.
  */
 
-export const KNOWLEDGE_TEXT_PROMPT_VERSION = 'knowledge-text-0.2';
+export const KNOWLEDGE_TEXT_PROMPT_VERSION = 'knowledge-text-0.3';
 const BATCH = 20;
 const MAX_PER_JOB = 100;
 const MAX_STORED = 1500;

@@ -88,17 +88,18 @@ export function WikiBody({ wiki, profile, learner, projectId, sessionKey, onJump
   const [showDeferred, setShowDeferred] = useState(false);
   const { snapshot, plan } = wiki;
   const items = new Map(snapshot.items.map((i) => [i.id, i]));
-  const alerts = plan.commonAlertIds.map((id) => snapshot.findings.find((f) => f.id === id)).filter((f) => !!f);
+  // 보안·데이터 항목은 위쪽 전용 섹션에서 예산과 관계없이 모두 보여 준다.
+  const alerts = snapshot.findings.filter((f) => plan.commonAlertIds.includes(f.id) && f.category !== 'security' && f.category !== 'data');
   const card = (id: string, bundle: (typeof plan.bundles)[number] | null) => {
     const item = items.get(id);
     return item ? <WikiItemCard key={item.id} item={item} bundle={bundle} wiki={wiki} profile={profile} learner={learner} projectId={projectId} sessionKey={sessionKey} onJump={onJump} aiWriting={aiWriting} /> : null;
   };
   return (
     <>
-      <h3>{ko.wiki.alerts}</h3>
+      <h3>{ko.security.otherAlerts}</h3>
       <p className="small muted">{ko.wiki.alertsNote}</p>
       {plan.budget.status === 'mandatory_overflow' && <Notice kind="warn">{ko.wiki.overflow}</Notice>}
-      {alerts.length ? alerts.map((f) => <WikiAlertCard key={f.id} finding={f} snapshot={snapshot} onJump={onJump} />) : <div className="muted small">{ko.wiki.noAlerts}</div>}
+      {alerts.length ? alerts.map((f) => <WikiAlertCard key={f.id} finding={f} snapshot={snapshot} onJump={onJump} />) : null}
 
       <h3>{ko.wiki.items}</h3>
       {plan.bundles.map((b) => card(b.itemId, b))}

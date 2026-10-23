@@ -2,6 +2,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { Loading } from './components/Notice';
 import { LoginPage } from './pages/LoginPage';
+import { DisplayProvider } from './context/DisplayContext';
 import { AppRoutes } from './routes';
 
 function Gate() {
@@ -18,8 +19,8 @@ function Gate() {
 
 export function App() {
   return (
-    <AuthProvider>
-      <Gate />
-    </AuthProvider>
+    <DisplayProvider>
+      <AuthProvider><Gate /></AuthProvider>
+    </DisplayProvider>
   );
 }

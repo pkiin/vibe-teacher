@@ -129,14 +129,13 @@ const STATE_ORDER: Record<LearnerConceptState['state'], number> = { conflicting:
 
 /** 상태가 어떤 근거에서 나왔는지 말하는 문장. "모른다"고 단정하지 않는다 */
 export function reasonFor(input: { name: string; state: LearnerConceptState; top?: KnowledgeSource; mention?: KnowledgeMention }): string {
-  const n = shortName(input.name);
   const { state: s, top, mention } = input;
   const req = top ? (top.request ? `"${truncate(top.request, 40)}"` : `'${truncate(top.sessionTitle, 40)}'`) : null;
   let context = '';
   if (top && req) {
     if (top.via === 'finding') context = `${req} 작업에서 "${top.refTitle}" 확인이 필요했습니다.`;
     else if (top.via === 'item') context = `${req} 작업의 위키 항목 "${top.refTitle}"에 나온 개념입니다.`;
-    else context = `${req} 작업에 ${n} 관련 흔적이 있습니다.`;
+    else context = `${req} 작업에서 이 개념이 나왔습니다.`;
   }
   let evidence: string;
   if (s.disputed) evidence = '추정이 잘못됐다고 알려 주셔서, 다시 확인하기 전까지 판단을 보류하고 있습니다.';
@@ -147,8 +146,8 @@ export function reasonFor(input: { name: string; state: LearnerConceptState; top
   else if (s.selfReport === 'known') evidence = `'알고 있어요'라고 답하셨지만, 문제로 확인된 것은 아닙니다.`;
   else if (s.selfReport === 'unsure' || s.selfReport === 'unfamiliar') evidence = `'잘 모르겠어요'라고 답하셔서 설명을 더 자세히 보여 드립니다.`;
   else if (s.counts.practice > 0) evidence = '문제를 풀었지만 검토 전 문항이거나 연습이라 이해 확인에는 쓰지 않았습니다.';
-  else if (mention) evidence = `대화에서 "${mention.snippet}"처럼 언급하셨지만, ${n}에 관한 이해를 확인할 만한 설명이나 문제 응답은 아직 없습니다.`;
-  else evidence = `${n}에 관한 이해를 확인할 만한 발언은 아직 없었습니다.`;
+  else if (mention) evidence = `대화에서 "${mention.snippet}"처럼 언급하셨습니다. 아직 이해를 확인할 만한 문제 응답은 없습니다.`;
+  else evidence = '이 개념은 아직 문제로 이해를 확인하지 않았습니다.';
   return [context, evidence].filter(Boolean).join(' ');
 }
 

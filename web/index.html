@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>vibe-teacher</title>
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // CSS를 읽기 전에 색상을 정해 새로고침할 때 화면이 밝게 번쩍이지 않게 한다.
+      (() => {
+        let theme = 'system';
+        try { theme = localStorage.getItem('vibe-teacher-theme') || 'system'; } catch {}
+        try {
+          const prefs = JSON.parse(localStorage.getItem('vibe-teacher-display') || '{}');
+          if ([13, 14, 15, 16, 18].includes(prefs.fontSize)) document.documentElement.style.setProperty('--ui-font-size', prefs.fontSize + 'px');
+          if ([11, 12, 13, 14, 16].includes(prefs.codeSize)) document.documentElement.style.setProperty('--code-font-size', prefs.codeSize + 'px');
+          document.documentElement.dataset.density = prefs.density === 'comfortable' ? 'comfortable' : 'compact';
+        } catch {}
+        document.documentElement.dataset.theme = theme === 'light' || theme === 'dark' ? theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

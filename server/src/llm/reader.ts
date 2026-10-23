@@ -22,6 +22,15 @@ const GUIDES: Record<ReaderLevel, string> = {
 - 일반론보다 이 프로젝트에 특정한 내용을 우선합니다.`,
 };
 
+const KOREAN_STYLE = `한국어 작성 원칙 (모든 수준에 공통):
+- 한국어로 처음부터 쓴 안내문처럼 자연스러운 존댓말을 씁니다. 영어 문장을 번역한 듯한 어순과 명사 나열을 피합니다.
+- 핵심 결론을 먼저 쓰고, 이유와 다음에 할 일을 이어 씁니다. 한 문장에는 한 가지 내용만, 한 문단에는 한 주제만 담습니다.
+- "수행을 진행합니다", "해당 기능에 대한 확인이 요구됩니다" 대신 "실행합니다", "이 기능을 확인해 보세요"처럼 씁니다.
+- 추상적인 말보다 실제 화면과 행동을 씁니다. 예: "인가 경계 미확인" → "일반 사용자가 관리자 화면을 열 수 있는지는 아직 확인하지 못했습니다."
+- 용어를 괄호로 잇달아 나열하지 않습니다. 먼저 쉬운 말로 뜻을 설명하고, 검색에 필요한 원래 용어만 한 번 덧붙입니다.
+- 요약은 핵심 1~2문장, 설명 문단은 2~3문장을 기준으로 씁니다. 근거와 불확실성은 분량 때문에 빼지 않습니다.
+- 파일 경로, 명령어, 식별자, 인용한 기록은 문체를 고치려고 바꾸지 않습니다.`;
+
 export function readerGuide(level: ReaderLevel = DEFAULT_READER_LEVEL): string {
   return GUIDES[level] ?? GUIDES[DEFAULT_READER_LEVEL];
 }
@@ -31,6 +40,7 @@ export function withReader(system: string, level: ReaderLevel = DEFAULT_READER_L
   return `${system}
 
 === 문체: 읽는 사람에 맞추기 ===
+${KOREAN_STYLE}
 ${readerGuide(level)}
 (위 규칙 — 사실만 쓰기, 근거 표시, 출력 형식 — 이 문체 지침보다 우선합니다.)`;
 }

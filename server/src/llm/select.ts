@@ -51,12 +51,12 @@ export async function resolveLlm(cfg: AppConfig['llm'], llmCwd: string, deps: Ll
 
   if (setting === 'none') return { provider: null, status: { resolvedProvider: 'none', available: false, reason: '설정에서 AI 분석을 껐습니다', cliPath } };
   if ((IDS as string[]).includes(setting)) return pick(all[setting as LlmProviderId]);
-  // auto: Anthropic API 키 → Claude Code 로그인 → OpenRouter 키 → OpenAI 키
+  // auto: 글 작성에 쓸 GPT를 우선하고, 키가 없으면 기존 제공자를 이용한다.
+  if (env.OPENAI_API_KEY) return pick(all.openai);
   if (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) return pick(all['anthropic-sdk']);
   const viaCli = await pick(all['claude-cli']);
   if (viaCli.provider) return viaCli;
   if (env.OPENROUTER_API_KEY) return pick(all.openrouter);
-  if (env.OPENAI_API_KEY) return pick(all.openai);
   return {
     provider: null,
     status: { resolvedProvider: 'none', available: false, reason: `사용 가능한 AI 제공자가 없습니다 (${viaCli.status.reason ?? 'claude CLI 없음'}; API 키도 없음)`, cliPath },

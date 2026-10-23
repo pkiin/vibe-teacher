@@ -7,7 +7,24 @@ import type { LlmProviderId, LlmStatus } from './api';
 import type { ReaderLevel } from './reader';
 import type { Readable } from './domain';
 
-export type RepoSource = { kind: 'file'; path: string } | { kind: 'session'; key: string; title: string };
+export type RepoSource = { kind: 'file'; path: string; startLine?: number; endLine?: number; hash?: string } | { kind: 'session'; key: string; title: string };
+
+export interface RepoFileView {
+  path: string;
+  lines: string[];
+  startLine: number;
+  endLine: number;
+  lineCount: number;
+  hash: string;
+  truncated: boolean;
+  masked: boolean;
+}
+
+export interface RepoFlow {
+  nodes: { id: string; label: string; column: number; source: Extract<RepoSource, { kind: 'file' }> }[];
+  edges: { from: string; to: string; label: string; source: Extract<RepoSource, { kind: 'file' }> }[];
+  limited: boolean;
+}
 
 export interface RepoListItem {
   text: string;
@@ -19,6 +36,7 @@ export type RepoBlock =
   | { kind: 'text'; text: string }
   | { kind: 'list'; items: RepoListItem[] }
   | { kind: 'code'; text: string; lang?: string }
+  | { kind: 'flow'; graph: RepoFlow }
   | { kind: 'table'; head: string[]; rows: string[][] };
 
 export interface RepoSection {

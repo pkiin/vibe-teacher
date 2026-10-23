@@ -5,7 +5,8 @@ import { getToken, onUnauthorized, setToken } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { ko } from '../i18n/ko';
-import { ReaderLevelSetup, ReaderLevelSwitch } from './ReaderLevelPicker';
+import { ReaderLevelSetup } from './ReaderLevelPicker';
+import { SettingsPopover } from './SettingsPopover';
 
 export function Layout({ children }: { children: ReactNode }) {
   const { me, logout } = useAuth();
@@ -24,6 +25,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="layout">
+      <a className="skip-link" href="#main-content">{ko.reading.skip}</a>
       <header className="topbar">
         <Link to="/" className="brand">
           <span className="brand-name">{ko.appName}</span>
@@ -51,7 +53,6 @@ export function Layout({ children }: { children: ReactNode }) {
               {ko.nav.sources}
             </NavLink>
           )}
-          {canQuery && me?.reader && <ReaderLevelSwitch />}
           {me?.mode === 'home-token' && me.authenticated && (
             <span className="user-chip">
               <span className="mono">{me.username}</span>
@@ -61,6 +62,7 @@ export function Layout({ children }: { children: ReactNode }) {
               </button>
             </span>
           )}
+          <SettingsPopover />
         </nav>
       </header>
       {needToken && (
@@ -79,7 +81,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </form>
         </div>
       )}
-      <main className="content">
+      <main className="content" id="main-content" tabIndex={-1}>
         {canQuery && me?.reader && !me.reader.chosen && <ReaderLevelSetup />}
         {children}
       </main>

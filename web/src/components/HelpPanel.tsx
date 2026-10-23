@@ -25,6 +25,7 @@ import { ErrorBox, Notice } from './Notice';
 import { QuizCard } from './QuizCard';
 import { UnderstandingBadge } from './UnderstandingBadge';
 import { WikiAlertCard } from './WikiAlertCard';
+import { Tabs } from './Tabs';
 import { ConceptBody } from './WikiItemCard';
 
 /** 통합 화면이 도움 패널에 넘기는 재료 */
@@ -444,20 +445,32 @@ function AskView({ data }: { data: UnderstandData }) {
 
 function QuizView({ data }: { data: UnderstandData }) {
   const f = useFocus()!;
+  const [picked, setPicked] = useState<string | null>(null);
+  // 제출 후 설명 계획이 바뀌어도 방금 푼 문제의 해설을 유지한다.
+  const [suggested, setSuggested] = useState(data.wiki?.plan.optionalQuestionIds ?? []);
+  useEffect(() => {
+    const incoming = data.wiki?.plan.optionalQuestionIds ?? [];
+    if (!suggested.length && incoming.length) setSuggested(incoming);
+  }, [data.wiki, suggested.length]);
   const concept = conceptOf(f.focus, data);
   if (concept) {
     return <QuizCard key={concept} sessionKey={data.sessionKey} target={{ conceptId: concept }} learner={data.learner} explanationSeen={f.focus.kind !== 'session'} helpUsed={f.helped.has(concept)} />;
   }
-  const suggested = data.wiki?.plan.optionalQuestionIds ?? [];
+  const questionId = picked && suggested.includes(picked) ? picked : suggested[0];
   return (
     <div>
       <div className="small muted">{ko.help.quizPick}</div>
       {suggested.length > 0 && (
         <>
           <h4>{ko.help.quizSuggested}</h4>
-          {suggested.map((qid) => (
-            <QuizCard key={qid} sessionKey={data.sessionKey} target={{ questionId: qid }} learner={data.learner} explanationSeen={false} />
-          ))}
+          <div className="quiz-steps" role="group" aria-label={ko.quiz.pickQuestion}>
+            {suggested.map((qid, index) => (
+              <button key={qid} type="button" className={`btn btn-small ${questionId === qid ? 'btn-primary' : ''}`} aria-pressed={questionId === qid} onClick={() => setPicked(qid)}>
+                {ko.quiz.questionNumber(index + 1, suggested.length)}
+              </button>
+            ))}
+          </div>
+          {questionId && <QuizCard key={questionId} sessionKey={data.sessionKey} target={{ questionId }} learner={data.learner} explanationSeen={false} />}
         </>
       )}
     </div>
@@ -481,13 +494,7 @@ export function HelpPanel({ data }: { data: UnderstandData }) {
         )}
       </div>
       <div className="help-body">
-        <div className="tabs help-tabs" role="tablist">
-          {(['explain', 'ask', 'quiz'] as PanelTab[]).map((t) => (
-            <button key={t} role="tab" aria-selected={f.tab === t} className={`tab ${f.tab === t ? 'active' : ''}`} onClick={() => f.setTab(t)}>
-              {ko.help.tabs[t]}
-            </button>
-          ))}
-        </div>
+        <Tabs className="help-tabs" tabs={(['explain', 'ask', 'quiz'] as PanelTab[]).map((id) => ({ id, label: ko.help.tabs[id]! }))} active={f.tab} onChange={(id) => f.setTab(id as PanelTab)} />
         <div className="help-tab-body">
           {f.tab === 'explain' && <ExplainView data={data} />}
           {f.tab === 'ask' && <AskView data={data} />}

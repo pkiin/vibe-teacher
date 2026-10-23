@@ -84,7 +84,7 @@ export class WikiService {
   }
 
   isStale(snapshot: WikiSnapshot, summary: SessionSummary): boolean {
-    return snapshot.revision !== snapshotRevision(summary);
+    return snapshot.generator.rulesVersion !== RULES_VERSION || snapshot.revision !== snapshotRevision(summary);
   }
 
   /** 프로젝트 원장 + 개인 상태 → 화면용 응답. profile 이 null 이면 개인화 없이 계획한다. */

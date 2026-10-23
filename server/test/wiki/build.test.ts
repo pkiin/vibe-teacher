@@ -79,6 +79,16 @@ describe('wiki builder — case B (persistence, missing context)', () => {
 });
 
 describe('wiki builder — other rules', () => {
+  it('대화에 나온 배경 개념을 실제 사용한 것으로 표현하지 않는다', () => {
+    const session = fakeSession([{ human: 'README를 설명해줘' }, { human: 'README의 역할을 알려줘' }]);
+    const snapshot = snapshotOf(session);
+    const item = snapshot.items.find((i) => i.id === 'i_bg-markdown-readme')!;
+    expect(item.question).toBe('이 개념을 알아두면 어떤 도움이 되나요?');
+    expect(item.why).toContain('사용법과 실행 방법');
+    expect(item.unverified).toContain('관련 파일 변경·명령 실행 여부');
+    expect(snapshot.claims.find((c) => c.id === 'c_concept-markdown-readme')?.statement).toContain('실제 사용 여부는 확인되지 않았습니다');
+  });
+
   it('masks secrets in excerpts while flagging them', () => {
     const key = 'sk-abcdefghijklmnopqrstuvwxyz123456';
     const s = snapshotOf(fakeSession([{ human: `이 키로 연결해 줘 ${key}` }, { write: '.env' }]));
@@ -153,6 +163,7 @@ describe('wiki service', () => {
     expect((await wiki.current('proj01', session.key))?.revision).toBe(snap.revision);
     expect(await wiki.history('proj01', session.key)).toHaveLength(1);
     expect(wiki.isStale(snap, session)).toBe(false);
+    expect(wiki.isStale({ ...snap, generator: { ...snap.generator, rulesVersion: 'rules-old' } }, session)).toBe(true);
     expect(wiki.isStale(snap, { ...session, fileSize: 999 })).toBe(true);
     expect(fs.existsSync(path.join(home, 'wiki', 'learners'))).toBe(false);
     expect(await wiki.current('proj01', 'another-session')).toBeNull();

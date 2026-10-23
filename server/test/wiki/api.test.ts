@@ -107,6 +107,7 @@ describe('wiki / understanding / assessment API', () => {
     const alice = await sessionOf('alice');
     expect((await post(`/api/sessions/${bob.key}/wiki/build`, h, {})).status).toBe(404);
     expect((await app.request(`/api/projects/${bob.project.id}/understanding`, { headers: h })).status).toBe(404);
+    expect((await app.request(`/api/projects/${bob.project.id}/repo-wiki/source?path=README.md`, { headers: h })).status).toBe(404);
     expect((await post(`/api/projects/${alice.project.id}/assessments`, h, { sessionKey: bob.session.key, conceptId: 'auth' })).status).toBe(404);
   });
 

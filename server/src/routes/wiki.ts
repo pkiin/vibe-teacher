@@ -52,7 +52,7 @@ export function wikiRoutes(deps: AppDeps): Hono<AppEnv> {
   const currentSnapshot = async (summary: SessionSummary): Promise<WikiSnapshot> => {
     const snapshot = await deps.wiki.current(summary.projectId, summary.key);
     if (!snapshot) throw new HttpError(404, 'wiki_not_built', '먼저 위키를 만들어 주세요');
-    if (deps.wiki.isStale(snapshot, summary)) throw new HttpError(409, 'wiki_stale', '세션 기록이 바뀌었습니다. 위키를 다시 만든 뒤 AI 보강을 실행해 주세요');
+    if (deps.wiki.isStale(snapshot, summary)) throw new HttpError(409, 'wiki_stale', '세션 기록이나 설명 기준이 바뀌었습니다. 위키를 다시 만든 뒤 AI 설명을 작성해 주세요');
     return snapshot;
   };
 

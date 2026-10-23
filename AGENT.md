@@ -57,7 +57,7 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
                    · knowledge(개념이 나온 곳·언급·규칙 설명 문장) · knowledge-service(내 세션 모으기·캐시)
                    · knowledge-text(설명 문장 AI 작성: 사실 → 프롬프트, 넘겨짚는 문장 거르기, 지문별 저장, 작업)
                    · prefs(사용자 설정: 읽는 사람 수준, prefs.json)
-  src/repo/        레포 위키: scan(저장소 읽기 전용 스캔) · wiki(사실 초안 조립, 판 비교) · ai(AI 가 문장 쓰기, 표·코드 유지, 근거 표시 검사)
+  src/repo/        레포 위키: scan(저장소 읽기 전용 스캔) · source(근거 파일 안전 읽기) · code(TS 구문 분석·내부 파일 연결) · wiki(사실 초안 조립, 판 비교) · ai(AI 가 문장 쓰기, 표·코드 유지, 근거 표시 검사)
                    · service(저장·갱신 필요 판단, AI 작업과 규칙 대체)
   src/assessment/  문항 은행(bank) · 출제·채점(service)
   src/help/        도움 패널 질문: answer(대상별 근거 고르기·프롬프트·답 검사·AI 없는 대체 답) · service(개인 기록·작업)
@@ -67,6 +67,10 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
 web/               Vite + React 19 + react-router UI (한국어)
   src/i18n/ko.ts   화면 문자열 모음
   src/components/SessionUnderstand.tsx  "이번 세션 이해하기" 통합 화면 (위키·만들어진 것·개념 + 도움 패널)
+  src/context/DisplayContext.tsx        화면 설정(본문 14px·코드 12px·촘촘한 밀도 기본), 설명 난이도와 분리해 브라우저에 저장
+  src/components/SettingsPopover.tsx    오른쪽 위 톱니바퀴 설정. Modal.tsx 의 네이티브 dialog로 초점·Escape·복귀 처리
+  src/components/RepoSourceViewer.tsx   근거 파일 원문·줄 강조·검색, RepoFlowView.tsx 는 검증된 파일 연결을 SVG로 표시
+  src/components/ReadingGuide.tsx       위키의 쉬운 용어 풀이, SecurityReview.tsx 는 세션의 보안·데이터 주의사항과 추가 확인 안내
   src/components/HelpPanel.tsx          도움 패널 (설명/질문/퀴즈), src/context/FocusContext.tsx 가 지금 보는 대상을 공유
 scripts/           dev.mjs(웹+API 동시 실행), grant-read-acl.sh(다중 계정 읽기 ACL)
 ```
@@ -113,6 +117,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **도움 패널 질문은 이해 증거가 아니다.** 질문은 `help.jsonl` 에 개인 기록으로만 남기고 learner 원장을 바꾸지 않는다. 답의 프로젝트 연결은 검증된 claim 인용이 있어야 싣는다 (`acceptHelpOutput`). 도움 패널로 물어본 개념의 문제 응답은 `helpUsed` 로 보조 응답이 된다.
 - **정답은 제출 전에 내보내지 않는다.** 브라우저로 가는 문항은 `toPublicQuestion` 을 거친다.
 - **"내 메시지"는 사람이 실제로 입력한 것만.** 도구 결과, `<system-reminder>` 같은 주입 메시지, 사이드체인은 `human` 으로 분류하지 않습니다. 분류 규칙을 바꾸면 해당 어댑터의 분류 테스트를 갱신합니다.
+- **Codex 하위 세션과 자동 문맥을 구분한다.** `session_meta.source.subagent` 또는 `parent_thread_id`가 있는 세션은 목록에서 제외하고 직접 읽어도 사용자 입력으로 세지 않습니다. IDE 문맥의 `My request` 본문과 알려진 자동 태그는 `adapters/codex/classify.ts`에서 구분하며, 긴 자동 문맥을 지운 다음 길이를 제한합니다. 코드 블록·인라인 코드의 태그 예시를 지우지 않습니다.
 
 ## 6. 코드 규칙
 
@@ -164,17 +169,31 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - statement 에 관찰 범위와 불확실성을 쓴다. 정규식에 안 보인다는 이유만으로 "없다"고 쓰지 않는다.
 - 관련 개념은 카탈로그에 있는 ID 만 쓴다. `server/test/wiki/helpers.ts` 의 `fakeSession` 으로 합성 세션 테스트를 붙인다.
 - 판단 규칙이 바뀌면 `RULES_VERSION` 을 올린다.
+- 세션 위키의 revision에는 `RULES_VERSION`도 포함한다. 같은 기록을 새 기준으로 다시 만들어도 예전 판을 덮어쓰지 않고, 이전 기준의 위키에는 갱신 안내를 표시한다.
 
 ### 문항·선행관계 추가
 - 문항은 `server/data/questions.json`. 객관식은 정답 1개·선택지 3개 이상, OX 는 선택지 `o`,`x`. 직접 쓴 문항은 `reviewStatus: "candidate"` 로 두고, 사람이 검토한 것만 `reviewed` 로 바꾼다.
 - 선행관계는 `server/data/prerequisites.json`. 검토 전이면 `status: "proposed"`. `npm test` 의 shipped catalog 테스트가 순환·없는 개념을 잡는다.
 - 위키 AI 프롬프트나 출력 스키마(`WikiAiOutputSchema`)를 바꾸면 `shared/src/wiki.ts` 의 `WIKI_AI_PROMPT_VERSION` 을 올린다 (저장된 AI 레이어 무효화).
-- 내 지식 설명 문장 프롬프트·사실 형식을 바꾸면 `server/src/learner/knowledge-text.ts` 의 `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 올린다. 레포 위키 AI 는 시스템 프롬프트와 입력 전체가 지문(`inputHash`)에 들어가므로 따로 올릴 버전이 없다.
+- 내 지식 설명 문장 프롬프트·사실 형식을 바꾸면 `server/src/learner/knowledge-text.ts` 의 `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 올린다. 레포 위키는 시스템 프롬프트와 입력 전체가 지문(`inputHash`)에 들어간다. 공통 문체나 문장 형식이 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올려 기존 문장 레이어를 갱신 대상으로 돌린다.
 - 읽는 사람 문체 지침(`server/src/llm/reader.ts`)을 바꾸면 `ENRICH_PROMPT_VERSION`, `WIKI_AI_PROMPT_VERSION`, `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 함께 올린다 (이 셋은 지문에 시스템 프롬프트 본문이 들어가지 않는다). 수준을 추가하면 `READER_LEVELS`, `reader.ts` 의 지침, `web/src/i18n/ko.ts` 의 `reader.levels`, README "읽는 사람 수준" 표를 함께 고친다.
 - 위키용 개념 필드를 바꾸면 `server/src/wiki/catalog.ts` 의 `CATALOG_VERSION`, 상태 전이 규칙을 바꾸면 `POLICY_VERSION`, 원장 형식을 바꾸면 `shared/src/wiki.ts` 의 `WIKI_SCHEMA_VERSION` 을 올린다.
 
+### 화면과 한국어 설명
+- 글씨와 여백은 화면 설정 변수(`--ui-font-size`, `--code-font-size`, `--card-padding` 등)로 정하고, 설명 난이도·학습자 이해 상태와 연동하지 않는다. 설정은 오른쪽 위 톱니바퀴 팝업 하나로 모은다.
+- 색상은 `web/src/styles/app.css`의 의미별 토큰(`--panel`, `--surface`, `--text` 등)으로 정한다. 새 패널에도 라이트·다크 모드, 키보드 초점, 좁은 화면, 동작 줄이기를 함께 확인한다.
+- 기술 용어는 쉬운 말을 먼저 쓰고 필요한 원어만 덧붙인다. 퀴즈 문장을 바꾸면 문항 version과 은행 version을 올리되 정답·검토 상태를 임의로 바꾸지 않는다.
+- 개념의 작업 연결 설명은 확인한 사실과 알아둘 이유(`whyItMatters`)를 잇는다. 잘린 대화·링크·언급 횟수를 본문에 나열하지 않고 원문은 접힌 기록에 둔다. `contextKind=mention`은 대화 언급만 확인된 경우로, 구현·실행 사실로 표현하지 않는다. 자동 감지 개념을 추가할 때는 실용적인 이유도 함께 작성한다.
+- 레포 위키의 `security` 절은 AI가 바꾸지 못한다. 세션마다 보안·데이터 항목과 근거를 보존하며, 위키가 만들어진 세션 수와 미점검 범위를 표시한다. 설치 버전별 취약점 검사나 실제 서비스 점검을 한 것으로 표현하지 않는다.
+- 레포 위키 문장 형식·공통 문체가 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올린다. 예전 문장 레이어는 GET에서 사용하지 않고 자동 작성 대상으로 돌린다.
+
+### 레포 위키의 코드 근거와 파일 보기
+- 파일 읽기는 `repo/source.ts`를 사용한다. 계정 권한을 검사한 프로젝트 아래의 허용된 텍스트만 읽고 숨김 설정·키·심볼릭 링크·특수 파일을 거절한다. 환경 변수 예제는 이름만, 코드의 비밀값은 가려서 반환한다. 응답은 `Cache-Control: no-store`.
+- 코드 발췌와 파일 연결은 `repo/code.ts`의 TypeScript 구문 분석으로 모으며 코드·명령을 실행하지 않는다. 파일 근거의 줄·내용 지문을 보존하고, 없는 줄 인용은 버린다. AI는 `flow` 블록을 바꾸지 못한다.
+- 실제 파일 내용의 지문이 위키 근거와 달라지면 현재 파일임을 알리고 예전 줄 강조를 끈다. 글꼴을 적용해도 줄 번호가 변하지 않도록 비밀값 마스킹은 줄바꿈을 보존한다.
+
 ### AI 제공자 추가
-- `shared/src/api.ts` 의 `LlmProviderId`, `server/src/config/schema.ts` 와 `server/src/routes/settings.ts` 의 provider enum, `server/src/llm/select.ts` 의 `providers()`·`IDS`·auto 순서·`modelFor` 를 함께 고친다.
+- `shared/src/api.ts` 의 `LlmProviderId`, `server/src/config/schema.ts` 와 `server/src/routes/settings.ts` 의 provider enum, `server/src/llm/select.ts` 의 `providers()`·`IDS`·auto 순서(GPT 우선: OpenAI 키 → Anthropic 키 → Claude 로그인 → OpenRouter 키)·`modelFor` 를 함께 고친다.
 - 화면 문구는 `web/src/i18n/ko.ts` 의 `sources.llmChoice`·`llmNoKey`, 키는 `.env.example` 에 주석과 함께 추가한다.
 - 응답은 항상 zod 스키마로 다시 검사한다 (`LlmProvider.complete`). 네트워크는 테스트에서 fetch 를 주입해 막는다.
 
@@ -211,10 +230,11 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - [x] 읽는 사람 수준(비개발자·입문·주니어·숙련, 기본 비개발자): 처음 한 번 묻기, 상단 단추로 바꾸기, 모든 AI 프롬프트에 문체 지침, 수준별 저장(레포 위키 text/<수준>, 위키 AI 레이어, 세션 분석 캐시, 내 지식 지문)
 - [x] AI 문장 기본화: 레포 위키 본문(작업·미리 보기·지문 캐시), 내 지식 설명 문장(자동 작업·검사·지문 캐시), 세션 위키를 만들면 AI 설명 자동 시작. 규칙 문장은 AI 를 쓸 수 없을 때만, 사유 표시. 설정 `llm.autoText`
 - [x] 도움 패널 질문 (M3): 대상별 근거로 답, 인용 검사, AI 없을 때 대체 답, 개인 기록, 재시도 중복 방지
+- [x] 쉬운 한국어 문장·문항, 자동 AI의 GPT 우선 선택, 보안 및 취약점 점검 섹션, 라이트·다크 모드와 읽기 접근성
 - [ ] Markdown 내보내기 (개인 정보 기본 제외, T22)
 - [ ] 프로젝트 단위 위키(여러 세션 통합) · 두 번째 세션의 `supersedes` / `resolved_in_scope` (사례 C, T17, T18, T27)
 - [ ] 프로젝트 확인(project_awareness) 문항 — 검증된 claim 으로만 생성
-- [ ] 브라우저 E2E (`npm run test:e2e`) — 현재 개발 서버에는 브라우저가 없어 HTTP 수준으로만 확인함
+- [ ] 브라우저 E2E 상시 자동화 (`npm run test:e2e` 미구현) — 테마·모바일·퀴즈 기본 동작은 합성 데이터로 브라우저 확인, 정규 실행 스크립트는 아직 없음
 - [ ] 기존 쓰기 API 전체에 JSON/Origin 정책 적용 (지금은 새 위키 API 에만 `requireJson`)
 
 ## 10. 커밋 메시지

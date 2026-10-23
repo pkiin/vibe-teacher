@@ -61,12 +61,12 @@ describe('knowledge reason text', () => {
   const s = (over: Partial<ReturnType<typeof unknownConcept>> = {}) => ({ ...unknownConcept('authorization'), ...over });
 
   it('says no evidence was seen without concluding the user does not know', () => {
-    expect(reasonFor({ name: '권한 검사 (인가)', state: s(), top })).toBe('"로그인 기능 만들어 줘" 작업에서 "접근 권한 검사 위치 미확인" 확인이 필요했습니다. 권한 검사에 관한 이해를 확인할 만한 발언은 아직 없었습니다.');
+    expect(reasonFor({ name: '권한 검사 (인가)', state: s(), top })).toBe('"로그인 기능 만들어 줘" 작업에서 "접근 권한 검사 위치 미확인" 확인이 필요했습니다. 이 개념은 아직 문제로 이해를 확인하지 않았습니다.');
     expect(shortName('권한 검사 (인가)')).toBe('권한 검사');
   });
 
   it('reflects mentions, self-reports, partial evidence and disputes', () => {
-    expect(reasonFor({ name: '권한 검사 (인가)', state: s(), top, mention: { sessionKey: 's', sessionTitle: 't', messageIndex: 0, snippet: '권한도 봐야 하나요' } })).toContain('"권한도 봐야 하나요"처럼 언급하셨지만');
+    expect(reasonFor({ name: '권한 검사 (인가)', state: s(), top, mention: { sessionKey: 's', sessionTitle: 't', messageIndex: 0, snippet: '권한도 봐야 하나요' } })).toContain('"권한도 봐야 하나요"처럼 언급하셨습니다');
     expect(reasonFor({ name: '권한 검사 (인가)', state: s({ selfReport: 'known' }), top })).toContain("'알고 있어요'라고 답하셨지만, 문제로 확인된 것은 아닙니다");
     expect(reasonFor({ name: '권한 검사 (인가)', state: s({ state: 'partial', assessmentScope: '서로 다른 문항 1개' }), top })).toContain('일부 문제에서 맞혔지만');
     expect(reasonFor({ name: '권한 검사 (인가)', state: s({ disputed: true }), top })).toContain('판단을 보류');
@@ -83,7 +83,7 @@ describe('knowledge entries', () => {
     expect(authz.priority).toBe('check');
     expect(authz.sources[0]?.sessionKey).toBe(a.sessionKey);
     expect(authz.sources).toHaveLength(2);
-    expect(authz.reason).toContain('권한 검사에 관한 이해를 확인할 만한 발언은 아직 없었습니다');
+    expect(authz.reason).toContain('이 개념은 아직 문제로 이해를 확인하지 않았습니다');
     expect(entries[0]?.priority).toBe('check');
   });
 
