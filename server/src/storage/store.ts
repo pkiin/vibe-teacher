@@ -42,7 +42,7 @@ export class WikiStorage {
   readonly root: string;
   private readonly mutex = new KeyedMutex();
 
-  constructor(home: string) {
+  constructor(home: string, private readonly projectIds: (id: string) => string[] = (id) => [id]) {
     this.root = path.join(home, 'wiki');
   }
 
@@ -60,6 +60,15 @@ export class WikiStorage {
 
   lock<T>(key: string, fn: () => Promise<T>): Promise<T> {
     return this.mutex.run(key, fn);
+  }
+
+  /** 예전 프로젝트 폴더는 옮기거나 덮어쓰지 않고 함께 읽는다. 새 쓰기는 대표 ID로 한다. */
+  projectFiles(projectId: string, ...parts: string[]): string[] {
+    return this.projectIds(projectId).map((id) => path.join(this.projectDir(id), ...parts));
+  }
+
+  learnerProjectFiles(learnerId: string, projectId: string, ...parts: string[]): string[] {
+    return this.projectIds(projectId).map((id) => path.join(this.learnerProjectDir(learnerId, id), ...parts));
   }
 
   readJson<T>(file: string): Promise<T | null> {

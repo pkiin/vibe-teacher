@@ -26,11 +26,13 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
   /** 범위(전체·프로젝트·세션)를 검사하고 지식 위키 항목을 모은 뒤, 저장된 AI 문장을 입힌다 */
   const knowledgeFor = async (c: Context<AppEnv>, scope: { projectId?: string; sessionKey?: string }) => {
     await deps.index.ensureFresh();
-    const { projectId, sessionKey } = scope;
+    let { projectId } = scope;
+    const { sessionKey } = scope;
     if (projectId) {
       const p = deps.index.getProject(projectId);
       if (!p) throw notFound('프로젝트');
       assertAccount(c, deps, p.accountId, '프로젝트');
+      projectId = p.id;
     }
     const session = sessionKey ? await sessionSummaryFor(c, deps, sessionKey) : undefined;
     const base = await knowledge.wiki({ username: currentUser(c).username, learnerId: me(c), ...(projectId ? { projectId } : {}), ...(session ? { session } : {}) });

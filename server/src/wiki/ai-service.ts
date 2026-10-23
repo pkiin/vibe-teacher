@@ -41,8 +41,11 @@ export class WikiAiService {
   }
 
   async layer(projectId: string, revision: string, level: ReaderLevel = DEFAULT_READER_LEVEL): Promise<WikiAiLayer | null> {
-    const layer = await this.opts.storage.readJson<WikiAiLayer>(this.file(projectId, revision, level));
-    return layer && layer.snapshotRevision === revision && layer.promptVersion === WIKI_AI_PROMPT_VERSION && (layer.readerLevel ?? DEFAULT_READER_LEVEL) === level ? layer : null;
+    for (const file of this.opts.storage.projectFiles(projectId, 'ai', `${revision}.${level}.json`)) {
+      const layer = await this.opts.storage.readJson<WikiAiLayer>(file);
+      if (layer && layer.snapshotRevision === revision && layer.promptVersion === WIKI_AI_PROMPT_VERSION && (layer.readerLevel ?? DEFAULT_READER_LEVEL) === level) return layer;
+    }
+    return null;
   }
 
   private prompt(session: NormalizedSession, analysis: { built: BuiltSummary; concepts: ConceptHit[] }, snapshot: WikiSnapshot) {

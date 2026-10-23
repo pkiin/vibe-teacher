@@ -96,6 +96,34 @@ export class RepoWikiService {
     };
   }
 
+  private async saved(projectId: string) {
+    const saved = [];
+    for (const id of this.opts.index.getProjectIds(projectId)) {
+      const files = this.files(id);
+      const draft = await this.opts.storage.readJson<RepoWiki>(files.current);
+      if (draft) saved.push({ files, draft });
+    }
+    return saved.sort((a, b) => b.draft.builtAt.localeCompare(a.draft.builtAt))[0];
+  }
+
+  private async history(projectId: string): Promise<RepoWikiHistoryEntry[]> {
+    const entries = new Map<string, RepoWikiHistoryEntry>();
+    for (const id of this.opts.index.getProjectIds(projectId)) {
+      for (const entry of (await this.opts.storage.readJson<RepoWikiHistoryEntry[]>(this.files(id).history)) ?? []) {
+        if (!entries.has(entry.revision)) entries.set(entry.revision, entry);
+      }
+    }
+    return [...entries.values()].sort((a, b) => b.builtAt.localeCompare(a.builtAt));
+  }
+
+  private async layer(projectId: string, revision: string, level: ReaderLevel): Promise<TextLayer | null> {
+    for (const id of this.opts.index.getProjectIds(projectId)) {
+      const layer = await this.opts.storage.readJson<TextLayer>(this.files(id).text(level));
+      if (layer?.revision === revision) return layer;
+    }
+    return null;
+  }
+
   private sessions(projectId: string) {
     return this.opts.index
       .getSessions(projectId)
@@ -119,9 +147,9 @@ export class RepoWikiService {
   }
 
   async get(project: Project, level: ReaderLevel, allowed: Allowed): Promise<RepoWikiResponse> {
-    const f = this.files(project.id);
-    const draft = await this.opts.storage.readJson<RepoWiki>(f.current);
-    const history = (await this.opts.storage.readJson<RepoWikiHistoryEntry[]>(f.history)) ?? [];
+    const saved = await this.saved(project.id);
+    const draft = saved ? { ...saved.draft, projectId: project.id, rootPath: project.rootPath } : null;
+    const history = await this.history(project.id);
     if (!draft) return { wiki: null, stale: false, staleReasons: [], history };
     const reasons: string[] = [];
     const known = new Map(draft.inputs.sessions.map((s) => [s.key, s]));
@@ -132,7 +160,7 @@ export class RepoWikiService {
     if (changed.length) reasons.push(`내용이 늘어난 세션 ${changed.length}개`);
     const light = await scanRepo(project.rootPath, { light: true });
     if (light.readable === 'ok' && draft.inputs.repo.signature && light.signature !== draft.inputs.repo.signature) reasons.push('저장소 파일이 바뀜');
-    const layer = await this.opts.storage.readJson<TextLayer>(f.text(level));
+    const layer = await this.layer(project.id, draft.revision, level);
     const { wiki, canGenerate } = this.compose(draft, layer, await this.gate(allowed));
     return { wiki, stale: reasons.length > 0, staleReasons: reasons, history, text: { level, canGenerate } };
   }
@@ -160,7 +188,7 @@ export class RepoWikiService {
         findings: snapshot?.findings ?? [],
       });
     }
-    const previous = await this.opts.storage.readJson<RepoWiki>(this.files(project.id).current);
+    const previous = (await this.saved(project.id))?.draft ?? null;
     const draft = buildRepoWiki({ project: { id: project.id, name: project.name, rootPath: project.rootPath }, scan, sessions: digests, previous });
     return { scan, digests, draft };
   }
@@ -185,7 +213,7 @@ export class RepoWikiService {
     await this.opts.storage.lock(`repo:${project.id}`, async () => {
       await this.opts.storage.writeJson(f.current, draft);
       await this.opts.storage.writeJson(f.materials, { revision: draft.revision, user, handles: [...handles.entries()], files: scan.files.map((x) => x.path) } satisfies Materials);
-      const history = ((await this.opts.storage.readJson<RepoWikiHistoryEntry[]>(f.history)) ?? []).filter((h) => h.revision !== draft.revision);
+      const history = (await this.history(project.id)).filter((h) => h.revision !== draft.revision);
       history.unshift({ revision: draft.revision, builtAt: draft.builtAt, changes: draft.changes, sessions: digests.length });
       await this.opts.storage.writeJson(f.history, history.slice(0, MAX_HISTORY));
     });
@@ -204,15 +232,16 @@ export class RepoWikiService {
     const gate = await this.gate(allowed);
     if (!gate.ok) return done();
     const f = this.files(project.id);
-    const draft = await this.opts.storage.readJson<RepoWiki>(f.current);
-    const materials = await this.opts.storage.readJson<Materials>(f.materials);
+    const saved = await this.saved(project.id);
+    const draft = saved?.draft;
+    const materials = saved ? await this.opts.storage.readJson<Materials>(saved.files.materials) : null;
     if (!draft || !materials || materials.revision !== draft.revision) return done();
 
     const provider = gate.provider;
     const cfg = this.opts.store.get().llm;
     const system = withReader(REPO_AI_SYSTEM_PROMPT, level);
     const inputHash = shortId(`${system}|${materials.user}|${provider.id}|${modelFor(provider.id, cfg) ?? ''}`, 16);
-    const layer = await this.opts.storage.readJson<TextLayer>(f.text(level));
+    const layer = await this.layer(project.id, draft.revision, level);
     if (!force && layer?.revision === draft.revision && layer.inputHash === inputHash) return done();
 
     const job = this.jobs.enqueue(key, async (signal) => {
