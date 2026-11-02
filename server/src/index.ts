@@ -43,10 +43,10 @@ async function main() {
   const enrich = new EnrichService({ store, paths });
   const auth = new AuthService({ store, paths, index, serviceUser: currentUser().username, bearerToken: env.token, isLoopback: env.isLoopback, cookieSecure: process.env.VIBE_TEACHER_COOKIE_SECURE === '1' });
   await auth.init();
-  const { wiki, learner, assessments, wikiAi, help, prefs } = createWikiServices(paths.home, store, () => enrich.resolveProvider(), (id) => index.getProjectIds(id));
+  const { wiki, learner, assessments, wikiAi, help, prefs, memory } = createWikiServices(paths.home, store, () => enrich.resolveProvider(), (id) => index.getProjectIds(id));
 
   const app = createApp({
-    deps: { store, index, paths, analysis, enrich, auth, wiki, learner, assessments, wikiAi, help, prefs, version: VERSION },
+    deps: { store, index, paths, analysis, enrich, auth, wiki, learner, assessments, wikiAi, help, prefs, memory, version: VERSION },
     distDir: path.resolve(here, '../../web/dist'),
   });
 
@@ -54,10 +54,19 @@ async function main() {
   console.log(
     `[vibe-teacher] 계정 ${first.accounts}개, 소스 ${first.sources}개, 프로젝트 ${first.projects}개, 세션 ${first.sessions}개 (${first.durationMs}ms)`,
   );
-  serve({ fetch: app.fetch, hostname: env.host, port: env.port }, (info) => {
+  const server = serve({ fetch: app.fetch, hostname: env.host, port: env.port }, (info) => {
     console.log(`[vibe-teacher] http://${info.address === '::' ? 'localhost' : info.address}:${info.port}  (설정: ${paths.configFile})`);
     console.log(`[vibe-teacher] 로그인 모드: ${cfg.auth.mode}${cfg.auth.mode === 'home-token' ? ` · 관리자: ${[currentUser().username, ...cfg.auth.admins].join(', ')}` : ''}`);
   });
+  let stopping = false;
+  const shutdown = () => {
+    if (stopping) return;
+    stopping = true;
+    const deadline = setTimeout(() => process.exit(0), 10000).unref();
+    server.close(() => { void memory.close().finally(() => { clearTimeout(deadline); process.exit(0); }); });
+  };
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }
 
 main().catch((err) => {

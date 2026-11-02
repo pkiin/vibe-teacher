@@ -559,3 +559,14 @@ summary::marker { color: var(--muted); }
 @media (max-width: 720px) { .source-modal { width: calc(100vw - 24px); } .source-document { padding: 10px; } }
 
 .repo-code, .wiki-ai-preview, .focus-chip.file-name { font-size: var(--code-font-size); }
+.question-examples { margin: 1rem 0; }
+.question-example-list { display: grid; gap: .45rem; margin-top: .5rem; }
+.question-example-list .btn { white-space: normal; text-align: left; line-height: 1.5; }
+.learning-history { padding: .65rem 0; }
+.learning-history p { margin: .3rem 0; }
+.memory-panel { margin-top: 1.2rem; }
+.memory-search { display: flex; gap: .5rem; flex-wrap: wrap; }
+.memory-search input { flex: 1; min-width: 12rem; }
+.memory-results { padding-left: 1.2rem; }
+.memory-results li { margin: .8rem 0; }
+.memory-results p { white-space: pre-wrap; margin: .25rem 0; overflow-wrap: anywhere; }

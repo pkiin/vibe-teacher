@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { LearnerEvent, LearnerProfile } from '@vibe-teacher/shared';
+import type { LearnerEvent, LearnerProfile, WikiConcept } from '@vibe-teacher/shared';
 import { shortId } from '../lib/hash';
 import type { WikiStorage } from '../storage/store';
 import { isStateEvent, reduceProfile } from './reducer';
@@ -23,6 +23,11 @@ export class RevisionConflictError extends Error {
 }
 
 export type EventDraft = LearnerEvent extends infer E ? (E extends LearnerEvent ? Omit<E, 'profileRevision'> : never) : never;
+
+export interface RememberedConcept {
+  concept: WikiConcept;
+  sources: { projectId: string; sessionKey: string }[];
+}
 
 /**
  * 사용자 한 명의 이해 정보 원장 (프로젝트를 가리지 않음):
@@ -54,6 +59,23 @@ export class LearnerService {
 
   async profile(learnerId: string): Promise<LearnerProfile> {
     return reduceProfile(await this.events(learnerId), learnerId);
+  }
+
+  async concepts(learnerId: string): Promise<Record<string, RememberedConcept>> {
+    return (await this.storage.readJson<Record<string, RememberedConcept>>(path.join(this.files(learnerId).dir, 'concepts.json'))) ?? {};
+  }
+
+  /** 사용자가 접한 개념의 정의와 범위를 보존한다. 최근 세션 검색 범위에서 빠져도 다시 연결한다. */
+  async rememberConcepts(learnerId: string, concepts: Iterable<WikiConcept>, source?: { projectId: string; sessionKey: string }): Promise<void> {
+    await this.storage.lock(`learner-concepts:${learnerId}`, async () => {
+      const saved = await this.concepts(learnerId);
+      for (const concept of concepts) {
+        const sources = saved[concept.id]?.sources ?? [];
+        if (source && !sources.some((s) => s.sessionKey === source.sessionKey && s.projectId === source.projectId)) sources.push(source);
+        saved[concept.id] = { concept, sources };
+      }
+      await this.storage.writeJson(path.join(this.files(learnerId).dir, 'concepts.json'), saved);
+    });
   }
 
   /**

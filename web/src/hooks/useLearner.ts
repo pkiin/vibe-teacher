@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { ExposureAction, LearnerProfile, SelfReport } from '@vibe-teacher/shared';
+import type { ExplanationDepth, ExposureAction, LearnerProfile, SelfReport } from '@vibe-teacher/shared';
 import { ApiError, api, apiPost } from '../api/client';
 
 /** 재시도해도 한 번만 기록되도록 붙이는 요청 ID (비보안 컨텍스트에서도 동작) */
@@ -14,6 +14,7 @@ export interface LearnerActions {
   exposure: (action: ExposureAction, ids: { conceptId?: string; itemId?: string }) => void;
   selfReport: (conceptId: string, value: SelfReport) => Promise<void>;
   correction: (conceptId: string, note?: string) => Promise<void>;
+  preference: (conceptId: string, depth: ExplanationDepth, examples: boolean) => Promise<void>;
   /** 상태를 바꾸는 요청. 409(다른 곳에서 먼저 바뀜)이면 최신 revision 으로 한 번 다시 보낸다 */
   withRevision: <T>(fn: (revision: number) => Promise<T>) => Promise<T>;
   profileChanged: (profile: LearnerProfile) => void;
@@ -73,6 +74,7 @@ export function useLearnerActions(sessionKey: string | undefined, revision: numb
     exposure,
     selfReport: (conceptId, value) => send({ kind: 'self_report', conceptId, value }),
     correction: (conceptId, note) => send({ kind: 'correction', conceptId, ...(note ? { note } : {}) }),
+    preference: (conceptId, depth, examples) => send({ kind: 'preference', conceptId, depth, examples }),
     withRevision,
     profileChanged,
   };

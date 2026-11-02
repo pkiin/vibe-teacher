@@ -12,6 +12,7 @@ import type { PrefsService } from '../learner/prefs';
 import type { HelpService } from '../help/service';
 import type { WikiAiService } from '../wiki/ai-service';
 import type { WikiService } from '../wiki/service';
+import type { MemoryService } from '../memory/service';
 
 export interface AppDeps {
   store: ConfigStore;
@@ -26,6 +27,7 @@ export interface AppDeps {
   wikiAi: WikiAiService;
   help: HelpService;
   prefs: PrefsService;
+  memory: MemoryService;
   version: string;
 }
 

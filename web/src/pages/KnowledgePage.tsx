@@ -4,6 +4,7 @@ import { KnowledgeList } from '../components/KnowledgeList';
 import { Breadcrumb } from '../components/Layout';
 import { useApi } from '../hooks/useApi';
 import { ko } from '../i18n/ko';
+import { MemoryPanel } from '../components/MemoryPanel';
 
 /** 사용자 지식 위키: 내 모든 세션에서 나온 개념과 그 확인 상태 */
 export function KnowledgePage() {
@@ -28,6 +29,7 @@ export function KnowledgePage() {
         </label>
       )}
       <KnowledgeList projectId={projectId || undefined} />
+      <MemoryPanel projectId={projectId || undefined} />
     </div>
   );
 }

@@ -57,7 +57,12 @@ export function learnerRoutes(deps: AppDeps): Hono<AppEnv> {
       projectId: p.id,
       ...(req.sessionKey ? { sessionKey: req.sessionKey } : {}),
     } as EventDraft;
+    if (req.sessionKey) {
+      const snapshot = await deps.wiki.current(p.id, req.sessionKey);
+      await deps.learner.rememberConcepts(me(c), snapshot?.concepts ?? [], { projectId: p.id, sessionKey: req.sessionKey });
+    }
     const { profile, event } = await deps.learner.record(me(c), req.baseRevision, draft);
+    if (deps.auth.canEnrich(currentUser(c)).ok) deps.memory.scheduleSync(me(c), { projectId: p.id, allowedProjectIds: [p.id] });
     return c.json({ profile, event: event as LearnerEvent });
   });
 
@@ -77,13 +82,16 @@ export function learnerRoutes(deps: AppDeps): Hono<AppEnv> {
       const snap = await deps.wiki.current(p.id, s.key);
       for (const c of snap?.concepts ?? []) catalog.concepts.set(c.id, c);
     }
+    await deps.learner.rememberConcepts(me(c), catalog.concepts.values(), req.sessionKey ? { projectId: p.id, sessionKey: req.sessionKey } : undefined);
     return c.json(await deps.assessments.start(me(c), p.id, req, snapshot, catalog.concepts, await deps.prefs.level(me(c))));
   });
 
   app.post('/:id/assessments/:assessmentId/responses', requireJson, async (c) => {
     const p = await project(c);
     const body = await parseBody(c, AssessmentResponseRequestSchema);
-    return c.json(await deps.assessments.respond(me(c), p.id, c.req.param('assessmentId'), body));
+    const result = await deps.assessments.respond(me(c), p.id, c.req.param('assessmentId'), body);
+    if (deps.auth.canEnrich(currentUser(c)).ok) deps.memory.scheduleSync(me(c), { projectId: p.id, allowedProjectIds: [p.id] });
+    return c.json(result);
   });
 
   return app;

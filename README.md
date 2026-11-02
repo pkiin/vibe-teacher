@@ -27,6 +27,8 @@ npm install
 npm run dev        # API http://127.0.0.1:8787 + 웹 http://127.0.0.1:5173
 ```
 
+장기 기억의 의미 검색을 쓰려면 OpenRouter 키와 PostgreSQL + pgvector가 필요합니다. Docker·Compose가 설치되어 있으면 `npm run memory:db`로 로컬 DB와 접속 설정을 준비한 뒤 앱을 다시 시작하세요. Supabase를 쓰면 `VIBE_TEACHER_SUPABASE_DATABASE_URL`을 설정하고 `npm run memory:check`로 검사합니다. 기존 DB 연결과 상세 설정은 아래 "장기 기억: mem0 + PostgreSQL + OpenRouter" 절을 참고하세요.
+
 배포용:
 
 ```bash
@@ -57,8 +59,15 @@ npm run dev:web -- --port 3050                      # 웹만 (vite 옵션 그대
 | `VIBE_TEACHER_API_URL` | 웹 개발 서버가 프록시할 API 주소를 통째로 지정 (원격 API 등) | `http://127.0.0.1:$VIBE_TEACHER_PORT` |
 | `VIBE_TEACHER_HOME` | 설정 파일과 캐시 위치 | `~/.vibe-teacher` |
 | `VIBE_TEACHER_TOKEN` | 비-loopback 바인딩 시 요구되는 Bearer 토큰 | 없음 |
-| `OPENROUTER_API_KEY` | API 생성·Claude CLI 실패 재시도·외부 문서 검색에 사용하는 키 | 없음 |
+| `OPENROUTER_API_KEY` | API 생성·Claude CLI 실패 재시도·외부 문서 검색·mem0 기억 정리와 임베딩에 사용하는 키 | 없음 |
 | `VIBE_TEACHER_LLM_PROVIDER` | AI 제공자 강제 (`auto` · `claude-cli` · `openrouter` · `none`), 화면에서 고른 값보다 우선 | 설정값 (`auto`) |
+| `VIBE_TEACHER_MEMORY_BACKEND` | 장기 기억 검색 (`mem0` · `local` · `supermemory`). `local`은 API 없이 키워드 검색 | `mem0` |
+| `VIBE_TEACHER_MEMORY_MODEL` | mem0 기억 정리 모델. 임베딩은 `openai/text-embedding-3-small` (1536차원) | 설정된 OpenRouter 모델 (`openai/gpt-5-mini`) |
+| `VIBE_TEACHER_SUPABASE_DATABASE_URL` | Supabase PostgreSQL 접속 주소. 설정 시 일반·로컬 DB 주소보다 우선. Session pooler(5432) 권장 | 없음 |
+| `VIBE_TEACHER_MEMORY_DATABASE_URL` | mem0 기억 검색용 PostgreSQL 접속 주소. 해당 DB에 `pgvector` 확장 필요 | 없음 (`npm run memory:db`로 로컬 설정 생성) |
+| `VIBE_TEACHER_POSTGRES_PORT` | 프로젝트 전용 Docker PostgreSQL의 로컬 포트 | `55432` |
+| `VIBE_TEACHER_POSTGRES_PASSWORD` | 프로젝트 전용 Docker PostgreSQL 암호. 서버 응답에 포함하지 않음 | `memory:db` 실행 시 임의 생성하여 `.env`에 저장 |
+| `SUPERMEMORY_API_KEY` | Supermemory 검색·인덱스 갱신에 사용하는 서버 전용 키 | 없음 |
 
 지정한 포트가 이미 사용 중이면 다른 포트로 조용히 옮기지 않고 바로 실패합니다(`strictPort`).
 
@@ -141,11 +150,91 @@ API 표는 **방식 → 경로 → 동작 설명 → 파일** 순서로 표시�
 
 ### 내 지식과 이해 확인
 
-**내 지식**은 접근 가능한 세션의 AI 개념을 모으고 개념별로 근거 세션·자기보고·문항 응답을 연결합니다. 설명 문장은 AI가 작성합니다. 이해 상태는 명시적인 자기보고·응답·정정으로만 정하며, 개념의 등장·설명 열람·질문을 이해 증거로 취급하지 않습니다.
+**내 지식**은 세션의 AI 개념에 자기보고·문항 응답·질문·설명 방식 선택을 연결합니다. 개념 카드에서 연습 정답·오답, 질문 횟수, 최근 활동과 원래 세션을 확인할 수 있습니다. 프로젝트·세션 화면에는 그 범위의 활동을 따로 표시하고, 일반 개념 상태와 설명 선호는 다음 세션에도 이어집니다. 상호작용한 개념은 개인 개념 기록에도 보존하므로 최근 40개 세션 조회에서 빠져도 다시 연결할 수 있습니다. 설명 문장은 AI가 작성합니다.
 
-**간단히 확인하기**를 누르면 해당 개념의 AI 설명을 바탕으로 객관식 또는 OX 문항을 생성합니다. 정답과 해설은 제출 전 브라우저로 보내지 않고 서버에서 채점합니다. AI 생성 문항은 검토 전 연습으로 기록하며 숙련 확정 근거로 사용하지 않습니다. 건너뛰기와 모르겠어요는 오답이 아닙니다.
+**간단히 확인하기**를 누르면 개념 설명과 최근 응답을 참고해 객관식 또는 OX 문항을 생성합니다. 정답과 해설은 제출 전 브라우저로 보내지 않고 서버에서 채점합니다. AI 생성 문항의 정답·오답도 연습 성과로 저장하며, 다음 설명과 문항에 활용합니다. 이전 어려움 이후 정답을 고르면 학습 과정에 표시하지만 숙련을 확정하지는 않습니다. 건너뛰기와 모르겠어요는 오답이 아닙니다.
 
-도움 패널의 질문 답변도 AI가 작성합니다. AI를 사용할 수 없으면 생성 실패 사유를 표시하며 고정 답변을 반환하지 않습니다. 질문 기록은 개인별로 보관합니다.
+도움 패널은 **이렇게 물어보세요**에 현재 개념·파일에 맞는 질문 예시를 표시합니다. 예시나 AI의 후속 질문을 누르면 바로 질문합니다. 같은 대상의 대화를 이어서 저장하며, 답변은 이전 대화·관련 장기 기억·개념별 설명 방침을 참고해 AI가 작성합니다. 답변의 **이번 답변에 참고한 내 학습 기록**에서 실제 제공한 기록을 확인할 수 있습니다. AI를 사용할 수 없으면 실패 사유를 표시하며 고정 답변을 반환하지 않습니다.
+
+반복 질문은 예시를 보강하는 신호로, 최근 어려운 응답은 다시 설명할 신호로 사용합니다. **알고 있어요**는 짧은 상기로, **잘 모르겠어요**는 자세한 설명으로 이어집니다. 설명 깊이·예시를 직접 선택하면 그 선택을 우선해 기억합니다. 질문·열람을 모른다는 증거로 바꾸거나, 연습 정답을 숙련 인증으로 바꾸지는 않습니다. 개념 카드에는 설명을 조정한 이유를 표시하며, 프로젝트 사실과 위험 알림은 개인 상태로 바꾸지 않습니다.
+
+### 장기 기억: mem0 + PostgreSQL + OpenRouter
+
+**내 지식 → 내 기억 검색**에서 예전 질문·연습 결과·설명 선호를 검색할 수 있습니다. **mem0 OSS 하네스는 앱 안에서 실행하고 기억 검색 DB는 PostgreSQL + pgvector를 사용**합니다. 기억 정리와 임베딩은 OpenRouter API로 처리하며 로컬 모델 설치나 별도 메모리 서비스 구독이 필요 없습니다. OpenRouter API 사용량에 따른 비용은 발생합니다.
+
+로컬 DB는 Docker와 Docker Compose를 설치한 뒤 다음 명령으로 준비합니다.
+
+```bash
+npm install
+npm run memory:db
+npm run dev
+```
+
+`memory:db`는 임의 암호와 PostgreSQL 연결 주소를 `.env`에 저장하고 프로젝트 전용 DB를 `127.0.0.1:55432`에서 실행합니다. 포트가 사용 중이면 `.env`의 `VIBE_TEACHER_POSTGRES_PORT`를 바꾼 뒤 처음 실행하세요. 실행한 DB의 데이터는 Docker 이름 있는 볼륨에 보관하므로 컨테이너를 다시 실행해도 유지됩니다. 이미 준비한 DB의 암호를 `.env`에서 바꾸면 DB 계정 암호도 별도로 바꿔야 합니다.
+
+DB를 다시 시작하거나 중지할 때:
+
+```bash
+docker compose up -d --wait memory-db
+docker compose stop memory-db
+```
+
+**기존 PostgreSQL도 연결할 수 있습니다.** 해당 DB에서 `CREATE EXTENSION IF NOT EXISTS vector;`를 실행하고, 앱 계정에 이 전용 DB의 테이블·인덱스 생성 권한을 부여합니다. 기존 DB를 쓰면 `memory:db`를 실행할 필요가 없습니다. `.env` 예시:
+
+```dotenv
+OPENROUTER_API_KEY=발급받은_OpenRouter_키
+VIBE_TEACHER_MEMORY_BACKEND=mem0
+VIBE_TEACHER_MEMORY_DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME
+# 기억 정리 모델만 따로 지정할 때 (생략하면 설정된 OpenRouter 모델)
+# VIBE_TEACHER_MEMORY_MODEL=openai/gpt-5-mini
+```
+
+**Supabase 연결**은 다음 설정을 사용합니다. 프로젝트의 **Connect → Connection string → Session pooler**에서 포트 5432 URI를 복사하고, `[YOUR-PASSWORD]` 부분에 프로젝트의 **DB 비밀번호**를 넣습니다. 암호의 특수문자는 URL 인코딩하세요.
+
+```dotenv
+VIBE_TEACHER_SUPABASE_DATABASE_URL=postgresql://postgres.PROJECT_REF:DB_PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres
+```
+
+Supabase Database → Extensions에서 `vector`를 활성화하거나 SQL Editor에서 다음을 실행합니다.
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
+```
+
+```bash
+npm run memory:check
+npm run dev
+```
+
+`내 기억 검색`에는 기억 저장소 설정(Supabase 또는 PostgreSQL)을 표시합니다. 이 표시는 접속 성공 여부가 아니라 현재 선택된 설정입니다.
+
+`memory:check`는 접속·TLS·벡터 검색·쓰기 권한을 합성 데이터로 검사하고 검사 테이블을 롤백합니다. AI를 호출하거나 원기록을 전송하지 않습니다. 앱에 필요한 전용 스키마는 만들 수 있습니다. 출력에는 접속 문자열과 키를 포함하지 않습니다.
+
+Supabase 설정은 `VIBE_TEACHER_MEMORY_DATABASE_URL`의 기존 로컬 주소보다 우선합니다. `memory:db`도 Supabase 설정이 있으면 로컬 DB를 실행하거나 주소를 덮어쓰지 않습니다. Supabase 접속 실패 시 실패 이유와 원장의 키워드 검색을 표시합니다.
+
+Supabase 모드에서는 기억 테이블을 `vibe_teacher` 비공개 스키마에 만들고, `extensions.vector`와 관련 연산자를 찾도록 세션을 설정합니다. 공개 API 역할의 스키마 접근이 열려 있으면 저장을 중단하며 기존 권한을 자동으로 바꾸지 않습니다. 이 스키마는 Supabase의 Exposed schemas에 추가하지 마세요. 앱 사용자별 접근 권한은 기존 서버 인증에서 검사합니다.
+
+TLS는 호스트와 인증서를 검증합니다. 기본 [Supabase 공개 CA](https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt)를 앱에 포함했으며, 별도 CA가 필요하면 DB URI의 `sslrootcert=/absolute/path/to/ca.crt`로 지정할 수 있습니다. 현재 환경에서 Direct connection이 IPv6 문제로 실패하면 IPv4를 지원하는 Session pooler를 사용하세요. Transaction pooler(6543)는 세션 설정을 유지하는 이 경로에서 사용하지 않습니다. [Supabase 연결 문서](https://supabase.com/docs/guides/database/connecting-to-postgres), [TLS 문서](https://supabase.com/docs/guides/platform/ssl-enforcement)
+
+`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWKS_URL`은 API·인증 확장에 사용할 수 있는 별도 설정입니다. 현재 mem0는 DB 접속 주소로 SQL을 사용하며, 이 키만으로 SQL 연결을 대신하지 않습니다. 기존 로그인은 유지합니다. Secret Key는 서버 환경에만 보관합니다.
+
+일반 PostgreSQL URL에는 사용자명·암호·호스트·DB 이름을 채웁니다. 암호의 특수문자는 URL 인코딩하고, TLS가 필요한 서버는 제공자의 인증서·연결 설정을 따릅니다. 위의 로컬 준비 명령을 사용했다면 생성된 URL을 그대로 쓰세요.
+
+서버를 다시 시작하면 새 자기보고·퀴즈 응답·완료된 질문 뒤에 최신 미반영 기록을 최대 2개씩 백그라운드에서 색인합니다. 저장과 채점은 먼저 완료됩니다. 기존 기록은 **기억 인덱스 업데이트**를 눌러 한 번에 최대 10개씩 반영합니다. 남은 개수와 실패 사유를 표시합니다. 화면 열기(GET)만으로는 AI를 호출하지 않습니다. 검색 시 해당 시점에 완료된 색인을 사용하고 미반영 기록은 키워드 검색으로 보완하므로, 처음 색인한 뒤에는 다시 검색하세요.
+
+OpenRouter에 보내는 대상은 비밀값을 가린 질문·짧은 AI 답변·학습 활동이며, 원본 세션 JSONL이나 도구 출력 전문은 보내지 않습니다. 추출한 검색 단서는 짧은 기록·벡터와 함께 PostgreSQL에 저장합니다. 질문·학습 원장과 원기록 매핑은 `VIBE_TEACHER_HOME` 아래의 JSONL·JSON 파일로 보관합니다. 검색 결과는 현재 접근 가능한 원기록 ID와 대조하며, AI가 만든 숙련 추정을 학습 원장에 넣지 않습니다. DB 안에서는 사용자·앱·모델별 테이블과 검색 필터로 범위를 나누며 Supabase pooler의 프로젝트도 구분합니다. 재시작·재시도 시 같은 기록을 다시 추출하지 않습니다. SDK의 외부 텔레메트리도 끕니다. 기억 정리 모델이나 접속 DB·앱 저장 위치를 바꾸면 별도 색인을 사용하므로 기존 기록을 다시 반영하세요.
+
+키·DB 주소가 없거나 API·PostgreSQL 연결에 문제가 있으면 사유를 표시하고 원장의 키워드 검색을 유지합니다. API 없는 검색만 쓰려면 `VIBE_TEACHER_MEMORY_BACKEND=local`을 설정합니다. 키워드 검색은 원장에서 복원하고 최근 40개 세션 제한을 적용하지 않습니다. 프로젝트 선택 시 그 프로젝트와 범위 없는 개인 활동을 검색합니다. 다른 프로젝트와 계정의 기록은 검색 범위에 넣지 않습니다.
+
+기존 Supermemory 클라우드 어댑터도 `VIBE_TEACHER_MEMORY_BACKEND=supermemory`와 `SUPERMEMORY_API_KEY`로 선택할 수 있습니다. 이 경우 색인 갱신은 수동이며 해당 서비스 요금제가 적용됩니다.
+
+이전 SQLite 색인은 자동으로 복사하거나 삭제하지 않습니다. 기존 질문·응답·선호 원장은 보존되어 있으므로 **기억 인덱스 업데이트**로 PostgreSQL 색인을 다시 만들 수 있습니다. 이 재색인에도 OpenRouter 사용료가 발생합니다. PostgreSQL을 쓰는 현재 경로에서는 SQLite DB 파일을 생성하지 않습니다.
+
+PostgreSQL 연동 검사는 **검사용 DB**의 연결 주소를 지정해 실행합니다. 실제 AI 호출은 합성 응답으로 대체하며 검사에서 만든 임시 테이블만 정리합니다. 지정하지 않으면 일반 `npm test`에서 DB 검사는 건너뜁니다.
+
+```bash
+VIBE_TEACHER_TEST_DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/TEST_DB' npx vitest run server/test/memory/postgres.test.ts
+```
 
 ## AI 제공자와 외부 문서 검색
 
@@ -156,7 +245,7 @@ API 표는 **방식 → 경로 → 동작 설명 → 파일** 순서로 표시�
 | `openrouter` | 모든 생성을 OpenRouter API로 실행 |
 | `none` | 새 AI 생성을 중지. 저장된 AI 결과와 원본 기록은 열람 가능 |
 
-모든 API 호출은 **OpenRouter**를 사용하며 기본 모델은 **`openai/gpt-5-mini`**입니다. 기존 `openai`·`anthropic-sdk` 제공자 설정은 OpenRouter로 이관됩니다. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`로 직접 API를 호출하지 않습니다. 예전 기본값 `openrouter/free`는 `openai/gpt-5-mini`로 바뀝니다.
+AI 문장 생성·외부 문서 검색 API는 **OpenRouter**를 사용하며 기본 모델은 **`openai/gpt-5-mini`**입니다. 기존 `openai`·`anthropic-sdk` 제공자 설정은 OpenRouter로 이관됩니다. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`로 직접 API를 호출하지 않습니다. 예전 기본값 `openrouter/free`는 `openai/gpt-5-mini`로 바뀝니다. mem0 기억 정리·임베딩도 같은 OpenRouter 키를 사용합니다. 기억 API 호출은 설명 제공자와 별도로 `VIBE_TEACHER_MEMORY_BACKEND=local`로 끌 수 있습니다.
 
 저장소 루트의 `.env`에 키를 넣고 서버를 다시 시작하세요.
 
@@ -181,6 +270,8 @@ AI 미설정·권한 부족·취소·오류 상태에서는 새 설명을 생성
 - 레포 위키: 같은 프로젝트의 `repo/`, 수준별 문장은 `repo/text/`
 - 개인 이해 정보: `~/.vibe-teacher/wiki/learners/<ID>/events.jsonl`
 - 개인 설명: 같은 사용자 폴더의 `knowledge-text.json`
+- 개인 개념 기록: 같은 사용자 폴더의 `concepts.json`, 질문 원장은 `projects/<프로젝트>/help.jsonl`
+- mem0 검색 벡터·짧은 기록·검색 단서: `VIBE_TEACHER_MEMORY_DATABASE_URL`의 PostgreSQL, 원기록 매핑은 같은 사용자 폴더의 `memory/mem0-pg-<접속·모델 지문>.json`
 
 이전 규칙 기반 위키·설명 캐시는 현재 결과로 사용하지 않습니다. 기존 기록 파일은 보존하며, 화면에서 위키를 다시 생성하면 새 AI 흐름을 사용합니다.
 
@@ -264,7 +355,7 @@ UI 에서 처음 한 번 토큰을 입력하면 브라우저에 저장됩니다.
 shared/   도메인 타입, API DTO, LLM 출력 스키마 (zod)
 server/   Hono API — adapters(도구별 파서) · index(계정/소스/세션 인덱스) · analyzers(원본 작업 수집) · llm(AI 생성·제공자 라우팅)
           wiki(세션 위키 원장·검사·설명 계획) · repo(레포 위키: 읽기 전용 스캔·AI 추가 코드 확인·조립) · learner(내 이해 정보·내 지식 위키)
-          assessment(문항·채점) · help(도움 패널 질문) · storage(위키 저장소)
+          assessment(문항·채점) · help(도움 패널 질문) · memory(로컬 mem0·기억 검색·색인) · storage(위키 저장소)
 web/      Vite + React UI (한국어), test(화면 렌더링 검사)
 ```
 

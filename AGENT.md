@@ -61,6 +61,7 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
                    · service(저장·갱신 필요 판단, AI 작업과 실패 상태)
   src/assessment/  bank(문항 형식 검사) · service(AI 출제·서버 채점)
   src/help/        도움 패널 질문: answer(대상별 근거 고르기·프롬프트·답 검사) · service(개인 기록·작업)
+  src/memory/      개인 장기 기억: search(원장 사건의 검색 표현·한국어 키워드 검색) · service(권한 범위별 조회·POST 후 자동 색인) · mem0(PostgreSQL pgvector·OpenRouter 추출/임베딩) · database(Supabase 우선 설정·비공개 스키마·연결 검사) · supermemory(선택적 클라우드 어댑터)
   src/storage/     <home>/wiki 저장소 (경로 검사, 키별 직렬화, JSONL 원장)
   test/            vitest 테스트와 합성 픽스처
 web/               Vite + React 19 + react-router UI (한국어)
@@ -72,7 +73,8 @@ web/               Vite + React 19 + react-router UI (한국어)
   src/components/RepoSourceViewer.tsx   근거 파일 원문·줄 강조·검색, RepoFlowView.tsx 는 검증된 파일 연결을 SVG로 표시
   src/components/SecurityReview.tsx    AI가 선정한 보안·데이터 주의사항과 출처 표시
   src/components/HelpPanel.tsx          도움 패널 (설명/질문/퀴즈), src/context/FocusContext.tsx 가 지금 보는 대상을 공유
-scripts/           dev.mjs(웹+API 동시 실행), grant-read-acl.sh(다중 계정 읽기 ACL)
+scripts/           dev.mjs(웹+API 동시 실행), memory-db.mjs(로컬 PostgreSQL 준비), check-memory-db.ts(Supabase·PostgreSQL 접속 검사), postgres-init.sql(pgvector 확장), grant-read-acl.sh(다중 계정 읽기 ACL)
+compose.yaml       프로젝트 전용 PostgreSQL + pgvector, loopback 바인딩과 이름 있는 볼륨
 ```
 
 ## 4. 명령어
@@ -81,6 +83,8 @@ Node.js 20 이상이 필요합니다 (루트 `package.json` 의 `engines`). 개�
 
 ```bash
 npm install
+npm run memory:db                   # 로컬 PostgreSQL + pgvector 준비 (.env에 접속 설정 생성)
+npm run memory:check                # 설정된 Supabase·PostgreSQL 접속과 합성 쓰기·검색 검사 (AI 호출 없음)
 npm run dev                         # API :8787 + 웹 :5173 (웹의 /api 는 API 로 프록시)
 npm run dev:server                  # API 만
 npm run dev:web                     # 웹만
@@ -97,17 +101,17 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 
 이 앱은 **여러 사람의 대화 기록**을 다룹니다. 아래는 편의를 위해 완화하지 않습니다.
 
-- **스캔 대상은 읽기 전용.** `~/.claude`, `~/.codex`, `~/.copilot`, VS Code 저장소 등 스캔하는 홈에는 아무것도 쓰지 않습니다. 쓰기는 `VIBE_TEACHER_HOME`(기본 `~/.vibe-teacher`) 아래 `config.json`, `cache/index/`, `cache/enrich/` 만 허용합니다. 파일 쓰기는 `server/src/lib/fsx.ts` 의 `writeJsonAtomic` 을 씁니다.
+- **스캔 대상은 읽기 전용.** `~/.claude`, `~/.codex`, `~/.copilot`, VS Code 저장소 등 스캔하는 홈에는 아무것도 쓰지 않습니다. 파일 쓰기는 `VIBE_TEACHER_HOME`(기본 `~/.vibe-teacher`) 아래 설정·캐시·`wiki/`에 허용합니다. 장기 기억 검색 DB는 `VIBE_TEACHER_SUPABASE_DATABASE_URL` 우선, 없으면 `VIBE_TEACHER_MEMORY_DATABASE_URL`의 PostgreSQL에만 쓰며, 로컬 준비 명령은 프로젝트 `.env`에 DB 접속 설정을 저장하고 전용 Docker 볼륨을 사용합니다. JSON 파일 쓰기는 `server/src/lib/fsx.ts` 의 `writeJsonAtomic` 을 씁니다.
 - **LLM 에는 다이제스트만.** 원본 JSONL, 도구 출력 전문은 절대 보내지 않습니다. 보내는 내용은 `server/src/llm/digest.ts` 의 `buildDigest` 를 거치고 `maskSecrets` 로 마스킹합니다. 새 비밀값 형식을 발견하면 `SECRET_PATTERNS` 에 추가하고 테스트를 붙입니다.
 - **교육 내용은 AI가 생성한다.** 개념 선정·설명·위키 구성·주의사항·선행관계·연습 문항은 AI가 작성한다. 고정 카탈로그나 규칙 기반 대체 문장을 다시 넣지 않는다. 코드는 원문 수집·접근 권한·출처 참조·스키마·순환·출력 예산을 검사한다. AI를 쓸 수 없으면 실패 사유를 표시한다. GET은 AI를 호출하지 않고 POST로만 생성한다. `llm.autoText`는 자동 POST 여부이며 수동 생성은 유지한다.
-- **API는 OpenRouter만 사용한다.** 기본 모델은 `openai/gpt-5-mini`. 일반 작업은 Claude CLI를 우선하고 CLI 실패·외부 검색은 OpenRouter로 처리한다. 취소는 다른 제공자로 재시도하지 않는다. OpenAI·Anthropic 직접 호출이나 해당 API 키 사용을 추가하지 않는다. 검색에는 공개 개념 이름만 보내고 프로젝트 원문·사설 경로는 넣지 않는다. 참고 링크는 실제 API 검색 출처와 대조한다.
+- **AI 생성·외부 문서 검색 API는 OpenRouter만 사용한다.** 기본 모델은 `openai/gpt-5-mini`. 일반 작업은 Claude CLI를 우선하고 CLI 실패·외부 문서 검색은 OpenRouter로 처리한다. 취소는 다른 제공자로 재시도하지 않는다. OpenAI·Anthropic 직접 호출이나 해당 API 키 사용을 추가하지 않는다. 문서 검색에는 공개 개념 이름만 보내고 프로젝트 원문·사설 경로는 넣지 않는다. 참고 링크는 실제 API 검색 출처와 대조한다. 개인 기억 정리·임베딩도 OpenRouter를 사용한다. 명시적으로 선택한 Supermemory 클라우드 어댑터만 아래 장기 기억 규칙에 따라 별도 API를 사용한다.
 - **기본 바인딩은 `127.0.0.1`.** loopback 이 아닌 주소는 `VIBE_TEACHER_TOKEN` 또는 `auth.mode=home-token` 없이는 부팅을 거부합니다 (`server/src/index.ts`).
 - **계정 범위 밖은 404.** 다른 계정의 리소스는 403 이 아니라 404 로 존재 자체를 숨깁니다. 계정에 딸린 라우트에는 `assertAccount` 를 호출합니다 (`server/src/routes/deps.ts`).
 - **권한 없는 홈은 오류가 아니라 상태.** 읽을 수 없는 계정은 `readable: 'denied'` 로 표시하고 나머지는 계속 동작해야 합니다.
 - **자식 프로세스 환경.** `claude` CLI 를 띄울 때 `CLAUDE_CONFIG_DIR` 를 제외한 `CLAUDE*` 환경변수를 지웁니다 (Claude Code 안에서 실행해도 중첩 실행이 막히지 않도록).
 - **위키: 위험 알림은 사용자 상태와 무관.** `planWiki` 는 공통 알림을 profile 을 보기 전에 정한다. 숙련 추정으로 알림을 숨기거나 줄이지 않는다 (예산을 넘어도 `mandatory_overflow` 로 표시하고 모두 보여 줌).
 - **위키: 사실·해석·에이전트 주장 구분.** 세션 기록에 없는 것은 `inference` + `limits`("이 세션 기록에서 찾지 못함")로만 쓰고 저장소 전체의 부재로 단정하지 않는다. 에이전트의 "완료" 보고는 `agent_reported` 로 실행 기록과 분리한다. claim·finding·item ID 와 근거 ID 는 코드가 만들며, `enforceSnapshot` 을 통과하지 못한 것은 격리하고 `status: partial` 로 낮춘다.
-- **이해 증거는 명시적 입력만.** 세션 로그에서 사용자 이해 증거를 뽑지 않는다(동의 전). 자기보고·노출·건너뛰기·모르겠어요는 이해/오답으로 바꾸지 않고, 검토 전(candidate) 문항·해설 뒤 재시도·도움 사용 응답은 연습으로만 센다 (`server/src/learner/reducer.ts` 의 policy). 학습자 ID 는 인증 주체에서만 만든다 (`learnerIdFor`).
+- **숙련과 학습 활동을 구분한다.** 세션 로그에서 사용자 이해 증거를 자동 추출하지 않는다. 질문·노출·건너뛰기·모르겠어요는 이해/오답으로 바꾸지 않는다. 검토 전(candidate) 문항·해설 뒤 재시도·도움 사용 응답도 연습 정답·오답과 학습 과정으로 기록해 설명 방침에 활용하되 숙련 확정 근거로 쓰지 않는다 (`learner/reducer.ts`, policy-0.2). 직접 선택한 개념별 설명 방식은 우선한다. 학습자 ID 는 인증 주체에서만 만든다 (`learnerIdFor`).
 - **위키 AI 는 후보만.** AI 응답은 `server/src/wiki/ai.ts` 의 `acceptWikiAiOutput` 을 거쳐야 실린다: 제공한 ID 만 인용(하나라도 지어내면 그 제안 전체를 버림), 프로젝트 문장은 근거 주장 인용 필수, 출력도 `maskSecrets`. 주의사항도 AI가 근거를 보고 생성하며, AI 결과는 `wiki/projects/<p>/ai/<revision>.json` 레이어로 원장과 따로 둔다. 전송 전 미리 보기(`/wiki/ai/preview`)를 유지한다.
 - **CLI 로그인을 고르면 API 키를 넘기지 않는다.** `claude` 자식 프로세스 환경에서 `ANTHROPIC_API_KEY`·`ANTHROPIC_AUTH_TOKEN` 을 지운다 (`childEnv`).
 - **읽는 사람 수준은 문체만.** 사용자가 고른 수준(`shared/src/reader.ts` 의 `ReaderLevel`, 기본 `non-dev` = 완전 비개발자)은 AI 문장의 단어·설명 깊이에만 쓴다. 이해 증거가 아니므로 learner 원장에 넣지 않고(`learners/<id>/prefs.json`), 개념 상태·위험 알림·사실·근거를 바꾸지 않는다. 사람이 읽는 문장을 쓰는 **모든** AI 호출은 시스템 프롬프트를 `server/src/llm/reader.ts` 의 `withReader(prompt, level)` 로 감싸고, 결과는 수준별로 따로 저장한다(캐시 키·파일 이름·지문에 수준 포함). 시스템 프롬프트 본문에 특정 독자("초보", "비개발자")를 박아 넣지 않는다. 화면은 사용자가 수준을 고르기 전(`reader.chosen=false`)에는 AI 자동 작성을 시작하지 않고 먼저 묻는다.
@@ -115,7 +119,9 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **내 지식 설명 문장은 상태를 넘겨짚지 않는다.** AI 문장은 `server/src/learner/knowledge-text.ts` 의 `acceptKnowledgeText` 를 거친다: "모르십니다"류 단정, 확인되지 않았는데 "이해하고 계십니다"류는 버리고 생성 실패를 표시한다(같은 사실로 다시 부르지 않도록 거른 것도 저장). 상태 자체는 AI 가 바꾸지 못한다.
 - **저장소 스캔은 읽기만.** `server/src/repo/scan.ts` 는 쓰기·명령 실행(git 포함)을 하지 않고, 심볼릭 링크를 따라가지 않으며, `.env`·키 파일을 열지 않는다(`.env.example` 은 변수 이름만). 새로 읽을 파일 종류를 늘리면 비밀값이 섞이지 않는지 테스트(`server/test/repo`)를 붙인다.
 - **내 지식 위키: 언급은 증거가 아니다.** 사용자 메시지의 언급은 설명 문장의 맥락으로만 쓰고 상태는 learner 원장으로만 정한다. 붙여 넣은 글(`<pasted_content>`)은 언급으로 보지 않는다 (`ownWords`).
-- **도움 패널 질문은 이해 증거가 아니다.** 질문은 `help.jsonl` 에 개인 기록으로만 남기고 learner 원장을 바꾸지 않는다. 답의 프로젝트 연결은 검증된 claim 인용이 있어야 싣는다 (`acceptHelpOutput`). 도움 패널로 물어본 개념의 문제 응답은 `helpUsed` 로 보조 응답이 된다.
+- **도움 패널 질문은 숙련 증거가 아니다.** 질문·답변은 `help.jsonl`, 질문 활동은 learner 원장에 연결한다. 반복 질문은 설명 수요로만 활용한다. 대화 ID는 본인의 같은 프로젝트·세션 기록과 대조하며, 후속 질문은 원래 대상과 대화를 유지한다. 답의 프로젝트 연결은 검증된 claim 인용이 있어야 싣는다 (`acceptHelpOutput`). 도움 패널로 물어본 개념의 문제 응답은 `helpUsed` 로 보조 응답이 된다.
+- **장기 기억은 출처가 있는 개인 활동이다.** 로컬 원장이 진실이며 `MemoryService`가 현재 접근 범위를 적용한다. 과거 AI 답변을 현재 프로젝트 사실로 쓰지 않는다. 기본은 mem0 OSS + PostgreSQL pgvector이며 추출·임베딩 API는 OpenRouter만 쓴다. 추출은 앱의 zod 스키마로 검사하고 mem0에는 `infer:false`로 넣는다. SDK의 자유로운 숙련·프로필 추론을 원장에 주입하지 않는다. DB 주소는 `VIBE_TEACHER_SUPABASE_DATABASE_URL` 우선, 없으면 `VIBE_TEACHER_MEMORY_DATABASE_URL`로 지정하고 사용자·앱·모델별 안전한 테이블 이름(접미사까지 PostgreSQL 63바이트 이내)을 사용한다. 암호는 색인 지문과 응답에 넣지 않는다. SDK 설정 파일은 앱 저장소 안으로 지정하고 import 전에 `MEM0_TELEMETRY=false`로 외부 텔레메트리를 끈다. GET은 원장만 읽으며 AI 권한을 확인한 POST 활동 뒤에만 최신 2개를 자동 색인한다. 수동 갱신은 최대 10개다. 검색 결과 ID는 현재 범위의 원기록과 대조한다. 접속 DB·앱·모델 지문별 테이블·매핑을 나누며 원기록 지문별 runId로 중복을 막는다. Supabase는 인증서·호스트 검증 TLS와 `vibe_teacher` 비공개 스키마를 사용한다. 스키마가 공개 API 역할에 노출되었거나 pooler가 search_path를 무시하면 원문 저장 전에 실패한다. 기존 객체 권한은 자동 변경하지 않는다. 공유 pooler에서는 프로젝트 ID도 지문에 포함한다. `database.ts`의 설정·준비를 우회해 SDK를 만들지 않는다. 공개 CA는 `server/data/supabase-ca.crt`이며 사용자 키가 아니다. 새 `sb_secret_` 키와 PostgreSQL URL 암호도 `maskSecrets`에서 가린다. 실패는 표시하고 키워드 검색을 유지한다. `local`은 API 없는 검색, `supermemory`는 명시적으로 선택하는 기존 클라우드 어댑터다.
+- **질문 예시는 요청 UI다.** `ko.help.questionExamples`의 대상별 템플릿과 AI 후속 질문은 클릭하면 직접 질문한다. 이를 고정 교육 답변이나 AI 미사용 시 대체 답변으로 쓰지 않는다.
 - **정답은 제출 전에 내보내지 않는다.** 브라우저로 가는 문항은 `toPublicQuestion` 을 거친다.
 - **"내 메시지"는 사람이 실제로 입력한 것만.** 도구 결과, `<system-reminder>` 같은 주입 메시지, 사이드체인은 `human` 으로 분류하지 않습니다. 분류 규칙을 바꾸면 해당 어댑터의 분류 테스트를 갱신합니다.
 - **Codex 하위 세션과 자동 문맥을 구분한다.** `session_meta.source.subagent` 또는 `parent_thread_id`가 있는 세션은 목록에서 제외하고 직접 읽어도 사용자 입력으로 세지 않습니다. IDE 문맥의 `My request` 본문과 알려진 자동 태그는 `adapters/codex/classify.ts`에서 구분하며, 긴 자동 문맥을 지운 다음 길이를 제한합니다. 코드 블록·인라인 코드의 태그 예시를 지우지 않습니다.
@@ -211,6 +217,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **픽스처는 합성 데이터만.** 실제 대화 기록, 실제 사용자명, 실제 홈 경로, 실제 키·토큰을 넣지 않습니다. 실제 기록에서 형식을 확인했다면 내용을 바꿔 최소한으로 재현합니다.
 - 테스트는 실제 `~/.claude` 등에 의존하지 않습니다. 경로는 픽스처 디렉터리나 임시 디렉터리를 넘깁니다.
 - LLM 호출은 테스트에서 실제로 하지 않습니다 (가짜 제공자나 스텁 사용).
+- `server/test/memory/postgres.test.ts`는 `VIBE_TEACHER_TEST_DATABASE_URL`을 명시할 때만 실제 PostgreSQL에 접속합니다. 합성 AI 응답을 쓰고 검사에서 만든 임시 테이블만 정리합니다. 미지정 시 해당 통합 검사만 건너뜁니다.
 
 ## 9. 구현 상태
 

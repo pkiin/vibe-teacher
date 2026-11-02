@@ -8,6 +8,7 @@ import { FocusChip } from './FocusChip';
 import { InlineText } from './InlineText';
 import { QuizCard } from './QuizCard';
 import { UnderstandingBadge } from './UnderstandingBadge';
+import { Notice } from './Notice';
 
 const DEPTHS: ExplanationDepth[] = ['D0', 'D1', 'D2', 'D3'];
 
@@ -87,6 +88,7 @@ export function WikiItemCard({
   const [later, setLater] = useState(false);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [preferenceError, setPreferenceError] = useState(false);
 
   useEffect(() => {
     if (!overridden) setDepth(planned);
@@ -105,6 +107,10 @@ export function WikiItemCard({
     setDepth(next);
     setOverridden(true);
     learner.exposure(action, { conceptId: primaryId, itemId: item.id });
+    if (primaryId) {
+      setPreferenceError(false);
+      void learner.preference(primaryId, next, action === 'simpler' || example).catch(() => setPreferenceError(true));
+    }
   };
   const report = async (value: 'known' | 'unsure') => {
     if (!primaryId) return;
@@ -170,6 +176,8 @@ export function WikiItemCard({
               </div>
             ))}
           <ConceptBody concept={primary} depth={depth} showExample={example} />
+          {profile?.concepts[primaryId]?.teaching && <p className="small muted">{ko.learning.next}: {ko.learning.reason[profile.concepts[primaryId]!.teaching!.reason]}</p>}
+          {preferenceError && <Notice kind="warn">{ko.learning.preferenceError}</Notice>}
           <div className="wiki-buttons">
             <button
               className="btn btn-small"
@@ -203,6 +211,7 @@ export function WikiItemCard({
                 onClick={() => {
                   setExample((v) => !v);
                   if (!example) learner.exposure('example', { conceptId: primaryId, itemId: item.id });
+                  void learner.preference(primaryId, depth, !example).catch(() => setPreferenceError(true));
                 }}
               >
                 {ko.wiki.example}

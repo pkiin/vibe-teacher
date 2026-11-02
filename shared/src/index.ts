@@ -7,3 +7,4 @@ export * from './assessment';
 export * from './help';
 export * from './repo';
 export * from './reader';
+export * from './memory';

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { HelpJobStatus, HelpMessage, HelpThreadsResponse, Project, SessionSummary, UnderstandingResponse } from '@vibe-teacher/shared';
+import type { HelpJobStatus, HelpMessage, HelpThreadsResponse, LearnerProfile, Project, SessionSummary, UnderstandingResponse } from '@vibe-teacher/shared';
 import { allAdapters } from '../../src/adapters/registry';
 import { AnalysisService } from '../../src/analyzers/index';
 import { summarizeBuilt } from '../../src/analyzers/built/index';
@@ -116,7 +116,7 @@ describe('help API', () => {
     await index.rescan();
     const projects = (await (await app.request('/api/projects')).json()) as Project[];
     const sessions = (await (await app.request(`/api/projects/${projects[0]!.id}/sessions`)).json()) as SessionSummary[];
-    return { app, index, services, project: projects[0]!, session: sessions[0]! };
+    return { app, index, services, store, paths, project: projects[0]!, session: sessions[0]! };
   }
   const json = { 'content-type': 'application/json' };
 
@@ -127,8 +127,8 @@ describe('help API', () => {
     await fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('answers with AI as a job, stores it privately, dedupes retries and leaves understanding untouched', async () => {
-    const { app, index, services, project, session } = await makeApp(fake);
+  it('stores questions without lowering mastery, resumes threads and recalls learning after a restart', async () => {
+    const { app, index, services, project, session, store, paths } = await makeApp(fake);
     const k = encodeURIComponent(session.key);
     const loaded = (await index.loadSession(session.key))!;
     await services.wiki.save(loaded, snapshotOf(loaded));
@@ -166,7 +166,28 @@ describe('help API', () => {
 
     const u = (await (await app.request(`/api/projects/${project.id}/understanding`)).json()) as UnderstandingResponse;
     expect(u.profile.revision).toBe(0);
-    expect(u.events).toEqual([]);
+    expect(u.events).toHaveLength(1);
+    expect(u.events[0]?.kind).toBe('question');
+    expect(u.profile.concepts.authorization?.state).toBe('unknown');
+    expect(u.profile.concepts.authorization?.counts.questions).toBe(1);
+
+    const follow = await app.request(`/api/projects/${project.id}/help`, { method: 'POST', headers: json, body: JSON.stringify({ ...body, requestId: 'req-help-followup', question: '앞에서 설명한 권한 검사와 로그인은 어떻게 다른가요?' }) });
+    const next = (await follow.json()) as { message: HelpMessage; profile: LearnerProfile };
+    expect(next.message.threadId).toBe(message.threadId);
+    for (let i = 0; i < 50 && services.help.job(u.profile.learnerId, project.id, next.message.jobId!)?.state !== 'done'; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(calls[1]?.user).toContain('=== 이전 질문과 답 ===');
+    expect(calls[1]?.user).toContain(body.question);
+    expect(calls[1]?.user).toContain('=== 관련 장기 기억');
+    expect(next.profile.concepts.authorization?.teaching?.reason).toBe('repeated_questions');
+    const restarted = createWikiServices(paths.home, store, async () => ({ provider: fake, status: { available: true, resolvedProvider: 'claude-cli' } }));
+    const recalled = await restarted.memory.search(u.profile.learnerId, { projectId: project.id, allowedProjectIds: [project.id] }, { query: '권한', conceptIds: ['authorization'] });
+    expect(recalled.records.some((r) => r.id === message.id)).toBe(true);
+    expect(recalled.records).toHaveLength(2);
+    expect((await restarted.learner.profile(u.profile.learnerId)).concepts.authorization?.counts.questions).toBe(2);
+    expect((await app.request(`/api/projects/${project.id}/help`, { method: 'POST', headers: json, body: JSON.stringify({ ...body, requestId: 'req-help-foreign', threadId: 't_not_my_thread' }) })).status).toBe(404);
+    const memoryApi = await app.request(`/api/me/memory?projectId=${project.id}&q=권한`);
+    expect(memoryApi.status).toBe(200);
+    expect((await app.request('/api/me/memory?projectId=unknown-project')).status).toBe(404);
   });
 
   it('reports unavailable AI without returning a canned answer', async () => {
@@ -177,9 +198,12 @@ describe('help API', () => {
       body: JSON.stringify({ sessionKey: session.key, requestId: 'req-help-0002', question: '테스트가 뭔가요?', focus: { kind: 'concept', id: 'testing' } }),
     });
     expect(res.status).toBe(200);
-    const { message } = (await res.json()) as { message: HelpMessage };
+    const { message, profile } = (await res.json()) as { message: HelpMessage; profile: LearnerProfile };
     expect(message).toMatchObject({ status: 'error', error: { kind: 'unavailable' } });
     expect(message.answer).toBeUndefined();
+    const saved = (await (await app.request(`/api/projects/${project.id}/help?sessionKey=${encodeURIComponent(session.key)}`)).json()) as HelpThreadsResponse;
+    expect(saved.messages.find((m) => m.id === message.id)?.question).toBe('테스트가 뭔가요?');
+    expect(profile.activityRevision).toBe(1);
     expect((await app.request(`/api/projects/${project.id}/help`, { method: 'POST', headers: json, body: JSON.stringify({ sessionKey: session.key, requestId: 'bad', question: '', focus: { kind: 'x' } }) })).status).toBe(422);
   });
 });

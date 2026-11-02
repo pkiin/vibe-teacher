@@ -15,6 +15,7 @@ import { RULES_VERSION, buildWikiSnapshot, snapshotRevision } from './build';
 import { loadWikiCatalog } from './catalog';
 import { planWiki } from './plan';
 import { enforceSnapshot } from './validate';
+import { MemoryService } from '../memory/service';
 
 export interface SessionWikiIndex {
   sessionKey: string;
@@ -119,10 +120,11 @@ export function createWikiServices(
   store: ConfigStore,
   resolveProvider: () => Promise<ResolvedLlm>,
   projectIds?: (id: string) => string[],
-): { wiki: WikiService; learner: LearnerService; assessments: AssessmentService; wikiAi: WikiAiService; help: HelpService; prefs: PrefsService } {
+): { wiki: WikiService; learner: LearnerService; assessments: AssessmentService; wikiAi: WikiAiService; help: HelpService; prefs: PrefsService; memory: MemoryService } {
   const storage = new WikiStorage(home, projectIds);
   const learner = new LearnerService(storage);
   const wiki = new WikiService(storage, store);
   const wikiAi = new WikiAiService({ storage, store, wiki, resolveProvider });
-  return { wiki, learner, assessments: new AssessmentService(learner, () => wiki.bank(), { resolveProvider, timeoutMs: () => store.get().llm.timeoutMs }), wikiAi, help: new HelpService({ storage, store, wiki, wikiAi, resolveProvider }), prefs: new PrefsService(storage) };
+  const memory = new MemoryService(storage, learner, { projectIds, model: () => store.get().llm.openrouterModel });
+  return { wiki, learner, memory, assessments: new AssessmentService(learner, () => wiki.bank(), { resolveProvider, timeoutMs: () => store.get().llm.timeoutMs }), wikiAi, help: new HelpService({ storage, store, wiki, wikiAi, learner, memory, resolveProvider }), prefs: new PrefsService(storage) };
 }

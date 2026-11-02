@@ -10,10 +10,14 @@
   "dependencies": {
     "@hono/node-server": "^2.1",
     "@vibe-teacher/shared": "*",
+    "better-sqlite3": "12.11.1",
     "hono": "^4.13",
+    "mem0ai": "3.3.1",
+    "pg": "8.23.1",
     "zod": "^4.5"
   },
   "devDependencies": {
+    "@types/pg": "8.23.1",
     "tsx": "^4.23"
   }
 }

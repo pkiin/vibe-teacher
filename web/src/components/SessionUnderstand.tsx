@@ -146,7 +146,7 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
             </>
           )}
           <h2 id="knowledge">{ko.knowledge.sessionTitle}</h2>
-          <KnowledgeList sessionKey={sessionKey} onProfile={onProfile} refreshKey={`${profile?.revision}|${wiki?.ai?.createdAt}|${enrichment?.createdAt}`} showMeta={false} />
+          <KnowledgeList sessionKey={sessionKey} onProfile={onProfile} refreshKey={`${profile?.revision}|${profile?.activityRevision}|${wiki?.ai?.createdAt}|${enrichment?.createdAt}`} showMeta={false} />
 
           <SecurityReview wiki={wiki} onJump={onJump} />
         </div>

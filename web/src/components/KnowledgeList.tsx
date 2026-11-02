@@ -11,6 +11,7 @@ import { ko } from '../i18n/ko';
 import { ErrorBox, Loading, Notice } from './Notice';
 import { QuizCard } from './QuizCard';
 import { ConceptBody } from './WikiItemCard';
+import { LearningHistory } from './LearningHistory';
 
 const STATE_PILL: Record<string, string> = { unknown: 'pill-gray', partial: 'pill-blue', demonstrated: 'pill-green', conflicting: 'pill-yellow' };
 const DEPTHS: ExplanationDepth[] = ['D0', 'D1', 'D2', 'D3'];
@@ -21,16 +22,21 @@ type Open = 'quiz' | 'explain' | 'wrong' | null;
 export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = false }: { entry: KnowledgeEntry; concept?: WikiConcept; learner: LearnerActions; sessionKey?: string; writing?: boolean }) {
   const focus = useFocus();
   const [open, setOpen] = useState<Open>(null);
-  const [depth, setDepth] = useState<ExplanationDepth>('D1');
+  const [depth, setDepth] = useState<ExplanationDepth>(entry.state.teaching?.depth ?? 'D1');
+  const [actionError, setActionError] = useState<Error | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const s = entry.state;
+  useEffect(() => { setDepth(s.teaching?.depth ?? 'D1'); }, [s.teaching?.depth]);
   const toggle = (o: Open) => setOpen((cur) => (cur === o ? null : o));
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
+      setActionError(null);
       await fn();
+    } catch (e) {
+      setActionError(e as Error);
     } finally {
       setBusy(false);
     }
@@ -48,6 +54,7 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
         {s.selfReport && <span className="pill pill-outline">{ko.knowledge.selfReport[s.selfReport]}</span>}
         <span className="pill pill-outline">{entry.category}</span>
       </div>
+      <LearningHistory state={entry.scope?.state ?? s} scope={entry.scope?.kind} teaching={s.teaching} />
       {writing && entry.reasonOrigin !== 'llm' ? (
         <p className="knowledge-reason knowledge-reason-pending muted">{ko.knowledge.writing}</p>
       ) : (
@@ -97,12 +104,13 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
           {ko.knowledge.wrong}
         </button>
       </div>
+      {actionError && <ErrorBox error={actionError} />}
       {open === 'quiz' && <QuizCard sessionKey={sessionKey} target={{ conceptId: entry.conceptId }} learner={learner} explanationSeen={false} onClose={() => setOpen(null)} />}
       {open === 'explain' && concept && (
         <div className="knowledge-explain">
           <div className="help-depth" role="group">
             {DEPTHS.map((d) => (
-              <button key={d} type="button" className={`btn btn-small ${depth === d ? 'btn-primary' : ''}`} aria-pressed={depth === d} onClick={() => setDepth(d)}>
+              <button key={d} type="button" disabled={busy} className={`btn btn-small ${depth === d ? 'btn-primary' : ''}`} aria-pressed={depth === d} onClick={() => { setDepth(d); void run(() => learner.preference(entry.conceptId, d, d !== 'D0')); }}>
                 {ko.wiki.depth[d]}
               </button>
             ))}

@@ -18,6 +18,8 @@
     "dev:web": "vite web",
     "build": "npm -w web run build",
     "start": "tsx server/src/index.ts",
+    "memory:db": "node scripts/memory-db.mjs",
+    "memory:check": "tsx scripts/check-memory-db.ts",
     "typecheck": "tsc -p shared --noEmit && tsc -p server --noEmit && tsc -p web --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
