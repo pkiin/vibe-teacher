@@ -6,6 +6,9 @@ import { withReader } from '../llm/reader';
 import type { ResolvedLlm } from '../llm/select';
 import { LlmError } from '../llm/types';
 import { conceptFromHit } from '../llm/concepts';
+import type { LearnerService } from '../learner/service';
+import type { MemoryService } from '../memory/service';
+import { maskSecrets } from '../llm/digest';
 import type { ConfigStore } from '../config/store';
 import type { WikiStorage } from '../storage/store';
 import { mergeWikiAi } from '../wiki/ai';
@@ -16,7 +19,7 @@ import { HELP_SYSTEM_PROMPT, HelpOutputSchema, acceptHelpOutput, buildHelpContex
 /**
  * 도움 패널 질문·답변. 개인 기록으로만 남는다:
  *   wiki/learners/<learnerId>/projects/<projectId>/help.jsonl   (추가만, 같은 id 는 마지막 줄이 현재 상태)
- * 질문은 이해 상태(learner 원장)를 바꾸지 않는다.
+ * 질문 활동은 learner 원장에 연결하고 설명 방침에 활용한다. 숙련 상태는 낮추지 않는다.
  */
 export class HelpService {
   readonly jobs = new JobQueue<HelpMessage>();
@@ -31,6 +34,8 @@ export class HelpService {
       wiki: WikiService;
       wikiAi: WikiAiService;
       resolveProvider: () => Promise<ResolvedLlm>;
+      learner: LearnerService;
+      memory: MemoryService;
     },
   ) {}
 
@@ -44,7 +49,7 @@ export class HelpService {
     for (const file of this.opts.storage.learnerProjectFiles(learnerId, projectId, 'help.jsonl').reverse()) {
       for (const m of (await this.opts.storage.readJsonl<HelpMessage>(file)).items) latest.set(m.id, m);
     }
-    return [...latest.values()];
+    return [...latest.values()].sort((a, b) => a.askedAt.localeCompare(b.askedAt));
   }
 
   private append(learnerId: string, projectId: string, m: HelpMessage): Promise<void> {
@@ -99,19 +104,29 @@ export class HelpService {
       const catalog = this.opts.wiki.catalog(snapshot);
       for (const h of input.hits) if (!catalog.concepts.has(h.id)) catalog.concepts.set(h.id, conceptFromHit(h));
       const ctx = buildHelpContext({ focus: req.focus, snapshot, built: input.built, hits: input.hits, catalog });
+      const all = await this.all(learnerId, projectId);
+      const requestedThread = req.threadId ? all.find((m) => m.threadId === req.threadId && m.sessionKey === session.key) : undefined;
+      if (req.threadId && !requestedThread) throw Object.assign(new Error('대화를 찾을 수 없습니다'), { status: 404, code: 'not_found' });
+      const previous = [...all].reverse().find((m) => m.sessionKey === session.key && m.focus.kind === req.focus.kind && m.focus.id === req.focus.id);
       const base: HelpMessage = {
         id: `h_${randomUUID()}`,
-        threadId: req.threadId ?? `t_${randomUUID().replace(/-/g, '')}`,
+        threadId: requestedThread?.threadId ?? previous?.threadId ?? `t_${randomUUID().replace(/-/g, '')}`,
         requestId: req.requestId,
         sessionKey: session.key,
         ...(snapshot ? { snapshotRevision: snapshot.revision } : {}),
         focus: req.focus,
-        question: req.question,
-        ...(req.selectedText ? { selectedText: req.selectedText } : {}),
+        question: maskSecrets(req.question),
+        ...(req.selectedText ? { selectedText: maskSecrets(req.selectedText) } : {}),
         askedAt: new Date().toISOString(),
         status: 'pending',
         notices: [],
       };
+
+      // AI 사용 여부와 무관하게 질문을 먼저 보존한다.
+      await this.append(learnerId, projectId, base);
+      const conceptIdsForQuestion = req.focus.kind === 'concept' && req.focus.id && catalog.concepts.has(req.focus.id) ? [req.focus.id] : [...new Set(ctx.items.flatMap((i) => i.conceptIds))];
+      await this.opts.learner.rememberConcepts(learnerId, ctx.concepts, { projectId, sessionKey: session.key });
+      const activity = await this.opts.learner.record(learnerId, null, { id: `question_${base.id}`, kind: 'question', at: base.askedAt, projectId, sessionKey: session.key, conceptIds: conceptIdsForQuestion, messageId: base.id });
 
       const { provider, status } = input.allowed.ok ? await this.opts.resolveProvider() : { provider: null, status: { reason: input.allowed.reason } };
       if (!provider) {
@@ -121,8 +136,11 @@ export class HelpService {
         return done;
       }
 
-      const history = (await this.all(learnerId, projectId)).filter((m) => m.threadId === base.threadId);
-      const user = buildHelpPrompt({ ctx, session, built: input.built, hits: input.hits, question: req.question, selectedText: req.selectedText, history });
+      const recalled = await this.opts.memory.search(learnerId, { projectId, allowedProjectIds: [projectId] }, { query: req.question, conceptIds: conceptIdsForQuestion, sessionKey: session.key, remote: true, excludeId: base.id });
+      base.memories = recalled.records;
+      base.notices.push(...recalled.notices);
+      const history = all.filter((m) => m.threadId === base.threadId && m.sessionKey === session.key);
+      const user = buildHelpPrompt({ ctx, session, built: input.built, hits: input.hits, question: req.question, selectedText: req.selectedText, history, profile: activity.profile, memories: recalled.records });
       const claimIds = new Set(ctx.claims.map((c) => c.id));
       const conceptIds = new Set(catalog.concepts.keys());
       const cfg = this.opts.store.get().llm;
@@ -138,7 +156,7 @@ export class HelpService {
             status: 'done',
             mode: 'llm',
             answer,
-            notices,
+            notices: [...base.notices, ...notices],
             answeredAt: new Date().toISOString(),
             provider: res.provider,
             ...(res.model ? { model: res.model } : {}),
@@ -146,11 +164,13 @@ export class HelpService {
             ...(res.costUsd !== undefined ? { costUsd: res.costUsd } : {}),
           };
           await this.append(learnerId, projectId, done);
+          this.opts.memory.scheduleSync(learnerId, { projectId, allowedProjectIds: [projectId] });
           return done;
         } catch (err) {
           const e = err as LlmError;
           const cancelled = signal.aborted || (err instanceof LlmError && e.kind === 'cancelled');
           await this.append(learnerId, projectId, { ...base, jobId: job.id, status: cancelled ? 'cancelled' : 'error', error: { kind: e.kind ?? 'unknown', message: e.message ?? String(err) } });
+          this.opts.memory.scheduleSync(learnerId, { projectId, allowedProjectIds: [projectId] });
           throw err;
         }
       });

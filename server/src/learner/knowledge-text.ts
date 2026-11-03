@@ -18,7 +18,7 @@ import type { WikiStorage } from '../storage/store';
  * - 상태를 넘겨짚는 문장("모르십니다", 확인되지 않았는데 "이해하고 계십니다")은 버리고 생성 실패 상태를 표시한다.
  */
 
-export const KNOWLEDGE_TEXT_PROMPT_VERSION = 'knowledge-text-1.0';
+export const KNOWLEDGE_TEXT_PROMPT_VERSION = 'knowledge-text-2.0';
 const BATCH = 20;
 const MAX_PER_JOB = 100;
 const MAX_STORED = 1500;
@@ -31,6 +31,7 @@ export const KNOWLEDGE_TEXT_SYSTEM_PROMPT = `당신은 AI 로 무언가를 만�
 - 기록이 없다는 것은 모른다는 뜻이 아닙니다. "모르십니다", "이해하지 못하셨습니다"처럼 단정하지 않습니다.
 - 상태가 '확인됨'이 아니면 "이해하고 계십니다", "잘 알고 계십니다"라고 쓰지 않습니다. '확인됨'이어도 문항 범위 안에서 확인됐다고만 씁니다.
 - 대화에서 언급한 것은 이해의 증거가 아니라 맥락입니다.
+- 연습 정답·오답은 학습 활동으로 구분해 언급합니다. 검토 전 정답을 숙련 인증으로 바꾸지 않습니다. 질문 수와 설명 선호에 따른 다음 설명 방침도 짧게 알려 줄 수 있습니다.
 - 주어진 사실 밖의 내용을 지어내지 않습니다.
 - 요청된 JSON 스키마로만 답합니다.`;
 
@@ -49,6 +50,9 @@ export function entryFacts(e: KnowledgeEntry): string {
   const c = s.counts;
   const answered = [c.correct ? `정답 ${c.correct}` : '', c.incorrect ? `오답 ${c.incorrect}` : '', c.dontKnow ? `모름 ${c.dontKnow}` : '', c.practice ? `연습·검토 전 ${c.practice}` : ''].filter(Boolean);
   parts.push(`문제 응답: ${answered.length ? answered.join(', ') : '없음'}`);
+  parts.push(`연습 성과: 정답 ${c.practiceCorrect ?? 0} · 오답 ${c.practiceIncorrect ?? 0} · 질문 ${c.questions ?? 0}`);
+  if (s.progress) parts.push(`학습 과정: ${s.progress === 'improving' ? '이전 어려움 이후 문항에서 정답을 선택함 (숙련 인증 아님)' : s.progress === 'revisit' ? '최근 응답을 다시 살펴볼 필요가 있음' : '문항으로 연습함'}`);
+  if (s.teaching) parts.push(`다음 설명 방침: ${s.teaching.depth}, 예시 ${s.teaching.examples ? '표시' : '접기'}, 근거 유형 ${s.teaching.reason}`);
   parts.push(`자기 보고: ${s.selfReport ? SELF_LABEL[s.selfReport] : '없음'}`);
   if (s.disputed) parts.push('사용자가 이 추정이 잘못됐다고 알려 줌 → 다시 확인하기 전까지 판단 보류');
   for (const src of e.sources.slice(0, 2)) {

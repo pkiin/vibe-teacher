@@ -6,6 +6,7 @@ import type { SessionIndex } from '../index/session-index';
 import type { WikiService } from '../wiki/service';
 import { buildKnowledgeEntries, extractOccurrences, type SessionOccurrences } from './knowledge';
 import type { LearnerService } from './service';
+import { reduceProfile, unknownConcept } from './reducer';
 
 const MAX_SESSIONS = 40;
 const MAX_CACHE = 400;
@@ -28,8 +29,8 @@ export class KnowledgeService {
   ) {}
 
   /** 이 사용자의 세션 (최근 활동 순) */
-  sessionsOf(username: string, projectId?: string): SessionSummary[] {
-    const accounts = new Set(this.opts.index.getAccounts().filter((a) => a.username === username).map((a) => a.id));
+  sessionsOf(username: string, projectId?: string, accountIds?: ReadonlySet<string>): SessionSummary[] {
+    const accounts = accountIds ?? new Set(this.opts.index.getAccounts().filter((a) => a.username === username).map((a) => a.id));
     return this.opts.index
       .getProjects()
       .filter((p) => accounts.has(p.accountId) && (!projectId || p.id === projectId))
@@ -71,8 +72,8 @@ export class KnowledgeService {
    * 사용자 지식 위키. session 을 주면 그 세션에 나온 개념만, projectId 를 주면 그 프로젝트 세션만 본다.
    * session 은 다른 계정의 세션일 수도 있다 (관리자가 보는 경우) — 근거는 그 세션, 상태는 보는 사람 본인의 것.
    */
-  async wiki(input: { username: string; learnerId: string; projectId?: string; session?: SessionSummary }): Promise<Omit<KnowledgeWikiResponse, 'text'>> {
-    const all = input.session ? [input.session] : this.sessionsOf(input.username, input.projectId);
+  async wiki(input: { username: string; learnerId: string; projectId?: string; session?: SessionSummary; accountIds?: ReadonlySet<string> }): Promise<Omit<KnowledgeWikiResponse, 'text'>> {
+    const all = input.session ? [input.session] : this.sessionsOf(input.username, input.projectId, input.accountIds);
     const picked = all.slice(0, MAX_SESSIONS);
     const sessions: SessionOccurrences[] = [];
     for (const s of picked) {
@@ -82,14 +83,33 @@ export class KnowledgeService {
     const profile = await this.opts.learner.profile(input.learnerId);
     const catalog = new Map<string, WikiConcept>();
     for (const s of sessions) for (const c of s.catalog ?? []) if (!catalog.has(c.id)) catalog.set(c.id, c);
+    const remembered = await this.opts.learner.concepts(input.learnerId);
+    const allowed = new Map(all.map((s) => [s.key, s]));
+    const extras = new Map<string, SessionOccurrences>();
+    for (const { concept, sources } of Object.values(remembered)) {
+      const relevant = sources.filter((s) => allowed.has(s.sessionKey));
+      if ((!input.session && !input.projectId && !sources.length) || relevant.length) catalog.set(concept.id, catalog.get(concept.id) ?? concept);
+      for (const source of relevant) {
+        if (sessions.some((s) => s.sessionKey === source.sessionKey && s.concepts.some((c) => c.conceptId === concept.id))) continue;
+        const summary = allowed.get(source.sessionKey)!;
+        const extra = extras.get(source.sessionKey) ?? { sessionKey: summary.key, sessionTitle: summary.title, projectId: summary.projectId, projectName: this.opts.index.getProject(summary.projectId)?.name ?? summary.projectId, concepts: [], mentions: [] };
+        extra.concepts.push({ conceptId: concept.id, via: 'concept_hit', weight: 1 });
+        extras.set(source.sessionKey, extra);
+      }
+    }
     const entries = buildKnowledgeEntries({
-      sessions,
+      sessions: [...sessions, ...extras.values()],
       profile,
       catalog,
       ...(input.session ? { focusSessionKey: input.session.key } : {}),
       includeProfileOnly: !input.session && !input.projectId,
     });
-    const projectIds = [...new Set(this.sessionsOf(input.username).map((s) => s.projectId))];
+    if (input.session || input.projectId) {
+      const events = (await this.opts.learner.events(input.learnerId)).filter((e) => input.session ? e.sessionKey === input.session.key : !!e.projectId && this.opts.index.getProject(e.projectId)?.id === input.projectId);
+      const scoped = reduceProfile(events, input.learnerId);
+      for (const entry of entries) entry.scope = { kind: input.session ? 'session' : 'project', state: scoped.concepts[entry.conceptId] ?? unknownConcept(entry.conceptId) };
+    }
+    const projectIds = [...new Set(this.sessionsOf(input.username, undefined, input.accountIds).map((s) => s.projectId))];
     return {
       profile,
       entries,

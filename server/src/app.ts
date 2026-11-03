@@ -17,6 +17,8 @@ import { settingsRoutes } from './routes/settings';
 import { rescanRoute, sourcesRoutes } from './routes/sources';
 import { staticRoutes } from './routes/static';
 import { wikiRoutes } from './routes/wiki';
+import { membersRoutes, startRoutes } from './routes/start';
+import { CloudRuntime } from './cloud/runtime';
 
 export interface CreateAppOptions {
   deps: AppDeps;
@@ -38,9 +40,36 @@ export function createApp({ deps, distDir, quiet = false }: CreateAppOptions): H
     return c.json({ error: { code: 'internal', message: err.message || '서버 오류' } }, 500);
   });
 
+  const runtime = new CloudRuntime(deps);
   const api = new Hono<AppEnv>();
-  api.route('/auth', authRoutes(deps));
+  api.use('*', async (c, next) => { c.header('Cache-Control', 'no-store'); return next(); });
+  api.route('/auth', authRoutes(deps, runtime));
   api.use('*', authGuard(deps.auth));
+  const personalApps = new WeakMap<AppDeps, Hono<AppEnv>>();
+  api.all('*', (c) => {
+    const personal = runtime.forUser(c.get('user'));
+    let scoped = personalApps.get(personal);
+    if (!scoped) {
+      scoped = new Hono<AppEnv>();
+      scoped.onError((err) => { throw err; });
+      scoped.use('*', async (ctx, next) => { ctx.set('user', ctx.env.authUser!); return next(); });
+      scoped.route('/api', protectedRoutes(personal));
+      personalApps.set(personal, scoped);
+    }
+    return scoped.fetch(c.req.raw, { authUser: c.get('user') });
+  });
+  app.route('/api', api);
+  app.notFound((c) => (c.req.path.startsWith('/api/') ? c.json({ error: { code: 'not_found', message: '없는 API 경로입니다' } }, 404) : c.text('Not Found', 404)));
+
+  if (distDir) {
+    const s = staticRoutes(distDir);
+    if (s) app.route('/', s);
+  }
+  return app;
+}
+
+function protectedRoutes(deps: AppDeps): Hono<AppEnv> {
+  const api = new Hono<AppEnv>();
   api.get('/health', (c) => {
     const body: HealthResponse = { ok: true, version: deps.version, home: deps.paths.home, runningAs: osUser(), scanMode: deps.store.get().scan.mode };
     return c.json(body);
@@ -57,12 +86,8 @@ export function createApp({ deps, distDir, quiet = false }: CreateAppOptions): H
   api.route('/sessions', wikiRoutes(deps));
   api.route('/settings', settingsRoutes(deps));
   api.route('/jobs', jobsRoutes(deps));
-  app.route('/api', api);
-  app.notFound((c) => (c.req.path.startsWith('/api/') ? c.json({ error: { code: 'not_found', message: '없는 API 경로입니다' } }, 404) : c.text('Not Found', 404)));
-
-  if (distDir) {
-    const s = staticRoutes(distDir);
-    if (s) app.route('/', s);
-  }
-  return app;
+  api.route('/me', startRoutes(deps));
+  api.route('/members', membersRoutes(deps));
+  api.notFound((c) => c.json({ error: { code: 'not_found', message: '없는 API 경로입니다' } }, 404));
+  return api;
 }

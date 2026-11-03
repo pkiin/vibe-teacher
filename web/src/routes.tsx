@@ -5,11 +5,15 @@ import { ProjectsPage } from './pages/ProjectsPage';
 import { SessionPage } from './pages/SessionPage';
 import { SessionsPage } from './pages/SessionsPage';
 import { SourcesPage } from './pages/SourcesPage';
+import { StartPage } from './pages/StartPage';
+import { MembersPage } from './pages/MembersPage';
 
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<AccountsPage />} />
+      <Route path="/" element={<StartPage />} />
+      <Route path="/accounts" element={<AccountsPage />} />
+      <Route path="/members" element={<MembersPage />} />
       <Route path="/accounts/:accountId" element={<ProjectsPage />} />
       <Route path="/sources" element={<SourcesPage />} />
       <Route path="/knowledge" element={<KnowledgePage />} />

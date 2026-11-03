@@ -14,7 +14,7 @@ const PROVIDERS: Provider[] = ['claude-code', 'codex', 'copilot-cli', 'copilot-v
 
 export function SourcesPage() {
   const { me, refresh: refreshAuth } = useAuth();
-  const isAdmin = !!me?.isAdmin;
+  const isAdmin = !!me?.isAdmin || !!me?.canManageInstallation;
   const sources = useApi<SourceStatus[]>(isAdmin ? '/api/sources' : null);
   const accounts = useApi<Account[]>(isAdmin ? '/api/accounts' : null);
   const settings = useApi<SettingsResponse>(isAdmin ? '/api/settings' : null);
@@ -279,7 +279,7 @@ export function SourcesPage() {
         </div>
       </section>
 
-      <section className="section card">
+      {me?.mode !== 'supabase' && <section className="section card">
         <h2>{ko.login.authTitle}</h2>
         <Notice kind="warn">{ko.login.warnSelfLock}</Notice>
         <div className="form-grid">
@@ -313,7 +313,7 @@ export function SourcesPage() {
             </button>
           </div>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

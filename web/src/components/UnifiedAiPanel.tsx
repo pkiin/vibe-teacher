@@ -139,7 +139,7 @@ export function UnifiedAiPanel({
       </div>
       <p className="small">{ko.aiUnified.intro}</p>
       {reader.available && <ReaderLevelLine />}
-      {me?.isAdmin && !busy && <LlmQuickSwitch />}
+      {(me?.isAdmin || me?.canManageInstallation) && !busy && <LlmQuickSwitch />}
       {!available && <Notice kind="warn">{ko.aiUnified.ruleFallback(reason ?? '…')}</Notice>}
       {available && me && !me.autoText && !hasResult && <div className="small muted">{ko.aiUnified.autoOff}</div>}
       {available && !wiki && <div className="small muted">{ko.aiUnified.wikiSkipped}</div>}

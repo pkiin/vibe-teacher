@@ -10,7 +10,7 @@ export function authGuard(auth: AuthService): MiddlewareHandler {
       const mode = auth.mode();
       return c.json(
         {
-          error: { code: 'unauthorized', message: mode === 'home-token' ? '로그인이 필요합니다' : '접근 토큰이 필요합니다' },
+          error: { code: 'unauthorized', message: mode !== 'none' ? '로그인이 필요합니다' : '접근 토큰이 필요합니다' },
           authMode: mode,
         },
         401,

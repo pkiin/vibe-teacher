@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   BuiltSummary,
   ConceptHit,
@@ -27,6 +27,8 @@ import { UnderstandingBadge } from './UnderstandingBadge';
 import { WikiAlertCard } from './WikiAlertCard';
 import { Tabs } from './Tabs';
 import { ConceptBody } from './WikiItemCard';
+import { LearningHistory } from './LearningHistory';
+import { QuestionExamples } from './QuestionExamples';
 
 /** 통합 화면이 도움 패널에 넘기는 재료 */
 export interface UnderstandData {
@@ -98,10 +100,16 @@ function ExplainView({ data }: { data: UnderstandData }) {
   const { focus } = f;
   const [depth, setDepth] = useState<ExplanationDepth>('D1');
   const [example, setExample] = useState(false);
+  const [preferenceError, setPreferenceError] = useState(false);
+  const currentState = data.profile?.concepts[focus.id ?? ''];
   useEffect(() => {
-    setDepth('D1');
-    setExample(false);
-  }, [focus.kind, focus.id]);
+    setDepth(currentState?.teaching?.depth ?? 'D1');
+    setExample(currentState?.teaching?.examples ?? false);
+  }, [focus.kind, focus.id, currentState?.teaching?.depth, currentState?.teaching?.examples]);
+  const choose = (d: ExplanationDepth, examples: boolean) => {
+    setDepth(d); setExample(examples); setPreferenceError(false);
+    if (focus.kind === 'concept' && focus.id) void data.learner.preference(focus.id, d, examples).catch(() => setPreferenceError(true));
+  };
   const snap = data.wiki?.snapshot;
 
   if (focus.kind === 'concept' && focus.id) {
@@ -120,17 +128,19 @@ function ExplainView({ data }: { data: UnderstandData }) {
           <>
             <div className="help-depth" role="group" aria-label={ko.help.depth}>
               {DEPTHS.map((d) => (
-                <button key={d} type="button" className={`btn btn-small ${depth === d ? 'btn-primary' : ''}`} aria-pressed={depth === d} onClick={() => setDepth(d)}>
+                <button key={d} type="button" className={`btn btn-small ${depth === d ? 'btn-primary' : ''}`} aria-pressed={depth === d} onClick={() => choose(d, example)}>
                   {ko.wiki.depth[d]}
                 </button>
               ))}
               {concept.example && (
-                <button type="button" className="btn btn-small" aria-pressed={example} onClick={() => setExample((v) => !v)}>
+                <button type="button" className="btn btn-small" aria-pressed={example} onClick={() => choose(depth, !example)}>
                   {ko.wiki.example}
                 </button>
               )}
             </div>
             <ConceptBody concept={concept} depth={depth} showExample={example} />
+            {preferenceError && <Notice kind="warn">{ko.learning.preferenceError}</Notice>}
+            <LearningHistory state={currentState} />
           </>
         ) : (
           <p>{hit?.explanation}</p>
@@ -271,7 +281,7 @@ function ExplainView({ data }: { data: UnderstandData }) {
   );
 }
 
-function AnswerView({ m, data, onFollowUp }: { m: HelpMessage; data: UnderstandData; onFollowUp: (q: string) => void }) {
+function AnswerView({ m, data, onFollowUp, disabled }: { m: HelpMessage; data: UnderstandData; onFollowUp: (q: string) => void; disabled: boolean }) {
   const f = useFocus()!;
   const a = m.answer;
   if (!a) return null;
@@ -283,6 +293,7 @@ function AnswerView({ m, data, onFollowUp }: { m: HelpMessage; data: UnderstandD
           {n}
         </div>
       ))}
+      {!!m.memories?.length && <details className="evidence small"><summary>{ko.help.recalled} ({m.memories.length})</summary><ul>{m.memories.map((memory) => <li key={memory.id}><time dateTime={memory.at}>{new Date(memory.at).toLocaleDateString('ko-KR')}</time> · {memory.text}{memory.sessionKey && <> · <a href={`/sessions/${encodeURIComponent(memory.sessionKey)}?tab=understand`}>{ko.memory.source}</a></>}</li>)}</ul></details>}
       <p>
         <InlineText text={a.answer} />
       </p>
@@ -330,7 +341,7 @@ function AnswerView({ m, data, onFollowUp }: { m: HelpMessage; data: UnderstandD
         <div className="small help-related">
           {ko.help.followUps}:{' '}
           {a.followUps.map((q) => (
-            <button key={q} type="button" className="pill pill-outline focus-chip" onClick={() => onFollowUp(q)}>
+            <button key={q} type="button" disabled={disabled} className="pill pill-outline focus-chip" onClick={() => onFollowUp(q)}>
               {q}
             </button>
           ))}
@@ -360,7 +371,7 @@ function PendingAnswer({ m, data, onDone }: { m: HelpMessage; data: UnderstandDa
   );
 }
 
-function AskView({ data }: { data: UnderstandData }) {
+export function AskView({ data }: { data: UnderstandData }) {
   const f = useFocus()!;
   const { focus } = f;
   const key = `${focus.kind}:${focus.id ?? ''}`;
@@ -368,30 +379,39 @@ function AskView({ data }: { data: UnderstandData }) {
   const [error, setError] = useState<Error | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
   const draft = drafts[key] ?? '';
   const setDraft = useCallback((v: string) => setDrafts((d) => ({ ...d, [key]: v })), [key]);
 
   useEffect(() => {
+    let active = true;
+    setThreads(null); setError(null);
     api<HelpThreadsResponse>(`/api/projects/${data.projectId}/help?sessionKey=${encodeURIComponent(data.sessionKey)}`)
-      .then(setThreads)
-      .catch((e: Error) => setError(e));
+      .then((result) => { if (active) setThreads(result); })
+      .catch((e: Error) => { if (active) setError(e); });
+    return () => { active = false; };
   }, [data.projectId, data.sessionKey]);
 
   const replace = (m: HelpMessage) => setThreads((t) => (t ? { ...t, messages: t.messages.map((x) => (x.id === m.id ? m : x)) } : t));
-  const send = async (question: string) => {
-    if (!question.trim()) return;
+  const pending = threads?.messages.some((m) => m.status === 'pending') ?? false;
+  const send = async (question: string, threadId?: string, targetFocus: HelpFocus = focus) => {
+    if (!question.trim() || sending.current || pending || !threads) return;
+    sending.current = true;
     setBusy(true);
     setError(null);
-    const concept = conceptOf(focus, data);
+    const concept = conceptOf(targetFocus, data);
     if (concept) f.markHelped([concept]);
     try {
-      const res = await apiPost<{ message: HelpMessage }>(`/api/projects/${data.projectId}/help`, { sessionKey: data.sessionKey, requestId: requestId(), question, focus });
+      const activeThread = threadId ?? [...threads.messages].reverse().find((m) => m.focus.kind === targetFocus.kind && m.focus.id === targetFocus.id)?.threadId;
+      const res = await apiPost<{ message: HelpMessage; profile: LearnerProfile }>(`/api/projects/${data.projectId}/help`, { sessionKey: data.sessionKey, requestId: requestId(), question, focus: targetFocus, ...(activeThread ? { threadId: activeThread } : {}) });
       setThreads((t) => (t ? { ...t, messages: [...t.messages, res.message] } : t));
       if (res.message.answer?.conceptIds.length) f.markHelped(res.message.answer.conceptIds);
+      if (res.profile.revision >= data.learner.revision()) data.learner.profileChanged(res.profile);
       setDraft('');
     } catch (e) {
       setError(e as Error);
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   };
@@ -409,7 +429,7 @@ function AskView({ data }: { data: UnderstandData }) {
               <strong>Q.</strong> {m.question}
             </div>
             {m.status === 'pending' && <PendingAnswer m={m} data={data} onDone={replace} />}
-            {m.status === 'done' && <AnswerView m={m} data={data} onFollowUp={setDraft} />}
+            {m.status === 'done' && <AnswerView m={m} data={data} disabled={busy || pending || !threads?.llm.available} onFollowUp={(q) => void send(q, m.threadId, m.focus)} />}
             {(m.status === 'error' || m.status === 'cancelled') && (
               <div className="small">
                 <span className="llm-choice-reason">{m.error?.message ?? m.status}</span>{' '}
@@ -421,6 +441,7 @@ function AskView({ data }: { data: UnderstandData }) {
           </div>
         ))}
       </div>
+      <QuestionExamples label={label} kind={focus.kind} disabled={busy || pending || !threads || !threads.llm.available} onAsk={(q) => void send(q)} />
       {error && <ErrorBox error={error} />}
       <textarea
         className="help-input"
@@ -435,7 +456,7 @@ function AskView({ data }: { data: UnderstandData }) {
         aria-label={ko.help.askPlaceholder(label)}
       />
       <div className="quiz-actions">
-        <button className="btn btn-primary btn-small" disabled={busy || !draft.trim()} onClick={() => send(draft)}>
+        <button className="btn btn-primary btn-small" disabled={busy || pending || !threads || !threads.llm.available || !draft.trim()} onClick={() => send(draft)}>
           {ko.help.ask}
         </button>
       </div>

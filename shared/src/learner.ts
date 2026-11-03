@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import type { TextGenerator } from './api';
 import type { WikiConcept } from './wiki';
+import type { ExplanationDepth } from './wiki';
 
 export const LEARNER_SCHEMA_VERSION = 1;
 
@@ -50,6 +51,20 @@ export interface CorrectionEvent extends LearnerEventBase {
   note?: string;
 }
 
+/** 질문은 설명 수요이며 숙련 판정에는 쓰지 않는다. 서버가 도움 기록에서 만든다. */
+export interface QuestionEvent extends LearnerEventBase {
+  kind: 'question';
+  conceptIds: string[];
+  messageId: string;
+}
+
+export interface PreferenceEvent extends LearnerEventBase {
+  kind: 'preference';
+  conceptId: string;
+  depth: ExplanationDepth;
+  examples: boolean;
+}
+
 export interface ResponseEvent extends LearnerEventBase {
   kind: 'response';
   responseId: string;
@@ -75,7 +90,7 @@ export interface ResponseEvent extends LearnerEventBase {
   gradeNote?: string;
 }
 
-export type LearnerEvent = SelfReportEvent | ExposureEvent | CorrectionEvent | ResponseEvent;
+export type LearnerEvent = SelfReportEvent | ExposureEvent | CorrectionEvent | ResponseEvent | QuestionEvent | PreferenceEvent;
 
 export interface ConceptEvidenceCounts {
   correct: number;
@@ -84,6 +99,28 @@ export interface ConceptEvidenceCounts {
   skipped: number;
   practice: number;
   exposure: number;
+  practiceCorrect?: number;
+  practiceIncorrect?: number;
+  questions?: number;
+}
+
+export interface TeachingPlan {
+  depth: ExplanationDepth;
+  examples: boolean;
+  reason: 'preference' | 'repeated_questions' | 'review' | 'self_report' | 'demonstrated' | 'practice' | 'default';
+  evidenceIds: string[];
+}
+
+export interface LearningActivity {
+  id: string;
+  at: string;
+  kind: LearnerEvent['kind'];
+  projectId?: string;
+  sessionKey?: string;
+  grade?: Grade;
+  status?: ResponseStatus;
+  practice?: boolean;
+  selfReport?: SelfReport;
 }
 
 export interface LearnerConceptState {
@@ -100,6 +137,11 @@ export interface LearnerConceptState {
   counts: ConceptEvidenceCounts;
   /** 사용자가 이 추정에 이의를 제기함 */
   disputed: boolean;
+  /** 연습 성과와 설명 방침은 검토된 이해 상태와 구분한다. */
+  teaching?: TeachingPlan;
+  activity?: LearningActivity[];
+  preference?: { depth: ExplanationDepth; examples: boolean; eventId: string };
+  progress?: 'practicing' | 'improving' | 'revisit';
 }
 
 export interface LearnerProfile {
@@ -109,6 +151,8 @@ export interface LearnerProfile {
   /** 예전 프로젝트별 프로필과의 호환용. 지금은 사용자 전체 프로필이라 비어 있다 */
   projectId?: string;
   revision: number;
+  /** 숙련 상태를 바꾸지 않는 질문·열람도 포함한 기록 버전 */
+  activityRevision?: number;
   updatedAt?: string;
   policyVersion: string;
   concepts: Record<string, LearnerConceptState>;
@@ -128,6 +172,7 @@ const ConceptIdSchema = z.string().regex(/^[a-z0-9-]+$/).max(64);
 export const FeedbackEventSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('self_report'), conceptId: ConceptIdSchema, value: z.enum(['known', 'unsure', 'unfamiliar']) }),
   z.object({ kind: z.literal('correction'), conceptId: ConceptIdSchema, note: z.string().max(500).optional() }),
+  z.object({ kind: z.literal('preference'), conceptId: ConceptIdSchema, depth: z.enum(['D0', 'D1', 'D2', 'D3']), examples: z.boolean() }),
   z.object({
     kind: z.literal('exposure'),
     action: z.enum(['open_item', 'whats_this', 'deeper', 'simpler', 'example', 'evidence']),
@@ -187,6 +232,8 @@ export interface KnowledgeEntry {
   /** check: 먼저 확인할 것·위키 항목과 연결됨, background: 감지만 됨 */
   priority: 'check' | 'background';
   lastSeenAt?: string;
+  /** 개념 상태는 사용자 전체, 활동 내역은 선택한 범위도 따로 보여 준다. */
+  scope?: { kind: 'project' | 'session'; state: LearnerConceptState };
 }
 
 export interface KnowledgeWikiResponse {

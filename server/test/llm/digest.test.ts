@@ -16,6 +16,12 @@ describe('digest', () => {
     expect(maskSecrets('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.abcdefghijklmnop')).toBe('***');
   });
 
+  it('masks Supabase secret keys and PostgreSQL URL passwords in free text', () => {
+    expect(maskSecrets('키 sb_secret_abcdefghijklmnopqrstuvwxyz123456')).toBe('키 ***');
+    expect(maskSecrets('postgresql://tester:my%40private-password@db.example.com/postgres')).toBe('postgresql://tester:***@db.example.com/postgres');
+    expect(maskSecrets('postgres://tester:another-password@127.0.0.1/db')).toBe('postgres://tester:***@127.0.0.1/db');
+  });
+
   it('includes user messages, facts and timeline within budget and never raw tool output', async () => {
     const account = { id: 'a', username: 'tester', homePath: '/home/tester', isCurrent: false, readable: 'ok' as const, sourceCount: 0, sessionCount: 0, projectCount: 0 };
     const source = { id: 's', accountId: 'a', provider: 'claude-code' as const, path: path.dirname(FIX), label: 'x', kind: 'custom' as const, enabled: true };

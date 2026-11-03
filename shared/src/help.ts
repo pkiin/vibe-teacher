@@ -1,9 +1,11 @@
 /**
- * 도움 패널의 질문·답변 (plan §13.3). 질문은 개인 기록으로만 남고, 질문했다는 사실로 이해 상태를 바꾸지 않는다.
+ * 도움 패널의 질문·답변 (plan §13.3). 질문은 개인 학습 기록에 연결하며 설명 방침에 활용한다.
+ * 질문했다는 사실로 숙련 상태를 바꾸지 않는다.
  * 프로젝트에 관한 답은 검증된 주장(claim)을 인용해야 하며, 일반 배경 설명과 구분한다.
  */
 import { z } from 'zod';
 import type { BaseJobStatus, LlmProviderId } from './api';
+import type { MemoryRecord } from './memory';
 
 export type HelpFocusKind = 'session' | 'concept' | 'item' | 'finding' | 'file';
 
@@ -54,6 +56,8 @@ export interface HelpMessage {
   notices: string[];
   error?: { kind: string; message: string };
   jobId?: string;
+  /** 답변에 실제로 제공한 과거 활동 (숙련 판정·프로젝트 사실과 분리) */
+  memories?: MemoryRecord[];
 }
 
 export interface HelpThreadsResponse {

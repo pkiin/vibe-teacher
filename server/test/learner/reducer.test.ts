@@ -33,7 +33,7 @@ const resp = (over: Partial<ResponseEvent> = {}): ResponseEvent => ({
 const reduce = (events: LearnerEvent[]) => reduceProfile(events, 'l_1', 'p');
 const auth = (events: LearnerEvent[]) => conceptState(reduce(events), 'auth');
 
-describe('learner reducer (policy-0.1)', () => {
+describe('learner reducer (policy-0.2)', () => {
   it('defaults to unknown with no evidence (T01)', () => {
     const p = reduce([]);
     expect(p.revision).toBe(0);
@@ -111,6 +111,33 @@ describe('learner reducer (policy-0.1)', () => {
   it('counts only state events toward the profile revision', () => {
     const p = reduce([{ ...base(), kind: 'exposure', action: 'open_item' }, { ...base(), kind: 'self_report', conceptId: 'auth', value: 'unsure' }, resp()]);
     expect(p.revision).toBe(2);
+  });
+
+  it('retains candidate outcomes as learning progress and adapts after difficulty without promoting mastery', () => {
+    const correct = resp({ questionReview: 'candidate' });
+    const incorrect = resp({ questionId: 'q-new', questionReview: 'candidate', grade: 'incorrect' });
+    const s = auth([correct, incorrect]);
+    expect(s.state).toBe('unknown');
+    expect(s.counts).toMatchObject({ practice: 2, practiceCorrect: 1, practiceIncorrect: 1, correct: 0, incorrect: 0 });
+    expect(s.teaching).toMatchObject({ depth: 'D2', examples: true, reason: 'review' });
+    expect(s.activity?.map((a) => a.id)).toEqual([correct.id, incorrect.id]);
+    const recovered = auth([correct, incorrect, resp({ questionId: 'q-newer', questionReview: 'candidate' })]);
+    expect(recovered.progress).toBe('improving');
+    expect(recovered.state).toBe('unknown');
+  });
+
+  it('uses repeated questions to change teaching, retains mastery and honors an explicit preference', () => {
+    const events: LearnerEvent[] = [resp(), resp({ questionId: 'q-apply', format: 'single_choice', questionKind: 'application' }),
+      { ...base(), kind: 'question', conceptIds: ['auth'], messageId: 'h1' },
+      { ...base(), kind: 'question', conceptIds: ['auth'], messageId: 'h2' }];
+    const before = reduce(events);
+    expect(before.concepts.auth?.state).toBe('demonstrated');
+    expect(before.concepts.auth?.counts.questions).toBe(2);
+    expect(before.concepts.auth?.teaching?.reason).toBe('repeated_questions');
+    expect(before.revision).toBe(2);
+    expect(before.activityRevision).toBe(4);
+    events.push({ ...base(), kind: 'preference', conceptId: 'auth', depth: 'D3', examples: true });
+    expect(reduce(events).concepts.auth?.teaching).toMatchObject({ depth: 'D3', reason: 'preference' });
   });
 });
 

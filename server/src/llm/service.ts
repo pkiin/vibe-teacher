@@ -9,6 +9,8 @@ import { SYSTEM_PROMPT, buildUserPrompt } from './prompts';
 import { withReader } from './reader';
 import { ModelCatalog } from './models';
 import { modelFor, probeProviders, resolveLlm, type ResolvedLlm } from './select';
+import path from 'node:path';
+import type { WikiStorage } from '../storage/store';
 import type { LlmProvider } from './types';
 
 export interface EnrichServiceOptions {
@@ -20,6 +22,9 @@ export interface EnrichServiceOptions {
   /** 테스트용 네트워크 주입 (OpenRouter·OpenAI) */
   fetch?: typeof fetch;
   buildBuilt?: (session: NormalizedSession) => BuiltSummary;
+  storage?: WikiStorage;
+  /** 공용 서버는 로그인한 회원에게 연결된 API 키로만 실행한다. */
+  requireUserKey?: boolean;
 }
 
 export class EnrichService {
@@ -34,6 +39,10 @@ export class EnrichService {
 
   private get deps() {
     return { env: this.opts.env ?? process.env, catalog: this.models, fetch: this.opts.fetch };
+  }
+
+  get providerEnvOverride(): string | undefined {
+    return (this.opts.env ?? process.env).VIBE_TEACHER_LLM_PROVIDER?.trim() || undefined;
   }
 
   invalidate(): void {
@@ -57,6 +66,9 @@ export class EnrichService {
     if (this.opts.providerOverride !== undefined) {
       const p = this.opts.providerOverride;
       return { provider: p, status: { resolvedProvider: p?.id ?? 'none', available: !!p, reason: p ? undefined : '테스트: 제공자 없음' } };
+    }
+    if (this.opts.requireUserKey && !this.opts.env?.OPENROUTER_API_KEY?.trim() && this.opts.env?.VIBE_TEACHER_LLM_PROVIDER !== 'none') {
+      return { provider: null, status: { resolvedProvider: 'none', available: false, reason: '이 계정에 연결된 OpenRouter API 키가 없습니다. 관리자에게 키 등록을 요청하세요' } };
     }
     if (this.resolved && Date.now() - this.resolved.at < 60_000) return this.resolved.value;
     const value = await resolveLlm(this.opts.store.get().llm, this.opts.paths.llmCwd, this.deps);
@@ -83,7 +95,7 @@ export class EnrichService {
     const { status } = await this.resolve();
     const levels = level === 'any' ? READER_LEVELS : [level];
     for (const k of this.candidateKeys(session, status.resolvedProvider, levels)) {
-      const rec = await readEnrichment(this.opts.paths.enrichCacheDir, k);
+      const rec = this.opts.storage ? await this.opts.storage.readJson<EnrichmentRecord>(path.join(this.opts.storage.root, 'enrich', `${k}.json`)) : await readEnrichment(this.opts.paths.enrichCacheDir, k);
       if (rec) return rec;
     }
     return null;
@@ -152,7 +164,8 @@ export class EnrichService {
         })) },
       };
       const actualKey = enrichCacheKey(session, res.provider, modelFor(res.provider, cfg), ENRICH_PROMPT_VERSION, level);
-      await writeEnrichment(this.opts.paths.enrichCacheDir, actualKey, record);
+      if (this.opts.storage) await this.opts.storage.writeJson(path.join(this.opts.storage.root, 'enrich', `${actualKey}.json`), record);
+      else await writeEnrichment(this.opts.paths.enrichCacheDir, actualKey, record);
       return record;
     });
     return { status: job.state === 'running' ? 'running' : 'queued', jobId: job.id };

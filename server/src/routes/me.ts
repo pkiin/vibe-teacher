@@ -8,9 +8,10 @@ import { KnowledgeService } from '../learner/knowledge-service';
 import { KnowledgeTextService } from '../learner/knowledge-text';
 import { learnerIdFor, type EventDraft } from '../learner/service';
 import { WikiStorage } from '../storage/store';
-import { assertAccount, currentUser, notFound, parseBody, requireJson, sessionSummaryFor, type AppDeps, type AppEnv } from './deps';
+import { assertAccount, currentUser, HttpError, notFound, parseBody, requireJson, sessionSummaryFor, type AppDeps, type AppEnv } from './deps';
 
 const ScopeSchema = z.object({ projectId: z.string().max(200).optional(), sessionKey: z.string().max(2000).optional(), force: z.boolean().default(false) });
+const MemorySearchSchema = z.object({ query: z.string().trim().max(2000).default(''), projectId: z.string().max(200).optional(), conceptId: z.string().max(64).optional() });
 
 /**
  * /api/me — 로그인한 사용자 본인의 지식 위키와 이해 정보 (프로젝트를 가리지 않음).
@@ -19,8 +20,9 @@ const ScopeSchema = z.object({ projectId: z.string().max(200).optional(), sessio
 export function meRoutes(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
   const knowledge = new KnowledgeService({ index: deps.index, analysis: deps.analysis, wiki: deps.wiki, learner: deps.learner, enrich: deps.enrich });
-  const texts = new KnowledgeTextService({ storage: new WikiStorage(deps.paths.home), store: deps.store });
+  const texts = new KnowledgeTextService({ storage: deps.storage ?? new WikiStorage(deps.paths.home), store: deps.store });
   const me = (c: Context<AppEnv>) => learnerIdFor(currentUser(c).username);
+  const accountScope = (c: Context<AppEnv>) => currentUser(c).cloud ? { accountIds: new Set(deps.index.getAccounts().filter((a) => deps.auth.canAccessAccount(currentUser(c), a.id)).map((a) => a.id)) } : {};
   const gate = (c: Context<AppEnv>) => textGate({ store: deps.store, resolveProvider: () => deps.enrich.resolveProvider(), allowed: deps.auth.canEnrich(currentUser(c)) });
 
   /** 범위(전체·프로젝트·세션)를 검사하고 지식 위키 항목을 모은 뒤, 저장된 AI 문장을 입힌다 */
@@ -35,7 +37,7 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
       projectId = p.id;
     }
     const session = sessionKey ? await sessionSummaryFor(c, deps, sessionKey) : undefined;
-    const base = await knowledge.wiki({ username: currentUser(c).username, learnerId: me(c), ...(projectId ? { projectId } : {}), ...(session ? { session } : {}) });
+    const base = await knowledge.wiki({ username: currentUser(c).username, learnerId: me(c), ...accountScope(c), ...(projectId ? { projectId } : {}), ...(session ? { session } : {}) });
     const level = await deps.prefs.level(me(c));
     const applied = await texts.apply(me(c), base.entries, level);
     return { base, level, ...applied };
@@ -82,6 +84,37 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
 
   app.get('/profile', async (c) => c.json({ profile: await deps.learner.profile(me(c)) }));
 
+  const memoryScope = async (c: Context<AppEnv>, projectId?: string) => {
+    await deps.index.ensureFresh();
+    let canonical: string | undefined;
+    if (projectId) {
+      const p = deps.index.getProject(projectId);
+      if (!p) throw notFound('프로젝트');
+      assertAccount(c, deps, p.accountId, '프로젝트');
+      canonical = p.id;
+    }
+    const allowedProjectIds = deps.index.getProjects().filter((p) => deps.auth.canAccessAccount(currentUser(c), p.accountId)).map((p) => p.id);
+    return { ...(canonical ? { projectId: canonical } : {}), allowedProjectIds };
+  };
+  // GET은 로컬 원장만 읽는다. 외부 검색·색인 갱신은 명시적 POST로 분리한다.
+  app.get('/memory', async (c) => {
+    const result = await deps.memory.search(me(c), await memoryScope(c, c.req.query('projectId')), { query: c.req.query('q') ?? '', limit: 12 });
+    return c.json({ ...result, canSync: result.canSync && deps.auth.canEnrich(currentUser(c)).ok });
+  });
+  app.post('/memory/search', requireJson, async (c) => {
+    const req = await parseBody(c, MemorySearchSchema);
+    const scope = await memoryScope(c, req.projectId);
+    const allowed = deps.auth.canEnrich(currentUser(c)).ok;
+    const result = await deps.memory.search(me(c), scope, { query: req.query, ...(req.conceptId ? { conceptIds: [req.conceptId] } : {}), limit: 12, remote: allowed });
+    return c.json({ ...result, canSync: result.canSync && allowed });
+  });
+  app.post('/memory/sync', requireJson, async (c) => {
+    const req = await parseBody(c, MemorySearchSchema);
+    const allowed = deps.auth.canEnrich(currentUser(c));
+    if (!allowed.ok) throw new HttpError(403, 'forbidden', allowed.reason ?? '외부 기억 인덱스를 갱신할 권한이 없습니다');
+    return c.json(await deps.memory.sync(me(c), await memoryScope(c, req.projectId)));
+  });
+
   // 읽는 사람 수준 — AI 문장의 단어와 설명 깊이. 이해 증거가 아니라 설정이다
   app.get('/prefs', async (c) => c.json(await deps.prefs.get(me(c))));
   app.put('/prefs', requireJson, async (c) => {
@@ -91,7 +124,17 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
 
   app.post('/feedback', requireJson, async (c) => {
     const req = await parseBody(c, FeedbackRequestSchema);
-    const { projectId } = await sessionContext(c, req.sessionKey);
+    const { projectId, snapshot } = await sessionContext(c, req.sessionKey);
+    if (snapshot) await deps.learner.rememberConcepts(me(c), snapshot.concepts ?? [], projectId && req.sessionKey ? { projectId, sessionKey: req.sessionKey } : undefined);
+    else if ('conceptId' in req.event && req.event.conceptId) {
+      const base = await knowledge.wiki({ username: currentUser(c).username, learnerId: me(c), ...accountScope(c) });
+      const concept = base.concepts?.[req.event.conceptId];
+      if (concept) {
+        const sources = base.entries.find((e) => e.conceptId === concept.id)?.sources ?? [];
+        await deps.learner.rememberConcepts(me(c), [concept]);
+        for (const source of sources) await deps.learner.rememberConcepts(me(c), [concept], { projectId: source.projectId, sessionKey: source.sessionKey });
+      }
+    }
     const draft = {
       ...req.event,
       id: req.requestId ? `fb_${req.requestId}` : `fb_${randomUUID()}`,
@@ -100,6 +143,7 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
       ...(req.sessionKey ? { sessionKey: req.sessionKey } : {}),
     } as EventDraft;
     const { profile, event } = await deps.learner.record(me(c), req.baseRevision, draft);
+    if (deps.auth.canEnrich(currentUser(c)).ok) deps.memory.scheduleSync(me(c), await memoryScope(c, projectId));
     return c.json({ profile, event });
   });
 
@@ -109,12 +153,15 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
     const allowed = deps.auth.canEnrich(currentUser(c));
     if (!allowed.ok) throw Object.assign(new Error(allowed.reason ?? 'AI 사용 권한이 없습니다'), { status: 403, code: 'forbidden' });
     const { base, level } = await knowledgeFor(c, req.sessionKey ? { sessionKey: req.sessionKey } : {});
+    await deps.learner.rememberConcepts(me(c), Object.values(base.concepts ?? {}), projectId && req.sessionKey ? { projectId, sessionKey: req.sessionKey } : undefined);
     return c.json(await deps.assessments.start(me(c), projectId, req, snapshot, new Map(Object.entries(base.concepts ?? {})), level));
   });
 
   app.post('/assessments/:assessmentId/responses', requireJson, async (c) => {
     const body = await parseBody(c, AssessmentResponseRequestSchema);
-    return c.json(await deps.assessments.respond(me(c), undefined, c.req.param('assessmentId'), body));
+    const result = await deps.assessments.respond(me(c), undefined, c.req.param('assessmentId'), body);
+    if (deps.auth.canEnrich(currentUser(c)).ok) deps.memory.scheduleSync(me(c), await memoryScope(c));
+    return c.json(result);
   });
 
   return app;

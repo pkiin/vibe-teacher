@@ -41,7 +41,7 @@ export function helpRoutes(deps: AppDeps): Hono<AppEnv> {
     const cached = await deps.enrich.getCached(session, await deps.prefs.level(me(c)));
     const hits = cached ? deps.enrich.mergeConcepts([], cached) : concepts;
     const message = await deps.help.ask({ learnerId: me(c), projectId: p.id, session, built, hits, req, allowed: deps.auth.canEnrich(currentUser(c)), level: await deps.prefs.level(me(c)) });
-    return c.json({ message }, message.status === 'pending' ? 202 : 200);
+    return c.json({ message, profile: await deps.learner.profile(me(c)) }, message.status === 'pending' ? 202 : 200);
   });
 
   app.get('/:id/help/jobs/:jobId', async (c) => {

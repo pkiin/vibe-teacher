@@ -43,21 +43,25 @@ export function Layout({ children }: { children: ReactNode }) {
             </select>
           )}
           <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
+            {ko.start.nav}
+          </NavLink>
+          <NavLink to="/accounts" className={({ isActive }) => (isActive ? 'active' : '')}>
             {ko.nav.accounts}
           </NavLink>
           <NavLink to="/knowledge" className={({ isActive }) => (isActive ? 'active' : '')}>
             {ko.knowledge.nav}
           </NavLink>
-          {isAdmin && (
+          {(isAdmin || me?.canManageInstallation) && (
             <NavLink to="/sources" className={({ isActive }) => (isActive ? 'active' : '')}>
               {ko.nav.sources}
             </NavLink>
           )}
-          {me?.mode === 'home-token' && me.authenticated && (
+          {me?.mode === 'supabase' && isAdmin && <NavLink to="/members">{ko.members.nav}</NavLink>}
+          {me?.mode !== 'none' && me?.authenticated && (
             <span className="user-chip">
-              <span className="mono">{me.username}</span>
+              <span className="mono">{me.email ?? me.username}</span>
               {isAdmin && <span className="pill pill-blue">{ko.login.admin}</span>}
-              <button className="link" onClick={() => void logout()}>
+              <button className="link" onClick={() => void logout().catch(() => {})}>
                 {ko.login.logout}
               </button>
             </span>
@@ -82,7 +86,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       )}
       <main className="content" id="main-content" tabIndex={-1}>
-        {canQuery && me?.reader && !me.reader.chosen && <ReaderLevelSetup />}
+        {location.pathname !== '/' && canQuery && me?.reader && !me.reader.chosen && <ReaderLevelSetup />}
         {children}
       </main>
     </div>
