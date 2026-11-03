@@ -571,6 +571,19 @@ summary::marker { color: var(--muted); }
 .memory-results li { margin: .8rem 0; }
 .memory-results p { white-space: pre-wrap; margin: .25rem 0; overflow-wrap: anywhere; }
 /* 시작 안내와 이메일 로그인 */
+.email-confirmation { min-height: 100dvh; display: grid; place-items: center; padding: 32px 20px; box-sizing: border-box; }
+.email-confirmation-card { width: 100%; max-width: 540px; padding: clamp(24px, 5vw, 44px); box-sizing: border-box; text-align: center; }
+.email-confirmation-steps { list-style: none; padding: 0; margin: 28px 0; display: flex; justify-content: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.email-confirmation-steps li + li::before { content: '›'; margin-right: 12px; color: var(--muted); }
+.email-confirmation-steps .is-complete { color: var(--accent); }
+.email-confirmation-icon { width: 56px; height: 56px; margin: 12px auto 20px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--accent); font-size: 30px; font-weight: 650; }
+.email-confirmation-card.is-confirmed .email-confirmation-icon { background: var(--green-soft); color: var(--green); }
+.email-confirmation-card.is-error .email-confirmation-icon { background: var(--red-soft); color: var(--red); }
+.email-confirmation-card h1 { font-size: clamp(22px, 4vw, 28px); line-height: 1.4; }
+.email-confirmation-card .muted { line-height: 1.8; margin-bottom: 28px; }
+.email-confirmation-card .btn { display: inline-flex; justify-content: center; width: 100%; box-sizing: border-box; }
+.email-resend { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); text-align: left; }
+.email-resend .muted { margin: 10px 0; }
 .welcome-auth { max-width: 1100px; margin: 0 auto; padding: clamp(24px, 6vw, 80px) 24px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 48px; align-items: start; }
 .welcome-intro h1 { font-size: clamp(28px, 3.5vw, 42px); line-height: 1.35; max-width: 15em; margin: 16px 0; }
 .welcome-intro > p { line-height: 1.8; }

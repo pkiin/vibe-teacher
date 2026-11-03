@@ -13,15 +13,45 @@ function fixture(overrides: Partial<CloudConfig> = {}) {
     const body = await c.req.json<{ email: string; password: string }>();
     return c.json(await auth.signup(c, body.email, body.password), 201);
   });
+  app.post('/resend', async (c) => c.json(await auth.resendConfirmation(c, 'user@example.test')));
   const signup = (url: string, origin?: string) => app.request(url, {
     method: 'POST', headers: { 'content-type': 'application/json', ...(origin ? { origin } : {}) },
     body: JSON.stringify({ email: 'user@example.test', password: 'synthetic-password' }),
   });
   const redirectTo = () => new URL(String(request.mock.calls[0]?.[0])).searchParams.get('redirect_to');
-  return { signup, request, redirectTo };
+  const resend = (url: string, origin?: string) => app.request(url, { method: 'POST', headers: { ...(origin ? { origin } : {}) } });
+  return { signup, resend, request, redirectTo };
 }
 
 describe('이메일 인증 후 앱으로 돌아오기', () => {
+  it('재발송도 브라우저의 웹 포트로 돌아오며 비밀번호나 관리자 키를 요구하지 않는다', async () => {
+    const f = fixture();
+    const response = await f.resend('http://127.0.0.1:3318/resend', 'http://localhost:3317');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ requested: true, retryAfterSeconds: 60 });
+    expect(f.redirectTo()).toBe('http://localhost:3317/');
+    const [input, init] = f.request.mock.calls[0]!;
+    expect(new URL(String(input)).pathname).toBe('/auth/v1/resend');
+    expect(JSON.parse(String(init?.body))).toEqual({ type: 'signup', email: 'user@example.test' });
+    expect(new Headers(init?.headers).get('apikey')).toBe('sb_publishable_test');
+    expect(new Headers(init?.headers).has('authorization')).toBe(false);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('공용 서버의 재발송은 설정한 공개 주소를 사용한다', async () => {
+    const f = fixture({ deployment: 'shared', secure: true, publicUrl: 'https://app.example.test/' });
+    expect((await f.resend('http://internal:3318/resend', 'https://other.example.test')).status).toBe(200);
+    expect(f.redirectTo()).toBe('https://app.example.test/');
+  });
+
+  it('재발송에서도 설치 방식과 맞지 않는 주소를 메일 발송 전에 거절한다', async () => {
+    for (const [deployment, origin] of [['local', 'https://other.example.test'], ['shared', 'http://localhost:3317']] as const) {
+      const f = fixture({ deployment });
+      expect((await f.resend('http://127.0.0.1:3318/resend', origin)).status).toBe(422);
+      expect(f.request).not.toHaveBeenCalled();
+    }
+  });
+
   it.each(['http://127.0.0.1:5173', 'http://localhost:3050', 'http://[::1]:5173'])('웹 Origin %s의 호스트와 포트를 개발 프록시 뒤에서도 보존한다', async (origin) => {
     const f = fixture();
     const response = await f.signup('http://127.0.0.1:8787/signup', origin);

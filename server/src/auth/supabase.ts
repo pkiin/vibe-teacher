@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import type { Member, SignupResponse } from '@vibe-teacher/shared';
+import { EMAIL_RESEND_COOLDOWN_SECONDS, type Member, type ResendConfirmationResponse, type SignupResponse } from '@vibe-teacher/shared';
 import { CloudClient, CloudError, normalizeAppUrl, type CloudConfig } from '../cloud/client';
 import { ensureDir } from '../lib/fsx';
 import type { AuthUser } from './service';
@@ -10,7 +10,7 @@ import type { AuthUser } from './service';
 const ACCESS = 'vt_cloud_access';
 const REFRESH = 'vt_cloud_refresh';
 interface Session { access_token: string; refresh_token: string; expires_in: number }
-interface SupabaseUser { id: string; email?: string }
+interface SupabaseUser { id: string; email?: string; email_confirmed_at?: string | null }
 
 export class SupabaseAuth {
   private refreshes = new Map<string, Promise<Session>>();
@@ -29,21 +29,38 @@ export class SupabaseAuth {
     this.save(c, session);
   }
 
-  async signup(c: Context, email: string, password: string): Promise<SignupResponse> {
-    let redirectTo: string;
+  private redirectTo(c: Context): string {
     try {
       // Vite가 API를 프록시해도 사용자가 연 웹 화면의 포트로 돌아간다.
-      redirectTo = normalizeAppUrl(this.config.publicUrl ?? c.req.header('origin') ?? new URL(c.req.url).origin, this.config.deployment);
+      return normalizeAppUrl(this.config.publicUrl ?? c.req.header('origin') ?? new URL(c.req.url).origin, this.config.deployment);
     } catch {
       throw new CloudError(422, 'invalid_app_url', '브라우저에서 여는 앱 주소를 VIBE_TEACHER_PUBLIC_URL에 설정하세요. Supabase의 Redirect URLs에도 같은 주소를 등록하세요');
     }
-    const query = new URLSearchParams({ redirect_to: redirectTo });
+  }
+
+  async signup(c: Context, email: string, password: string): Promise<SignupResponse> {
+    const query = new URLSearchParams({ redirect_to: this.redirectTo(c) });
     const result = await this.client().call<Partial<Session>>(`/auth/v1/signup?${query}`, { method: 'POST', body: JSON.stringify({ email, password }) });
     if (result.access_token && result.refresh_token && result.expires_in) {
       this.save(c, result as Session);
       return { confirmationRequired: false };
     }
     return { confirmationRequired: true };
+  }
+
+  async resendConfirmation(c: Context, email: string): Promise<ResendConfirmationResponse> {
+    const query = new URLSearchParams({ redirect_to: this.redirectTo(c) });
+    await this.client().call(`/auth/v1/resend?${query}`, { method: 'POST', body: JSON.stringify({ type: 'signup', email }) });
+    // 계정 존재 여부·인증 여부·실제 전달 여부를 공개 응답으로 추정하지 않는다.
+    return { requested: true, retryAfterSeconds: EMAIL_RESEND_COOLDOWN_SECONDS };
+  }
+
+  /** 인증 메일의 복귀 토큰을 검증하되 로그인·로컬 소유자 연결은 비밀번호 로그인 뒤에 한다. */
+  async confirmEmail(accessToken: string): Promise<void> {
+    const user = await this.client(accessToken).call<SupabaseUser>('/auth/v1/user');
+    if (!user.id || !user.email || !user.email_confirmed_at || !Number.isFinite(Date.parse(user.email_confirmed_at))) {
+      throw new CloudError(422, 'email_not_confirmed', '이메일 인증 완료 여부를 확인하지 못했습니다');
+    }
   }
 
   /** 최초의 검증된 사용자에게 로컬 설치를 묶는다. 공용 서버에서는 절대 자동 연결하지 않는다. */
@@ -88,7 +105,7 @@ export class SupabaseAuth {
     if (!user || !token) return null;
     const members = await this.client(token).call<Member[]>('/rest/v1/vt_members?select=*&user_id=eq.' + encodeURIComponent(user.id));
     const member = members[0];
-    if (!member || member.user_id !== user.id) throw new CloudError(503, 'member_missing', '가입 정보를 찾을 수 없습니다. 관리자에게 Supabase 마이그레이션 확인을 요청하세요');
+    if (!member || member.user_id !== user.id) throw new CloudError(503, 'member_missing', '이메일 계정은 확인했지만 앱 회원 정보를 찾지 못했습니다. 관리자에게 회원 정보 복원을 요청하세요');
     return {
       username: `sb_${user.id}`, isAdmin: member.is_admin, via: 'cookie',
       cloud: { userId: user.id, email: user.email ?? member.email, accessToken: token, approved: member.approved || member.is_admin, accountIds: member.account_ids, localOwner: await this.localOwner(user.id) },

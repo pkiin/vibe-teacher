@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { ko } from '../i18n/ko';
+import { ResendConfirmation } from '../components/ResendConfirmation';
 
 export function LoginPage() {
   const { me } = useAuth();
@@ -100,6 +101,7 @@ function CloudLoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [requestedAt, setRequestedAt] = useState(0);
   const text = ko.cloudLogin;
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -109,7 +111,7 @@ function CloudLoginPage() {
     try {
       if (joining) {
         const result = await signup(email.trim(), password);
-        if (result.confirmationRequired) { setMessage(text.confirmEmail); setJoining(false); setPassword(''); setConfirm(''); }
+        if (result.confirmationRequired) { setMessage(text.confirmEmail); setRequestedAt(Date.now()); setJoining(false); setPassword(''); setConfirm(''); }
       } else await login(email.trim(), password);
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
@@ -134,6 +136,7 @@ function CloudLoginPage() {
         <button className="btn btn-primary" disabled={busy} type="submit">{busy ? ko.common.loading : joining ? text.signup : text.login}</button>
         <button className="link" type="button" disabled={busy} onClick={() => { setJoining(!joining); setError(''); setMessage(''); setPassword(''); setConfirm(''); }}>{joining ? text.haveAccount : text.needAccount}</button>
       </form>
+      <ResendConfirmation initialEmail={email} requestedAt={requestedAt} />
     </section>
   </main>;
 }

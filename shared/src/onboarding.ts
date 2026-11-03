@@ -25,3 +25,8 @@ export const MemberUpdateSchema = z.object({
 export const EmailLoginSchema = z.object({ email: z.email().max(254), password: z.string().min(1).max(256) });
 export const SignupSchema = EmailLoginSchema.extend({ password: z.string().min(8).max(256) });
 export interface SignupResponse { confirmationRequired: boolean }
+export const EmailConfirmationSchema = z.object({ accessToken: z.string().min(1).max(16_384) });
+export interface EmailConfirmationResponse { confirmed: true }
+export const ResendConfirmationSchema = EmailLoginSchema.pick({ email: true });
+export const EMAIL_RESEND_COOLDOWN_SECONDS = 60;
+export interface ResendConfirmationResponse { requested: true; retryAfterSeconds: number }

@@ -134,9 +134,11 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **"내 메시지"는 사람이 실제로 입력한 것만.** 도구 결과, `<system-reminder>` 같은 주입 메시지, 사이드체인은 `human` 으로 분류하지 않습니다. 분류 규칙을 바꾸면 해당 어댑터의 분류 테스트를 갱신합니다.
 - **Codex 하위 세션과 자동 문맥을 구분한다.** `session_meta.source.subagent` 또는 `parent_thread_id`가 있는 세션은 목록에서 제외하고 직접 읽어도 사용자 입력으로 세지 않습니다. IDE 문맥의 `My request` 본문과 알려진 자동 태그는 `adapters/codex/classify.ts`에서 구분하며, 긴 자동 문맥을 지운 다음 길이를 제한합니다. 코드 블록·인라인 코드의 태그 예시를 지우지 않습니다.
 
-- **메일 인증의 복귀 주소는 앱 주소다.** 가입 요청에 `redirect_to`를 전달한다. `VIBE_TEACHER_PUBLIC_URL` > 요청 Origin > 요청 URL의 origin 순서로 정하며 Vite 프록시 뒤에서도 웹 포트를 보존한다. local은 loopback, shared는 HTTPS만 허용하고 사용자 정보·경로·쿼리·해시가 붙은 주소는 거절한다. Supabase 대시보드의 Redirect URLs 등록은 별도이며 앱 환경변수로 자동 변경하지 않는다. 콜백의 로그인 토큰은 URL 기록에서 지우고 로그·오류·문서에 재출력하지 않는다.
+- **메일 인증의 복귀 주소는 앱 주소다.** 가입 요청에 `redirect_to`를 전달한다. `VIBE_TEACHER_PUBLIC_URL` > 요청 Origin > 요청 URL의 origin 순서로 정하며 Vite 프록시 뒤에서도 웹 포트를 보존한다. local은 loopback, shared는 HTTPS만 허용하고 사용자 정보·경로·쿼리·해시가 붙은 주소는 거절한다. Supabase 대시보드의 Redirect URLs 등록은 별도이며 앱 환경변수로 자동 변경하지 않는다. `web/src/auth/email-confirmation.ts`가 React·라우터 시작 전에 콜백 토큰·외부 오류를 URL에서 제거하고 가입용 access token만 POST 본문으로 보낸다. `/api/auth/email-confirmation`은 `/auth/v1/user`의 `email_confirmed_at`을 확인하고 결과만 반환한다. 콜백에서 로그인 쿠키·로컬 소유자를 만들거나 refresh token을 사용·보관하지 않는다. 확인된 결과만 완료 화면에 표시하며 토큰과 외부 오류 원문을 로그·화면·저장소에 남기지 않는다. 만료·검증 실패·서버 장애는 완료와 구분하고 로그인 버튼으로 이어 간다.
 
 - **공용 서버 AI 키는 인증 UUID로 선택한다.** `llm/credentials.ts`는 `shared` 요청에 `VIBE_TEACHER_USER_OPENROUTER_KEYS`의 본인 UUID 키만 전달합니다. 일반 회원은 관리자 키·서버의 공통 키·CLI로 우회하지 못합니다. 관리자 계정만 본인 매핑이 없을 때 개발용 키를 사용할 수 있습니다. 승인 검사는 별도로 유지합니다. 키 목록과 관리자 전용 변수는 하위 제공자 환경에서 지우고 응답·로그에 노출하지 않습니다. `CloudRuntime`은 사용자별 환경을 분리하고 키·관리자 상태가 바뀌면 제공자 캐시를 무효화합니다. 로컬 사용자는 `.env`의 본인 키를 사용하며 관리자 개발용 키는 관리자에게만 적용합니다.
+
+- **인증 메일 재발송은 접수와 전달을 구분한다.** 로그인 화면·인증 실패 화면은 `ResendConfirmation`을 사용한다. 공개 키로 `/auth/v1/resend`에 가입용 재발송만 요청하며 가입과 같은 복귀 주소 검사를 적용한다. 계정 존재·인증 여부를 공개 조회하거나 메일 전달을 보장하지 않는다. 가입·재발송 후 60초 대기는 UI 안내이며 Supabase 발송 제한은 별도로 유지한다. 알려진 발송 한도·수신 주소 제한·미인증 오류 코드만 안전한 문구로 바꾸고 외부 오류 원문은 노출하지 않는다. 관리자가 삭제한 `vt_members`는 자동 복구하지 않는다.
 
 ## 6. 코드 규칙
 

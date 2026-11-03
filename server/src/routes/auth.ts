@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { EmailLoginSchema, SignupSchema, type AuthMeResponse, type LoginRequest, type LoginResponse } from '@vibe-teacher/shared';
+import { EmailConfirmationSchema, EmailLoginSchema, ResendConfirmationSchema, SignupSchema, type AuthMeResponse, type EmailConfirmationResponse, type LoginRequest, type LoginResponse } from '@vibe-teacher/shared';
 import { tokenSetupCommand } from '../auth/token-file';
 import { learnerIdFor } from '../learner/service';
 import { HttpError, parseBody, requireJson, type AppDeps, type AppEnv } from './deps';
@@ -64,6 +64,20 @@ export function authRoutes(deps: AppDeps, runtime?: CloudRuntime): Hono<AppEnv> 
     if (!deps.auth.cloud) throw new HttpError(400, 'bad_request', 'Supabase 로그인을 먼저 설정하세요');
     const { email, password } = await parseBody(c, SignupSchema);
     return c.json(await deps.auth.cloud.signup(c, email, password), 201);
+  });
+
+  app.post('/resend-confirmation', requireJson, async (c) => {
+    if (!deps.auth.cloud) throw new HttpError(400, 'bad_request', 'Supabase 로그인을 먼저 설정하세요');
+    const { email } = await parseBody(c, ResendConfirmationSchema);
+    return c.json(await deps.auth.cloud.resendConfirmation(c, email));
+  });
+
+  app.post('/email-confirmation', requireJson, async (c) => {
+    if (!deps.auth.cloud) throw new HttpError(400, 'bad_request', 'Supabase 로그인을 먼저 설정하세요');
+    const { accessToken } = await parseBody(c, EmailConfirmationSchema);
+    await deps.auth.cloud.confirmEmail(accessToken);
+    const result: EmailConfirmationResponse = { confirmed: true };
+    return c.json(result);
   });
 
   app.post('/logout', async (c) => {
