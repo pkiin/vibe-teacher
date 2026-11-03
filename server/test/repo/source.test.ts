@@ -146,7 +146,7 @@ describe('code evidence and flow', () => {
     const section = draft.system.find((item) => item.id === 'mechanism')!;
     const source = section.sources.find((ref) => ref.kind === 'file' && ref.path === 'src/main.ts')!;
     if (source.kind !== 'file') throw new Error('파일 근거 필요');
-    const output = applyRepoAi({ draft, output: { changes: [], routeDescriptions: [], flowGroups: [], flowNodes: [], sections: [{ id: 'mechanism', page: 'system', title: '코드 연결', sources: [], sourceBlocks: ['mechanism'], paragraphs: ['시작 코드가 응답 처리 함수를 불러옵니다.'], items: [{ text: '코드', detail: '', sources: [`F:${source.path}#L${source.startLine}-L${source.endLine}`, 'F:src/main.ts#L999-L1000'] }] }] }, handles, fileSet: new Set(scan.files.map((file) => file.path)), result: { provider: 'openai', durationMs: 1 } });
+    const output = applyRepoAi({ draft, output: { changes: [], routeDescriptions: [], flowGroups: [], flowNodes: [], features: [], sections: [{ id: 'mechanism', page: 'system', title: '코드 연결', sources: [], sourceBlocks: ['mechanism'], paragraphs: ['시작 코드가 응답 처리 함수를 불러옵니다.'], items: [{ text: '코드', detail: '', sources: [`F:${source.path}#L${source.startLine}-L${source.endLine}`, 'F:src/main.ts#L999-L1000'] }] }] }, handles, fileSet: new Set(scan.files.map((file) => file.path)), result: { provider: 'openai', durationMs: 1 } });
     const updated = output.system.find((item) => item.id === 'mechanism')!;
     expect(updated.blocks.find((block) => block.kind === 'flow')).toEqual(section.blocks.find((block) => block.kind === 'flow'));
     expect(updated.sources).toContainEqual(source);

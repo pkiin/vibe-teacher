@@ -10,6 +10,12 @@ loadDotEnv(fileURLToPath(new URL('.env.admin', root)));
 
 class SetupError extends Error {}
 
+/** 순서대로 적용한다. 표가 모두 있으면 건너뛰고, 일부만 있으면 기존 객체를 건드리지 않고 멈춘다. */
+const MIGRATIONS = [
+  { file: '202611030001_accounts_and_storage.sql', tables: ['vt_members', 'vt_documents', 'vt_events', 'vt_locks'], label: '회원·승인·RLS 저장소' },
+  { file: '202611030002_ai_call_log.sql', tables: ['vt_ai_calls', 'vt_ai_runs'], label: 'AI 호출 기록' },
+];
+
 try {
   const config = cloudConfig({ ...process.env, VIBE_TEACHER_AUTH_MODE: 'supabase' })!;
   const url = process.env.VIBE_TEACHER_SUPABASE_DATABASE_URL;
@@ -23,15 +29,17 @@ try {
   try {
     await client.connect();
     await client.query("select pg_advisory_lock(hashtext('vibe-teacher-accounts-setup'))");
-    const existing = await client.query<{ name: string }>("select relname as name from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and relname = any($1)", [['vt_members', 'vt_documents', 'vt_events', 'vt_locks']]);
-    if (existing.rows.length === 4) {
-      console.log('[accounts] 회원 저장소가 이미 있습니다. 기존 데이터는 변경하지 않았습니다.');
-    } else {
-      if (existing.rows.length) throw new SetupError('회원 표가 일부만 존재합니다. 기존 객체는 변경하지 않았습니다. 관리자가 마이그레이션 상태를 확인하세요.');
-      const sql = await fs.readFile(new URL('supabase/migrations/202611030001_accounts_and_storage.sql', root), 'utf8');
+    for (const migration of MIGRATIONS) {
+      const existing = await client.query<{ name: string }>("select relname as name from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and relname = any($1)", [migration.tables]);
+      if (existing.rows.length === migration.tables.length) {
+        console.log(`[accounts] ${migration.label}: 이미 있어 기존 데이터를 변경하지 않았습니다.`);
+        continue;
+      }
+      if (existing.rows.length) throw new SetupError(`${migration.label} 표가 일부만 존재합니다. 기존 객체는 변경하지 않았습니다. 관리자가 마이그레이션 상태를 확인하세요.`);
+      const sql = await fs.readFile(new URL(`supabase/migrations/${migration.file}`, root), 'utf8');
       await client.query(sql);
       await client.query("notify pgrst, 'reload schema'");
-      console.log('[accounts] Supabase 회원·승인·RLS 저장소를 준비했습니다.');
+      console.log(`[accounts] ${migration.label}: Supabase에 준비했습니다.`);
     }
   } finally { await client.end().catch(() => {}); }
 } catch (error) {

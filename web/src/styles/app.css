@@ -28,6 +28,13 @@
   --yellow-soft: #fff3d9;
   --control-border: #8290a8;
   --shadow: 0 6px 24px rgba(32, 42, 59, 0.05);
+  --syntax-keyword: #8a2db3;
+  --syntax-string: #186749;
+  --syntax-comment: #5b687d;
+  --syntax-number: #9a4600;
+  --syntax-function: #2a52b5;
+  --syntax-type: #7f5500;
+  --syntax-slot: #b52e3b;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", Roboto, sans-serif;
 }
@@ -52,6 +59,13 @@
   --yellow-soft: #3f3421;
   --control-border: #71849f;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  --syntax-keyword: #d6aaff;
+  --syntax-string: #91dfb6;
+  --syntax-comment: #9fadc4;
+  --syntax-number: #ffbb80;
+  --syntax-function: #adc1ff;
+  --syntax-type: #f0cb82;
+  --syntax-slot: #ffa9b2;
 }
 :root[data-density="comfortable"] {
   --read-line-height: 1.85;
@@ -380,6 +394,31 @@ textarea { font-family: var(--mono); font-size: var(--font-small); }
 .repo-toc { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
 .repo-history ul ul { margin: 2px 0 6px; }
 .repo-origin { margin-left: 8px; font-weight: normal; vertical-align: middle; }
+/* 주요 기능 목록과 기능별 페이지 */
+.feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; margin: 10px 0; }
+.repo-wiki .feature-grid .card { margin: 0; }
+.feature-card { display: flex; flex-direction: column; gap: 6px; }
+.feature-card h3 { margin: 0; }
+.feature-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: auto; }
+.feature-card-meta .pill { margin-left: 0; }
+.feature-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.feature-steps { margin: 6px 0; padding-left: 22px; }
+.feature-steps > li { padding: calc(var(--space) * .5) 0; }
+.feature-steps > li + li { border-top: 1px solid var(--border); }
+.feature-ai { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 12px 0; background: var(--surface); }
+.feature-ai h4 { margin: 0 0 8px; }
+.feature-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 8px; }
+.feature-facts dt { color: var(--muted); }
+.feature-facts dd { margin: 0; overflow-wrap: anywhere; }
+.feature-facts .pill { margin-left: 6px; }
+.feature-prompt { margin-top: 10px; }
+.feature-prompt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
+.feature-prompt .code-block { max-height: 360px; }
+.feature-round { margin: 6px 0; }
+.feature-round summary { cursor: pointer; font-weight: 600; }
+.feature-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.feature-links .pill { margin-left: 0; }
+@media (max-width: 560px) { .feature-facts { grid-template-columns: 1fr; } }
 .knowledge-reason-pending { font-style: italic; }
 .knowledge-rule-tag { margin-left: 8px; vertical-align: middle; }
 .checkbox { display: flex; align-items: flex-start; gap: 8px; }
@@ -535,9 +574,26 @@ summary::marker { color: var(--muted); }
 .source-line.highlighted { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
 .source-line.highlighted .source-line-number { color: var(--accent); background: var(--accent-soft); }
 .source-code mark { background: var(--yellow-soft); color: var(--yellow); border-radius: 2px; }
-.syntax-keyword { color: var(--accent); font-weight: 600; }
-.syntax-string { color: var(--green); }
-.syntax-comment { color: var(--muted); }
+/* 코드 색칠 (CodeBlock.tsx). 라이트·다크 모두 배경 대비 4.5:1 이상 */
+.syntax-keyword { color: var(--syntax-keyword); font-weight: 600; }
+.syntax-string { color: var(--syntax-string); }
+.syntax-comment { color: var(--syntax-comment); font-style: italic; }
+.syntax-number { color: var(--syntax-number); }
+.syntax-function { color: var(--syntax-function); }
+.syntax-type { color: var(--syntax-type); }
+.syntax-property { color: var(--syntax-function); }
+.syntax-slot { color: var(--syntax-slot); }
+.code-block { white-space: pre; overflow: auto; max-height: 480px; line-height: 1.6; background: var(--bg); }
+.code-block code { background: none; padding: 0; font-size: inherit; color: var(--text); }
+.code-line-number { display: inline-block; margin-right: 12px; color: var(--muted); user-select: none; white-space: pre; }
+.prompt-text { margin: 0; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--sans); font-size: var(--ui-font-size); line-height: 1.7; background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; max-height: 420px; overflow: auto; }
+.prompt-slot { font-family: var(--mono); font-size: var(--code-font-size); color: var(--syntax-slot); background: var(--red-soft); border-radius: 3px; padding: 0 3px; }
+.prompt-part + .prompt-part { margin-top: 12px; }
+.prompt-part > p { margin: 4px 0 0; }
+.prompt-from { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; }
+.feature-code { margin-top: 6px; }
+.feature-code summary { cursor: pointer; font-size: var(--font-small); color: var(--accent); }
+.feature-code[open] summary { margin-bottom: 4px; }
 .source-pagination { display: flex; justify-content: space-between; margin-top: 10px; }
 .repo-flow { margin: 8px 0 16px; }
 .repo-flow figcaption { font-size: var(--font-small); color: var(--muted); margin-bottom: 8px; }

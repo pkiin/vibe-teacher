@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { maskSecrets, maskOutput } from './digest';
+import { errorInfo, newCallId, type AiCallRecord, type AiLog } from './log';
 import { OPENROUTER_BASE_URL } from './models';
 import { LlmError, extractJson, type LlmAvailability, type LlmProvider, type LlmRequest, type LlmResult } from './types';
 
@@ -24,6 +25,8 @@ export interface OpenAiCompatOptions {
   fetch?: typeof fetch;
   /** 모델이 JSON 스키마 강제를 지원하는지 (모르면 null — 먼저 시도하고 거절되면 프롬프트 지시로 다시) */
   structured?: (model: string) => Promise<boolean | null>;
+  /** 실제 요청·응답 기록 (Supabase 회원 모드) */
+  log?: AiLog;
 }
 
 /** OpenAI strict 스키마 규칙: 모든 객체에 additionalProperties:false, 모든 속성을 required 로 */
@@ -45,11 +48,21 @@ export function toStrictJsonSchema(schema: z.ZodType): Record<string, unknown> {
 }
 
 interface ChatResponse {
+  id?: string;
   model?: string;
   choices?: { message?: { content?: string | null; refusal?: string | null; annotations?: { type: string; url_citation?: { url: string; title?: string; content?: string } }[] }; finish_reason?: string }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    cost?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
   error?: { message?: string; code?: number | string };
 }
+
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
 export class OpenAiCompatProvider implements LlmProvider {
   readonly id = 'openrouter' as const;
@@ -76,17 +89,38 @@ export class OpenAiCompatProvider implements LlmProvider {
     const first: OutputMode = structured === false ? 'json_object' : 'json_schema';
     const started = Date.now();
     try {
-      return await this.request(req, first, started);
+      return await this.request(req, first, started, 1);
     } catch (err) {
       // 모델이 response_format 을 받지 않으면 프롬프트 지시만으로 한 번 더
       if (err instanceof LlmError && err.kind === 'unknown' && /response_format|structured|json_schema|json mode/i.test(`${err.message} ${err.detail ?? ''}`)) {
-        return this.request(req, 'prompt', started);
+        return this.request(req, 'prompt', started, 2);
       }
       throw err;
     }
   }
 
-  private async request<T>(req: LlmRequest<T>, mode: OutputMode, started: number): Promise<LlmResult<T>> {
+  /** 성공·실패와 관계없이 요청 하나마다 기록한다. 인증 헤더는 남기지 않는다. */
+  private async request<T>(req: LlmRequest<T>, mode: OutputMode, started: number, attempt: number): Promise<LlmResult<T>> {
+    const at = Date.now();
+    const record: AiCallRecord = {
+      id: newCallId(), ...(req.trace ? { trace: req.trace } : {}), provider: 'openrouter', task: req.task ?? 'text', schemaName: req.schemaName,
+      attempt, outputMode: mode, startedAt: new Date(at).toISOString(), durationMs: 0, status: 'ok', request: {},
+    };
+    try {
+      const result = await this.send(req, mode, started, record);
+      record.output = result.data;
+      return result;
+    } catch (err) {
+      record.status = req.signal?.aborted || (err instanceof LlmError && err.kind === 'cancelled') ? 'cancelled' : 'error';
+      record.error = errorInfo(err);
+      throw err;
+    } finally {
+      record.durationMs = Date.now() - at;
+      await this.opts.log?.call(record);
+    }
+  }
+
+  private async send<T>(req: LlmRequest<T>, mode: OutputMode, started: number, record: AiCallRecord): Promise<LlmResult<T>> {
     const schema = toStrictJsonSchema(req.schema);
     const system =
       mode === 'json_schema'
@@ -100,6 +134,8 @@ export class OpenAiCompatProvider implements LlmProvider {
       ],
       // OpenAI 의 추론 모델은 max_tokens 대신 max_completion_tokens 를 받는다
       max_tokens: req.maxTokens,
+      // 응답에 실제 요금(usage.cost)을 받는다
+      usage: { include: true },
       ...(req.task === 'research' ? { plugins: [{ id: 'web', max_results: 5 }] } : {}),
     };
     if (mode === 'json_schema') body.response_format = { type: 'json_schema', json_schema: { name: req.schemaName, strict: true, schema } };
@@ -108,22 +144,36 @@ export class OpenAiCompatProvider implements LlmProvider {
     const signal = req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs)]) : AbortSignal.timeout(req.timeoutMs);
     const headers: Record<string, string> = { authorization: `Bearer ${this.key}`, 'content-type': 'application/json' };
     headers['x-title'] = 'vibe-teacher';
+    const url = `${this.setup.baseUrl}/chat/completions`;
+    record.requestedModel = String(body.model);
+    record.request = { method: 'POST', url, headers: { 'content-type': headers['content-type'], 'x-title': headers['x-title'] }, body };
 
     let res: Response;
     try {
-      res = await (this.opts.fetch ?? globalThis.fetch)(`${this.setup.baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body), signal });
+      res = await (this.opts.fetch ?? globalThis.fetch)(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
     } catch (err) {
       const name = (err as Error).name;
       if (req.signal?.aborted) throw new LlmError('cancelled', '작업이 취소되었습니다');
       if (name === 'TimeoutError' || name === 'AbortError') throw new LlmError('timeout', `${this.setup.label} 응답이 ${Math.round(req.timeoutMs / 1000)}초 안에 오지 않았습니다`);
       throw new LlmError('network', `${this.setup.label}에 연결하지 못했습니다`, (err as Error).message);
     }
+    record.httpStatus = res.status;
     const text = await res.text();
     let data: ChatResponse = {};
+    record.response = { text };
     try {
       data = text ? (JSON.parse(text) as ChatResponse) : {};
+      record.response = data;
     } catch {
       // 오류 본문이 JSON 이 아닐 수 있다
+    }
+    if (data.model) record.model = data.model;
+    if (data.id) record.generationId = data.id;
+    if (data.usage) {
+      const u = data.usage;
+      record.usage = { inputTokens: num(u.prompt_tokens), outputTokens: num(u.completion_tokens), totalTokens: num(u.total_tokens),
+        cachedTokens: num(u.prompt_tokens_details?.cached_tokens), reasoningTokens: num(u.completion_tokens_details?.reasoning_tokens), raw: u };
+      record.costUsd = num(u.cost);
     }
     if (!res.ok || data.error) throw this.httpError(res.status, data.error?.message ?? text.slice(0, 300));
 

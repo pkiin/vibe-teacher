@@ -167,6 +167,20 @@ describe('AI-only generation over the API', () => {
     const retry = await (await post(`${url}/text`, { force: true })).json() as { jobId: string };
     expect((await waitJob(`${url}/jobs/${retry.jobId}`)).state).toBe('done');
   });
+  it('serves the feature list without AI and hides missing or malformed feature pages and jobs', async () => {
+    const url = `/api/projects/${project.id}/repo-wiki`;
+    const before = calls.length;
+    const list = await app.request(`${url}/features`);
+    expect(list.status).toBe(200);
+    expect(await list.json()).toMatchObject({ features: [] });
+    for (const id of ['nothing', '..%2F..%2Fsecret', 'UPPER']) {
+      expect((await app.request(`${url}/features/${id}`)).status).toBe(404);
+      expect((await post(`${url}/features/${id}/analyze`)).status).toBe(404);
+    }
+    expect((await app.request(`${url}/features/nothing/analyze`, { method: 'POST', body: '{}' })).status).toBe(415);
+    expect((await app.request(`${url}/feature-jobs/unknown`)).status).toBe(404);
+    expect(calls).toHaveLength(before);
+  });
   it('builds personal knowledge from generated concepts and writes reasons with AI', async () => {
     const first = await (await app.request('/api/me/knowledge')).json() as KnowledgeWikiResponse;
     expect(first.entries.length).toBeGreaterThan(0);

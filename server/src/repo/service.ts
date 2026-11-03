@@ -1,10 +1,11 @@
 import path from 'node:path';
-import type { Project, ReaderLevel, RepoSection, RepoWiki, RepoWikiAiPreview, RepoWikiBuildResponse, RepoWikiHistoryEntry, RepoWikiResponse } from '@vibe-teacher/shared';
+import { READER_LEVELS, type Project, type ReaderLevel, type RepoFeature, type RepoSection, type RepoWiki, type RepoWikiAiPreview, type RepoWikiBuildResponse, type RepoWikiHistoryEntry, type RepoWikiResponse } from '@vibe-teacher/shared';
 import type { AnalysisService } from '../analyzers/index';
 import type { ConfigStore } from '../config/store';
 import type { SessionIndex } from '../index/session-index';
 import { textGate, type TextGate } from '../llm/gate';
 import { JobQueue } from '../llm/jobs';
+import { withAiRun } from '../llm/log';
 import { withReader } from '../llm/reader';
 import { modelFor } from '../llm/select';
 import type { EnrichService } from '../llm/service';
@@ -21,7 +22,7 @@ import { inspectRepo, REPO_INSPECTION_LIMITS } from './inspect';
 
 const MAX_SESSIONS = 60;
 const MAX_HISTORY = 30;
-const REPO_TEXT_VERSION = 7;
+const REPO_TEXT_VERSION = 9;
 
 type Allowed = { ok: boolean; reason?: string };
 
@@ -51,6 +52,7 @@ interface TextLayer {
   generator: RepoWiki['generator'];
   user?: RepoSection[];
   system?: RepoSection[];
+  features?: RepoFeature[];
   /** AI 결과에서 생긴 경고 (사실 초안의 경고는 따로) */
   warnings?: string[];
   /** 호출이 실패한 사유. 같은 입력으로는 자동으로 다시 부르지 않는다 ("다시 쓰기"로만) */
@@ -100,32 +102,29 @@ export class RepoWikiService {
     };
   }
 
-  private async saved(projectId: string) {
-    const saved = [];
-    for (const id of this.opts.index.getProjectIds(projectId)) {
+  /** 예전 프로젝트 ID 의 같은 파일을 함께 읽는다. 회원 모드에서는 읽기마다 Supabase 왕복이라 동시에 읽는다. */
+  private readAll<T>(projectId: string, file: (files: ReturnType<RepoWikiService['files']>) => string): Promise<{ files: ReturnType<RepoWikiService['files']>; value: T | null }[]> {
+    return Promise.all(this.opts.index.getProjectIds(projectId).map(async (id) => {
       const files = this.files(id);
-      const draft = await this.opts.storage.readJson<RepoWiki>(files.current);
-      if (draft) saved.push({ files, draft });
-    }
+      return { files, value: await this.opts.storage.readJson<T>(file(files)) };
+    }));
+  }
+
+  private async saved(projectId: string) {
+    const saved = (await this.readAll<RepoWiki>(projectId, (f) => f.current)).flatMap(({ files, value }) => value ? [{ files, draft: value }] : []);
     return saved.sort((a, b) => b.draft.builtAt.localeCompare(a.draft.builtAt))[0];
   }
 
   private async history(projectId: string): Promise<RepoWikiHistoryEntry[]> {
     const entries = new Map<string, RepoWikiHistoryEntry>();
-    for (const id of this.opts.index.getProjectIds(projectId)) {
-      for (const entry of (await this.opts.storage.readJson<RepoWikiHistoryEntry[]>(this.files(id).history)) ?? []) {
-        if (!entries.has(entry.revision)) entries.set(entry.revision, entry);
-      }
+    for (const { value } of await this.readAll<RepoWikiHistoryEntry[]>(projectId, (f) => f.history)) {
+      for (const entry of value ?? []) if (!entries.has(entry.revision)) entries.set(entry.revision, entry);
     }
     return [...entries.values()].sort((a, b) => b.builtAt.localeCompare(a.builtAt));
   }
 
   private async layer(projectId: string, revision: string, level: ReaderLevel): Promise<TextLayer | null> {
-    for (const id of this.opts.index.getProjectIds(projectId)) {
-      const layer = await this.opts.storage.readJson<TextLayer>(this.files(id).text(level));
-      if (layer?.revision === revision && layer.promptVersion === REPO_TEXT_VERSION) return layer;
-    }
-    return null;
+    return (await this.readAll<TextLayer>(projectId, (f) => f.text(level))).map((r) => r.value).find((layer) => layer?.revision === revision && layer.promptVersion === REPO_TEXT_VERSION) ?? null;
   }
 
   private sessions(projectId: string) {
@@ -145,16 +144,47 @@ export class RepoWikiService {
     const fresh = layer && layer.revision === draft.revision && layer.promptVersion === REPO_TEXT_VERSION ? layer : null;
     if (fresh && !fresh.failed && fresh.user && fresh.system) {
       // 예전 레이어에는 같은 그림이 두 절에 들어 있을 수 있어 읽을 때 한 번만 남긴다
-      return { wiki: { ...draft, user: dropRepeatedBlocks(fresh.user), system: dropRepeatedBlocks(fresh.system), warnings: [...draft.warnings, ...(fresh.warnings ?? [])], generator: fresh.generator }, canGenerate: false };
+      return { wiki: { ...draft, user: dropRepeatedBlocks(fresh.user), system: dropRepeatedBlocks(fresh.system), features: fresh.features ?? [], warnings: [...draft.warnings, ...(fresh.warnings ?? [])], generator: fresh.generator }, canGenerate: false };
     }
     const reason = fresh?.failed ?? (gate.ok ? undefined : gate.reason);
     return { wiki: { ...draft, user: [], system: [], generator: { kind: reason ? 'unavailable' : 'pending', version: draft.generator.version, ...(reason ? { reason } : {}) } }, canGenerate: gate.ok && !fresh?.failed };
   }
 
+  /**
+   * 주요 기능 목록 (AI 를 부르지 않는다). files 를 요청하면 기능 분석이 읽을 수 있는 파일 목록도 돌려준다.
+   * 목록만 볼 때는 큰 재료 파일(materials.json)을 읽지 않는다.
+   */
+  async catalog(projectId: string, level: ReaderLevel, opts: { files?: boolean } = {}): Promise<{ revision: string; features: RepoFeature[]; files: string[] } | null> {
+    const saved = await this.saved(projectId);
+    if (!saved || saved.draft.generator.version !== REPO_WIKI_VERSION) return null;
+    const order = [level, ...READER_LEVELS.filter((x) => x !== level)];
+    const [layers, materials] = await Promise.all([
+      Promise.all(order.map((l) => this.readAll<TextLayer>(projectId, (f) => f.text(l)))),
+      opts.files ? this.opts.storage.readJson<Materials>(saved.files.materials) : Promise.resolve(null),
+    ]);
+    // 기능의 id·파일·세션은 수준·문장 형식과 무관하다. 이 수준의 목록이 없으면 같은 판의 다른 수준 목록을 쓴다.
+    const layer = layers.flat().map((r) => r.value).find((l) => l?.revision === saved.draft.revision && !l.failed && l.features?.length);
+    return { revision: saved.draft.revision, features: layer?.features ?? [], files: materials?.revision === saved.draft.revision ? materials.files : [] };
+  }
+
+  /** 다시 생성할 때 같은 기능에 같은 id 를 쓰도록 지금까지 만든 기능 이름을 모은다 (모든 수준·판). */
+  private async knownFeatures(projectId: string): Promise<{ id: string; name: string }[]> {
+    const known = new Map<string, string>();
+    for (const rows of await Promise.all(READER_LEVELS.map((level) => this.readAll<TextLayer>(projectId, (f) => f.text(level))))) {
+      for (const { value } of rows) for (const f of value?.features ?? []) if (!known.has(f.id)) known.set(f.id, f.name);
+    }
+    return [...known].slice(0, 40).map(([id, name]) => ({ id, name }));
+  }
+
   async get(project: Project, level: ReaderLevel, allowed: Allowed): Promise<RepoWikiResponse> {
     const saved = await this.saved(project.id);
     const draft = saved ? { ...saved.draft, projectId: project.id, rootPath: project.rootPath } : null;
-    const history = await this.history(project.id);
+    // 이력·문장 레이어 읽기(회원 모드에서는 Supabase 왕복)와 저장소 변경 확인을 동시에 한다
+    const [history, light, layer] = await Promise.all([
+      this.history(project.id),
+      draft ? scanRepo(project.rootPath, { light: true }) : null,
+      draft ? this.layer(project.id, draft.revision, level) : null,
+    ]);
     if (!draft) return { wiki: null, stale: false, staleReasons: [], history };
     const reasons: string[] = [];
     if (draft.generator.version !== REPO_WIKI_VERSION) reasons.push('새 설명 형식과 보안 점검을 반영하려면 업데이트가 필요합니다');
@@ -164,9 +194,7 @@ export class RepoWikiService {
     const changed = now.filter((s) => known.has(s.key) && known.get(s.key)!.mtime !== undefined && known.get(s.key)!.mtime !== s.fileMtime);
     if (added.length) reasons.push(`새 세션 ${added.length}개`);
     if (changed.length) reasons.push(`내용이 늘어난 세션 ${changed.length}개`);
-    const light = await scanRepo(project.rootPath, { light: true });
-    if (light.readable === 'ok' && draft.inputs.repo.signature && light.signature !== draft.inputs.repo.signature) reasons.push('저장소 파일이 바뀜');
-    const layer = await this.layer(project.id, draft.revision, level);
+    if (light?.readable === 'ok' && draft.inputs.repo.signature && light.signature !== draft.inputs.repo.signature) reasons.push('저장소 파일이 바뀜');
     const gate = draft.generator.version === REPO_WIKI_VERSION ? await this.gate(allowed) : { ok: false as const, reason: '이전 형식의 위키입니다. 업데이트한 뒤 AI 설명을 생성해 주세요.' };
     const { wiki, canGenerate } = this.compose(draft, layer, gate);
     return { wiki, stale: reasons.length > 0, staleReasons: reasons, history, text: { level, canGenerate: canGenerate && this.opts.store.get().llm.autoText } };
@@ -255,35 +283,40 @@ export class RepoWikiService {
     const layer = await this.layer(project.id, draft.revision, level);
     if (!force && layer?.revision === draft.revision && layer.promptVersion === REPO_TEXT_VERSION && layer.inputHash === inputHash) return done();
 
-    const job = this.jobs.enqueue(key, async (signal) => {
+    const known = await this.knownFeatures(project.id);
+    const job = this.jobs.enqueue(key, (signal) => withAiRun(this.opts.storage, { feature: 'repo_wiki', projectId: project.id, readerLevel: level }, signal, async (run) => {
       const base = { promptVersion: REPO_TEXT_VERSION, revision: draft.revision, level, inputHash, at: new Date().toISOString() };
       try {
-        const inspection = await inspectRepo({ root: project.rootPath, draft, files: materials.files, provider, level, signal });
-        const user = inspection.text ? `${materials.user}\n\n=== 추가 파일 확인 질문과 답변 (코드 발췌에 근거한 보조 설명) ===\n${inspection.text}` : materials.user;
-        const res = await provider.complete({ system, user, schema: RepoAiOutputSchema, schemaName: 'repo_wiki_text', maxTokens: 32_000, timeoutMs: Math.max(cfg.timeoutMs, 300_000), signal });
+        const inspection = await inspectRepo({ root: project.rootPath, draft, files: materials.files, provider, level, signal, trace: run.trace });
+        const knownText = known.length ? `\n\n=== 기존 주요 기능 id (같은 기능이면 같은 id를 다시 쓰세요) ===\n${JSON.stringify(known)}` : '';
+        const user = (inspection.text ? `${materials.user}\n\n=== 추가 파일 확인 질문과 답변 (코드 발췌에 근거한 보조 설명) ===\n${inspection.text}` : materials.user) + knownText;
+        const res = await provider.complete({ system, user, schema: RepoAiOutputSchema, schemaName: 'repo_wiki_text', maxTokens: 32_000, timeoutMs: Math.max(cfg.timeoutMs, 300_000), signal, trace: run.trace });
         const { data, ...meta } = res;
         const apply = (output: RepoAiOutput) => applyRepoAi({ draft, output, handles: new Map(materials.handles), fileSet: new Set(materials.files), result: meta, additionalSources: inspection.sources });
         let wiki = apply(data);
         if (missingRepoFlowNodes(draft, wiki).length) {
           const flow = await provider.complete({ task: 'repo-inspect', system: withReader(REPO_FLOW_SYSTEM_PROMPT, level),
             user: `${materials.flowUser ?? materials.user}\n\n=== 추가 파일 확인 답변 ===\n${inspection.text || '없음'}`,
-            schema: repoFlowOutputSchema(draft), schemaName: 'repo_wiki_flow', maxTokens: 8000, timeoutMs: Math.max(cfg.timeoutMs, 90_000), signal });
+            schema: repoFlowOutputSchema(draft), schemaName: 'repo_wiki_flow', maxTokens: 8000, timeoutMs: Math.max(cfg.timeoutMs, 90_000), signal, trace: run.trace });
           wiki = apply({ ...data, ...flow.data });
           wiki.generator.durationMs = (wiki.generator.durationMs ?? 0) + flow.durationMs;
           if (flow.costUsd !== undefined) wiki.generator.costUsd = (wiki.generator.costUsd ?? 0) + flow.costUsd;
         }
         assertRepoFlowComplete(draft, wiki);
         wiki.warnings.push(...inspection.warnings);
-        const next: TextLayer = { ...base, generator: { ...wiki.generator, inputHash }, user: wiki.user, system: wiki.system, warnings: wiki.warnings.slice(draft.warnings.length) };
+        const next: TextLayer = { ...base, generator: { ...wiki.generator, inputHash }, user: wiki.user, system: wiki.system, features: wiki.features ?? [], warnings: wiki.warnings.slice(draft.warnings.length) };
         await this.opts.storage.writeJson(f.text(level), next);
+        run.result(f.text(level), next);
         return { revision: draft.revision, level, generator: 'llm' };
       } catch (e) {
         if (signal.aborted || (e instanceof LlmError && e.kind === 'cancelled')) throw e;
         const reason = `AI 설명을 만들지 못했습니다: ${e instanceof Error ? e.message : String(e)}`;
-        await this.opts.storage.writeJson(f.text(level), { ...base, generator: { kind: 'unavailable', version: draft.generator.version, reason }, failed: reason } satisfies TextLayer);
+        const failed = { ...base, generator: { kind: 'unavailable', version: draft.generator.version, reason }, failed: reason } satisfies TextLayer;
+        await this.opts.storage.writeJson(f.text(level), failed);
+        run.result(f.text(level), failed);
         throw e;
       }
-    });
+    }));
     return { status: job.state === 'running' ? 'running' : 'queued', jobId: job.id };
   }
 }

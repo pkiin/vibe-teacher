@@ -3,7 +3,7 @@
  * 저장소를 읽기 전용으로 살펴본 결과와 그 프로젝트의 세션들에서 모은 사실을 합쳐 만들고,
  * 새 세션이나 저장소 변경이 생기면 갱신하며 이전 판과 달라진 점을 남긴다.
  */
-import type { LlmProviderId, LlmStatus } from './api';
+import type { BaseJobStatus, LlmProviderId, LlmStatus } from './api';
 import type { ReaderLevel } from './reader';
 import type { Readable } from './domain';
 
@@ -28,6 +28,123 @@ export interface RepoFlow {
   limited: boolean;
 }
 
+type FileSource = Extract<RepoSource, { kind: 'file' }>;
+
+/** 레포 위키를 쓸 때 AI가 고른 주요 기능. 읽는 사람 수준별 문장 레이어에 함께 저장한다. */
+export interface RepoFeature {
+  /** 영문 소문자·숫자·하이픈. 다시 생성해도 같은 기능이면 같은 id 를 쓰도록 이전 목록을 AI 에 준다 */
+  id: string;
+  name: string;
+  summary: string;
+  files: FileSource[];
+  sessions: Extract<RepoSource, { kind: 'session' }>[];
+  sources: RepoSource[];
+}
+
+export interface RepoFeatureFlowStep { title: string; detail: string; sources: RepoSource[] }
+export interface RepoFeatureFile { path: string; role: string; sources: RepoSource[] }
+/** 저장소에서 읽은 줄을 그대로 보여 준다 (AI 가 다시 쓴 프롬프트가 아님) */
+export interface RepoFeatureCode {
+  source: FileSource;
+  text: string;
+  /** 이 코드가 AI 에 넘기는 프롬프트. 읽을 때 서버가 구문 분석으로 만든다 (AI 가 다시 쓴 문장이 아님) */
+  prompts?: RepoFeaturePromptPart[];
+}
+
+/** text: 코드에 적힌 고정 문장, slot: 실행할 때 채워지는 값(코드의 식을 그대로 보여 줌) */
+export interface RepoFeaturePromptSegment { kind: 'text' | 'slot'; text: string }
+export interface RepoFeaturePromptPart {
+  /** 프롬프트를 넘기거나 정의한 줄 */
+  line: number;
+  segments: RepoFeaturePromptSegment[];
+  /** 거쳐 간 감싸는 함수 (예: withReader). 실행할 때 내용을 덧붙이거나 바꿀 수 있다 */
+  via: string[];
+  /** 따라간 변수·상수·함수가 있는 곳 */
+  from: { path: string; line: number }[];
+  /** 이 프롬프트를 넘기는 호출 (예: provider.complete · schemaName). 한 범위에 요청이 여러 개면 구분에 쓴다 */
+  call?: string;
+}
+
+/** 기능이 AI·LLM API 를 부르는 곳 하나 */
+export interface RepoFeatureAiCall {
+  purpose: string;
+  /** 코드에서 확인한 SDK·서비스 이름 */
+  provider: string;
+  /** 코드에 적힌 모델 값 또는 모델을 정하는 설정 이름. 근거 줄에서 확인한 것만 싣는다 */
+  model?: string;
+  modelOrigin: 'code' | 'config' | 'unknown';
+  modelSource?: FileSource;
+  systemPrompt?: RepoFeatureCode;
+  userPrompt?: RepoFeatureCode;
+  outputHandling: string;
+  sources: RepoSource[];
+}
+
+/** 자세한 분석 중 AI 가 만든 질문과, 서버가 읽어 준 코드에 근거한 답 */
+export interface RepoFeatureQuestion { round: number; question: string; answer: string; sources: RepoSource[] }
+
+/** 기능별 페이지: wiki/projects/<p>/repo/features/<기능>.<수준>.json */
+export interface RepoFeaturePage {
+  version: number;
+  featureId: string;
+  level: ReaderLevel;
+  /** 분석할 때의 레포 위키 판 */
+  revision: string;
+  at: string;
+  name: string;
+  summary: string;
+  generator: { provider?: LlmProviderId; model?: string; durationMs: number; costUsd?: number; calls: number; rounds: number };
+  overview: string[];
+  overviewSources: RepoSource[];
+  userFlow: RepoFeatureFlowStep[];
+  files: RepoFeatureFile[];
+  aiCalls: RepoFeatureAiCall[];
+  questions: RepoFeatureQuestion[];
+  limits: string[];
+  warnings: string[];
+  /** 읽은 코드 범위와 내용 지문. 파일이 바뀌면 다시 분석하라고 알린다 */
+  read: { path: string; hash: string; startLine: number; endLine: number }[];
+}
+
+export const REPO_FEATURE_LIMITS = { rounds: 3, questionsPerRound: 6, maxChars: 48_000 } as const;
+
+export interface RepoFeatureListItem extends RepoFeature {
+  /** 이 수준의 자세한 분석을 마친 시각 (없으면 기본 정보만 있음) */
+  analyzedAt?: string;
+}
+
+export interface RepoFeatureListResponse {
+  level: ReaderLevel;
+  revision?: string;
+  features: RepoFeatureListItem[];
+}
+
+export interface RepoFeatureResponse {
+  /** 지금 레포 위키의 기능 목록 항목. 다시 생성하면서 목록에서 빠졌으면 null */
+  feature: RepoFeature | null;
+  page: RepoFeaturePage | null;
+  stale: boolean;
+  staleReasons: string[];
+  /** 분석을 실행할 수 없는 사유 (권한·제공자) */
+  unavailable?: string;
+  /** 진행 중인 분석 작업 */
+  jobId?: string;
+  limits: typeof REPO_FEATURE_LIMITS;
+}
+
+export type RepoFeatureAnalyzeResponse = { status: 'done'; response: RepoFeatureResponse } | { status: 'running' | 'queued'; jobId: string };
+export type RepoFeatureJobStatus = BaseJobStatus<{ featureId: string; questions: number; files: number }>;
+
+/** 분석을 시작하기 전 AI 에 처음 보내는 질문 계획 요청 (GET 은 AI 를 부르지 않는다) */
+export interface RepoFeaturePreview {
+  llmStatus: LlmStatus;
+  fallbackReason?: string;
+  system: string;
+  user: string;
+  chars: number;
+  limits: typeof REPO_FEATURE_LIMITS;
+}
+
 export interface RepoListItem {
   text: string;
   detail?: string;
@@ -39,7 +156,9 @@ export type RepoBlock =
   | { kind: 'list'; items: RepoListItem[] }
   | { kind: 'code'; text: string; lang?: string }
   | { kind: 'flow'; graph: RepoFlow }
-  | { kind: 'table'; head: string[]; rows: string[][] };
+  | { kind: 'table'; head: string[]; rows: string[][] }
+  /** 주요 기능 목록(RepoWiki.features)에서 이 id 들을 기능 페이지 링크로 보여 준다 */
+  | { kind: 'features'; ids: string[] };
 
 export interface RepoSection {
   id: string;
@@ -82,6 +201,8 @@ export interface RepoWiki {
   user: RepoSection[];
   /** 기능·동작 중심: 어떻게 구성되어 어떻게 동작하는지 */
   system: RepoSection[];
+  /** 주요 기능 목록 (이 수준의 AI 문장과 함께 만든다) */
+  features?: RepoFeature[];
   /** 이전 판과 달라진 점 */
   changes: string[];
   warnings: string[];

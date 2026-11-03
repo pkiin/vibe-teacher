@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { maskOutput } from './digest';
+import { errorInfo, newCallId, type AiCallRecord, type AiLog } from './log';
 import { LlmError, extractJson, type LlmAvailability, type LlmProvider, type LlmRequest, type LlmResult } from './types';
 
 export interface ClaudeCliOptions {
@@ -13,6 +14,8 @@ export interface ClaudeCliOptions {
   maxBudgetUsd: number;
   env?: NodeJS.ProcessEnv;
   spawn?: typeof nodeSpawn;
+  /** 실제 실행 인자·출력 기록 (Supabase 회원 모드) */
+  log?: AiLog;
 }
 
 const EXTENSION_ROOTS = ['.vscode-server/extensions', '.vscode/extensions', '.vscode-insiders/extensions', '.cursor-server/extensions', '.cursor/extensions'];
@@ -117,7 +120,7 @@ interface CliResult {
   result?: unknown;
   structured_output?: unknown;
   total_cost_usd?: number;
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
   modelUsage?: Record<string, unknown>;
 }
 
@@ -171,11 +174,32 @@ export class ClaudeCliProvider implements LlmProvider {
   async complete<T>(req: LlmRequest<T>): Promise<LlmResult<T>> {
     const bin = this.binary;
     if (!bin) throw new LlmError('spawn', 'claude CLI를 찾지 못했습니다');
-    const spawn = this.opts.spawn ?? nodeSpawn;
     const schemaJson = JSON.stringify(toCliJsonSchema(req.schema));
     const model = req.task === 'repo-inspect' ? 'haiku' : this.opts.model;
     const args = buildArgs({ schemaJson, system: req.system, model, ...(req.task === 'repo-inspect' ? { effort: 'low' as const } : {}), maxBudgetUsd: this.opts.maxBudgetUsd });
     const started = Date.now();
+    // 실행 파일 경로·환경변수는 남기지 않는다. 인자(시스템 프롬프트·스키마 포함)와 표준 입력이 실제로 보낸 전부다.
+    const record: AiCallRecord = {
+      id: newCallId(), ...(req.trace ? { trace: req.trace } : {}), provider: 'claude-cli', task: req.task ?? 'text', schemaName: req.schemaName,
+      attempt: 1, outputMode: 'cli', ...(model ? { requestedModel: model } : {}), startedAt: new Date(started).toISOString(), durationMs: 0, status: 'ok',
+      request: { command: 'claude', args, stdin: req.user },
+    };
+    try {
+      const result = await this.run(bin, args, model, req, started, record);
+      record.output = result.data;
+      return result;
+    } catch (err) {
+      record.status = req.signal?.aborted || (err instanceof LlmError && err.kind === 'cancelled') ? 'cancelled' : 'error';
+      record.error = errorInfo(err);
+      throw err;
+    } finally {
+      record.durationMs = Date.now() - started;
+      await this.opts.log?.call(record);
+    }
+  }
+
+  private async run<T>(bin: string, args: string[], model: string | null | undefined, req: LlmRequest<T>, started: number, record: AiCallRecord): Promise<LlmResult<T>> {
+    const spawn = this.opts.spawn ?? nodeSpawn;
 
     const { stdout, stderr, code, timedOut, cancelled } = await new Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean; cancelled: boolean }>(
       (resolve, reject) => {
@@ -219,6 +243,7 @@ export class ClaudeCliProvider implements LlmProvider {
     );
 
     const stderrTail = stderr.trim().split('\n').slice(-8).join('\n');
+    record.response = { exitCode: code, stdout, stderr: stderrTail };
     if (cancelled) throw new LlmError('cancelled', '작업이 취소되었습니다');
     if (timedOut) throw new LlmError('timeout', `claude 응답이 ${Math.round(req.timeoutMs / 1000)}초 안에 오지 않았습니다`, stderrTail);
 
@@ -232,6 +257,15 @@ export class ClaudeCliProvider implements LlmProvider {
       }
       throw err;
     }
+    record.response = { exitCode: code, output: parsed, stderr: stderrTail };
+    const actualModel = firstModel(parsed.modelUsage) ?? model ?? undefined;
+    if (actualModel) record.model = actualModel;
+    if (parsed.usage) {
+      const u = parsed.usage;
+      const input = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+      record.usage = { inputTokens: input, outputTokens: u.output_tokens ?? 0, totalTokens: input + (u.output_tokens ?? 0), ...(u.cache_read_input_tokens !== undefined ? { cachedTokens: u.cache_read_input_tokens } : {}), raw: u };
+    }
+    if (typeof parsed.total_cost_usd === 'number') record.costUsd = parsed.total_cost_usd;
     if (parsed.is_error || (parsed.subtype && parsed.subtype !== 'success')) {
       const text = typeof parsed.result === 'string' ? parsed.result : JSON.stringify(parsed.result ?? '');
       const kind = parsed.subtype === 'error_max_budget_usd' || /budget/i.test(parsed.subtype ?? '') ? 'budget' : /login|auth|unauthorized/i.test(text) ? 'auth' : 'unknown';

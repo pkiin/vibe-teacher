@@ -100,8 +100,8 @@ export class Mem0Backend implements MemoryBackend {
     // DB 커밋 뒤 JSON 매핑 저장 전에 종료됐어도 재추출·중복 삽입하지 않는다.
     const previous = await memory.getAll({ filters: { user_id: namespace, run_id: runId }, topK: 1 });
     if (previous.results[0]) return previous.results[0].id;
-    const provider = new OpenAiCompatProvider({ id: 'openrouter', model: this.opts.model, env: { OPENROUTER_API_KEY: this.opts.key }, fetch: this.opts.request });
-    const extracted = await provider.complete({ system: INSTRUCTIONS, user: JSON.stringify({ kind: record.kind, at: record.at, text: maskSecrets(record.text).slice(0, 1800) }), schema: Facts, schemaName: 'learning_memory', maxTokens: 1600, timeoutMs: 30000 });
+    const provider = new OpenAiCompatProvider({ id: 'openrouter', model: this.opts.model, env: { OPENROUTER_API_KEY: this.opts.key }, fetch: this.opts.request, log: this.storage.aiLog });
+    const extracted = await provider.complete({ system: INSTRUCTIONS, user: JSON.stringify({ kind: record.kind, at: record.at, text: maskSecrets(record.text).slice(0, 1800) }), schema: Facts, schemaName: 'learning_memory', maxTokens: 1600, timeoutMs: 30000, trace: { feature: 'memory_extract' } });
     const text = maskSecrets(`${record.text}\n검색 단서: ${extracted.data.facts.join(' / ')}`).slice(0, 3000);
     const added = await memory.add(text, { userId: namespace, runId, infer: false, metadata: { sourceId: record.id, sourceVersion: runId, kind: record.kind } });
     const id = added.results[0]?.id;

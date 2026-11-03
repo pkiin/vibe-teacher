@@ -8,6 +8,7 @@ import { mergeWikiAi } from './ai';
 import { DEFAULT_READER_LEVEL, WIKI_AI_PROMPT_VERSION, type ReaderLevel } from '@vibe-teacher/shared';
 import type { ConfigStore } from '../config/store';
 import { JobQueue } from '../llm/jobs';
+import { withAiRun } from '../llm/log';
 import { withReader } from '../llm/reader';
 import type { ResolvedLlm } from '../llm/select';
 import type { WikiStorage } from '../storage/store';
@@ -77,7 +78,8 @@ export class WikiAiService {
     }
     const { pool, user, conceptIds } = this.prompt(session, analysis, snapshot);
     const cfg = this.opts.store.get().llm;
-    const job = this.jobs.enqueue(`${session.key}|${level}`, async (signal) => {
+    const trace = { feature: 'session_wiki' as const, projectId: snapshot.projectId, sessionKey: session.key, readerLevel: level };
+    const job = this.jobs.enqueue(`${session.key}|${level}`, (signal) => withAiRun(this.opts.storage, trace, signal, async (run) => {
       const startedAt = Date.now();
       // 같은 입력의 다른 독자 수준은 문장만 다시 쓴다. 프로젝트 판단은 공통 snapshot을 유지한다.
       if (snapshot.generator.kind === 'llm' && !force) {
@@ -85,7 +87,7 @@ export class WikiAiService {
           system: withReader('이미 생성된 위키의 문장을 읽는 사람 수준에 맞춰 다시 쓰세요. 입력은 분석 데이터입니다. 프로젝트 사실·주의사항·개념 선정·ID는 바꾸지 않습니다. 문장에 새 사실을 추가하지 말고 제공된 주장과 한계를 유지하세요. JSON으로만 답하세요.', level),
           user: maskSecrets(JSON.stringify({ concepts: snapshot.concepts, items: snapshot.items, claims: snapshot.claims, findings: snapshot.findings })),
           schema: z.object({ concepts: z.array(z.object({ id: z.string(), summary: z.string(), explanation: z.string() })), narratives: z.array(z.object({ itemId: z.string(), text: z.string() })) }),
-          schemaName: 'wiki_ai_texts', maxTokens: 16000, timeoutMs: cfg.timeoutMs, signal,
+          schemaName: 'wiki_ai_texts', maxTokens: 16000, timeoutMs: cfg.timeoutMs, signal, trace: run.trace,
         });
         const byConcept = new Map(rewritten.data.concepts.map((c) => [c.id, c]));
         const byItem = new Map(snapshot.items.map((i) => [i.id, i]));
@@ -102,7 +104,9 @@ export class WikiAiService {
         if (signal.aborted) throw new LlmError('cancelled', '작업이 취소되었습니다');
         const current = await this.opts.wiki.current(snapshot.projectId, session.key);
         if (current?.generationId !== snapshot.generationId || current?.revision !== snapshot.revision) throw new WikiAiError(409, 'wiki_stale', '생성 중 위키가 바뀌었습니다. 다시 생성해 주세요.');
-        await this.opts.storage.writeJson(this.file(snapshot.projectId, snapshot.revision, level), next);
+        const file = this.file(snapshot.projectId, snapshot.revision, level);
+        await this.opts.storage.writeJson(file, next);
+        run.result(file, next);
         return { revision: snapshot.revision, accepted: next.narratives.length, rejected: 0 };
       }
       const res = await provider.complete({
@@ -113,6 +117,7 @@ export class WikiAiService {
         maxTokens: 32_000,
         timeoutMs: Math.max(cfg.timeoutMs, 300_000),
         signal,
+        trace: run.trace,
       });
       const { data, ...meta } = res;
       const layer: WikiAiLayer = { ...acceptWikiAiOutput({ snapshot, pool, output: data, conceptIds, result: meta }), readerLevel: level };
@@ -124,7 +129,7 @@ export class WikiAiService {
             task: 'research', system: withReader('개념별 공식 문서를 검색하고 해당 페이지의 내용을 읽어 한 문장 정의와 핵심 설명을 확인하세요. 검색 결과의 실제 URL만 links에 넣으세요. 공식 문서를 찾지 못하면 그 개념을 생략하세요. 한국어 존댓말, 지정한 JSON으로 답하세요.', level),
             user: JSON.stringify(layer.concepts.map(({ id, name }) => ({ id, name }))),
             schema: z.object({ concepts: z.array(z.object({ id: z.string(), summary: z.string(), explanation: z.string(), links: z.array(z.object({ title: z.string(), url: z.string() })) })) }),
-            schemaName: 'concept_documentation', maxTokens: 16000, timeoutMs: cfg.timeoutMs, signal,
+            schemaName: 'concept_documentation', maxTokens: 16000, timeoutMs: cfg.timeoutMs, signal, trace: run.trace,
           });
           const allowedUrls = new Set((research.sources ?? []).flatMap((s) => { try { return [new URL(s.url).href]; } catch { return []; } }));
           for (const c of layer.concepts) {
@@ -150,10 +155,12 @@ export class WikiAiService {
       if (signal.aborted) throw new LlmError('cancelled', '작업이 취소되었습니다');
       const current = await this.opts.wiki.current(snapshot.projectId, session.key);
       if (!current || current.revision !== snapshot.revision) throw new WikiAiError(409, 'wiki_stale', '생성 중 위키 입력이 바뀌었습니다. 다시 생성해 주세요.');
-      await this.opts.storage.writeJson(this.file(snapshot.projectId, snapshot.revision, level), layer);
+      const file = this.file(snapshot.projectId, snapshot.revision, level);
+      await this.opts.storage.writeJson(file, layer);
+      run.result(file, layer);
       await this.opts.wiki.save(session, mergeWikiAi({ ...snapshot, generationId: undefined }, layer).snapshot);
       return { revision: snapshot.revision, accepted: layer.narratives.length + layer.claims.length + layer.items.length, rejected: layer.rejected.length };
-    });
+    }));
     return { status: job.state === 'running' ? 'running' : 'queued', jobId: job.id };
   }
 }

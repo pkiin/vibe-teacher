@@ -3,10 +3,16 @@ import path from 'node:path';
 import type { CloudClient } from './client';
 import { CloudError } from './client';
 import type { StorageBackend } from '../storage/store';
+import { CloudAiLog } from './ai-log';
 
 /** 모든 키는 wiki 루트의 상대 경로다. user_id는 검증한 인증 주체에서만 받는다. */
 export class CloudStorage implements StorageBackend {
-  constructor(readonly client: CloudClient, readonly userId: string, private readonly root: string) {}
+  /** 같은 클라이언트를 써서 토큰 갱신이 기록에도 반영된다. */
+  readonly aiLog: CloudAiLog;
+
+  constructor(readonly client: CloudClient, readonly userId: string, private readonly root: string) {
+    this.aiLog = new CloudAiLog(client, userId);
+  }
 
   private key(file: string): string {
     const key = path.relative(this.root, file).split(path.sep).join('/');

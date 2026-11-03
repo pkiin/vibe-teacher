@@ -1,6 +1,7 @@
 import type { LlmProviderId, LlmProviderOption, LlmProviderSetting, LlmStatus } from '@vibe-teacher/shared';
 import type { AppConfig } from '../config/schema';
 import { ClaudeCliProvider, resolveClaudeBinary } from './claude-cli';
+import type { AiLog } from './log';
 import type { ModelCatalog } from './models';
 import { OpenAiCompatProvider } from './openai-compat';
 import { LlmError, type LlmProvider, type LlmRequest, type LlmResult } from './types';
@@ -8,7 +9,7 @@ import { LlmError, type LlmProvider, type LlmRequest, type LlmResult } from './t
 type LlmConfig = Omit<AppConfig['llm'], 'provider'> & { provider: LlmProviderSetting };
 
 export interface ResolvedLlm { provider: LlmProvider | null; status: LlmStatus }
-export interface LlmDeps { env?: NodeJS.ProcessEnv; catalog?: ModelCatalog; fetch?: typeof fetch }
+export interface LlmDeps { env?: NodeJS.ProcessEnv; catalog?: ModelCatalog; fetch?: typeof fetch; log?: AiLog }
 
 export function modelFor(id: LlmProviderId, cfg: LlmConfig): string | null {
   return id === 'claude-cli' ? cfg.model : cfg.openrouterModel;
@@ -35,8 +36,8 @@ export class RoutedProvider implements LlmProvider {
 function providers(cfg: LlmConfig, llmCwd: string, deps: LlmDeps) {
   const env = deps.env ?? process.env;
   return {
-    cli: new ClaudeCliProvider({ binaryPath: cfg.claudeCliPath, cwd: llmCwd, model: cfg.model, maxBudgetUsd: cfg.maxBudgetUsd, env }),
-    api: new OpenAiCompatProvider({ id: 'openrouter', model: cfg.openrouterModel, env, fetch: deps.fetch, structured: deps.catalog ? (m) => deps.catalog!.structured('openrouter', m) : undefined }),
+    cli: new ClaudeCliProvider({ binaryPath: cfg.claudeCliPath, cwd: llmCwd, model: cfg.model, maxBudgetUsd: cfg.maxBudgetUsd, env, log: deps.log }),
+    api: new OpenAiCompatProvider({ id: 'openrouter', model: cfg.openrouterModel, env, fetch: deps.fetch, log: deps.log, structured: deps.catalog ? (m) => deps.catalog!.structured('openrouter', m) : undefined }),
   };
 }
 

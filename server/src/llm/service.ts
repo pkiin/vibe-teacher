@@ -5,6 +5,7 @@ import { enrichCacheKey, readEnrichment, writeEnrichment } from './cache';
 import { buildDigest, maskSecrets, maskOutput } from './digest';
 import { conceptId, safeLinks } from './concepts';
 import { JobQueue } from './jobs';
+import { withAiRun } from './log';
 import { SYSTEM_PROMPT, buildUserPrompt } from './prompts';
 import { withReader } from './reader';
 import { ModelCatalog } from './models';
@@ -38,7 +39,7 @@ export class EnrichService {
   }
 
   private get deps() {
-    return { env: this.opts.env ?? process.env, catalog: this.models, fetch: this.opts.fetch };
+    return { env: this.opts.env ?? process.env, catalog: this.models, fetch: this.opts.fetch, log: this.opts.storage?.aiLog };
   }
 
   get providerEnvOverride(): string | undefined {
@@ -132,7 +133,7 @@ export class EnrichService {
     const built = (this.opts.buildBuilt ?? summarizeBuilt)(session);
     const digest = buildDigest(session, built, concepts);
     const cfg = this.opts.store.get().llm;
-    const job = this.jobs.enqueue(`${session.key}|${level}`, async (signal) => {
+    const job = this.jobs.enqueue(`${session.key}|${level}`, (signal) => withAiRun(this.opts.storage, { feature: 'session_enrich', projectId: session.projectId, sessionKey: session.key, readerLevel: level }, signal, async (run) => {
       const res = await provider.complete({
         system: withReader(SYSTEM_PROMPT, level),
         user: buildUserPrompt(digest),
@@ -142,6 +143,7 @@ export class EnrichService {
         maxTokens: 32_000,
         timeoutMs: cfg.timeoutMs,
         signal,
+        trace: run.trace,
       });
       const data = EnrichmentSchema.parse(maskOutput(res.data));
       const knownEvidence = new Set([
@@ -164,10 +166,13 @@ export class EnrichService {
         })) },
       };
       const actualKey = enrichCacheKey(session, res.provider, modelFor(res.provider, cfg), ENRICH_PROMPT_VERSION, level);
-      if (this.opts.storage) await this.opts.storage.writeJson(path.join(this.opts.storage.root, 'enrich', `${actualKey}.json`), record);
-      else await writeEnrichment(this.opts.paths.enrichCacheDir, actualKey, record);
+      if (this.opts.storage) {
+        const file = path.join(this.opts.storage.root, 'enrich', `${actualKey}.json`);
+        await this.opts.storage.writeJson(file, record);
+        run.result(file, record);
+      } else await writeEnrichment(this.opts.paths.enrichCacheDir, actualKey, record);
       return record;
-    });
+    }));
     return { status: job.state === 'running' ? 'running' : 'queued', jobId: job.id };
   }
 }
