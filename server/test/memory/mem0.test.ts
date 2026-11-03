@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Mem0Backend } from '../../src/memory/mem0';
 import { MemoryService } from '../../src/memory/service';
 import { LearnerService } from '../../src/learner/service';
@@ -16,6 +16,18 @@ async function fixture() {
   return { directory, storage, learner: new LearnerService(storage) };
 }
 describe('mem0 OSS with PostgreSQL and OpenRouter', () => {
+  it('loads the installed OSS SDK entry point without constructing clients', async () => {
+    const { directory } = await fixture();
+    vi.stubEnv('MEM0_TELEMETRY', 'false');
+    vi.stubEnv('MEM0_DIR', directory);
+    try {
+      const sdk = await import('mem0ai/oss');
+      expect(sdk.Memory).toBeTypeOf('function');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('separates destinations, users and embedding models without putting credentials into identities', async () => {
     const { storage } = await fixture();
     const options = { key: 'test-key', model: 'openai/gpt-5-mini', databaseUrl: 'postgresql://alice:private-password@127.0.0.1:55432/memory' };

@@ -14,6 +14,7 @@ describe('config store', () => {
     const cfg = await store.load();
     expect(cfg.scan.mode).toBe('current');
     expect(cfg.llm.provider).toBe('auto');
+    expect(cfg.server.port).toBe(3318);
     await store.update((c) => {
       c.scan.mode = 'all';
       c.sources.push({ id: 'x', provider: 'codex', path: '/tmp/x', label: '', enabled: true });

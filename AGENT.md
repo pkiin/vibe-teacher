@@ -14,6 +14,7 @@
 5. 사용자에게 무엇을 바꿨고 README 의 어느 절을 고쳤는지 짧게 보고합니다.
 
 커밋과 푸시는 사용자가 요청할 때만 합니다.
+새 기능 작업은 최신 `main`에서 새 작업 브랜치를 만들어 진행합니다.
 
 ## 2. README.md 갱신 기준
 
@@ -88,7 +89,7 @@ npm install
 npm run memory:db                   # 로컬 PostgreSQL + pgvector 준비 (.env에 접속 설정 생성)
 npm run memory:check                # 설정된 Supabase·PostgreSQL 접속과 합성 쓰기·검색 검사 (AI 호출 없음)
 npm run accounts:setup              # 관리자: 같은 프로젝트의 Supabase 회원·승인·RLS 스키마 최초 준비
-npm run dev                         # API :8787 + 웹 :5173 (웹의 /api 는 API 로 프록시)
+npm run dev                         # API :3318 + 웹 :3317 (웹의 /api 는 API 로 프록시)
 npm run dev:server                  # API 만
 npm run dev:web                     # 웹만
 npm run build && npm start          # web/dist 빌드 후 API 가 UI 까지 한 포트로 서빙
@@ -99,6 +100,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 ```
 
 개발 중 설정·캐시를 실제 홈과 분리하려면 `npm run dev -- --home /tmp/vt-dev` 처럼 `--home` 을 씁니다.
+
+개발 기본 포트는 웹 `3317`, API `3318`입니다. 변경 시 `scripts/dev.mjs`·`web/vite.config.ts`·설정 스키마·`.env.example`·README를 함께 맞춥니다. `mem0ai/oss`는 `server/package.json`에 고정한 `mem0ai` `3.3.1`을 사용하며 1.x로 낮추지 않습니다.
 
 ## 5. 지켜야 할 불변 조건 (보안·프라이버시)
 

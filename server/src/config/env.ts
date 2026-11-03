@@ -23,7 +23,7 @@ export function isLoopbackHost(host: string): boolean {
   return false;
 }
 
-/** `--port`, `--host`, `--home` CLI 인자 (예: `npm start -- --port 3060`) */
+/** `--port`, `--host`, `--home` CLI 인자 (예: `npm start -- --port 3338`) */
 export function parseServerArgs(argv: string[]): ServerArgs {
   let values: Record<string, string | boolean | undefined>;
   try {

@@ -49,7 +49,7 @@ export const WikiSchema = z.object({
 
 export const ServerSchema = z.object({
   host: z.string().default('127.0.0.1'),
-  port: z.number().int().positive().default(8787),
+  port: z.number().int().positive().default(3318),
 });
 
 export const ConfigSchema = z.object({
@@ -68,7 +68,7 @@ export const ConfigSchema = z.object({
     openaiModel: 'gpt-5-mini',
     autoText: true,
   }),
-  server: ServerSchema.default({ host: '127.0.0.1', port: 8787 }),
+  server: ServerSchema.default({ host: '127.0.0.1', port: 3318 }),
   auth: AuthSchema.default({ mode: 'none', admins: [], sessionTtlHours: 24 * 7, enrichFor: 'admins' }),
   wiki: WikiSchema.default({ briefTokenBudget: 900, maxPrerequisiteDepth: 2, maxPrerequisitesPerBundle: 4, maxOptionalQuestions: 2, suggestQuestions: true }),
 });

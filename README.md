@@ -33,7 +33,7 @@ chmod 600 .env
 `.env`에서 **`SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`OPENROUTER_API_KEY`**를 채운 뒤 실행합니다. Supabase 두 값은 관리자에게 받은 공통 연결 정보, OpenRouter 키는 본인에게 발급된 개인 키입니다. 예제는 `local` 실행과 `openrouter` 제공자로 준비되어 있습니다.
 
 ```bash
-npm run dev  # 웹 http://127.0.0.1:5173 / API http://127.0.0.1:8787
+npm run dev  # 웹 http://127.0.0.1:3317 / API http://127.0.0.1:3318
 ```
 
 회원가입 → 이메일 인증 → 로그인 → 준비 단계 선택 순서로 시작합니다. 회원 모드의 AI 사용에는 관리자 승인도 필요합니다. Claude CLI 로그인을 쓰려면 `.env`의 `VIBE_TEACHER_LLM_PROVIDER`를 `auto`로 바꿉니다. 키나 CLI 로그인이 없어도 기본 기록 조회·저장은 사용할 수 있습니다.
@@ -117,8 +117,8 @@ chmod 600 .env
 예제의 `VIBE_TEACHER_DEPLOYMENT=local`을 그대로 두고, 관리자에게 받은 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`와 본인의 `OPENROUTER_API_KEY`를 `.env`에 채웁니다. `.env.admin`과 관리자 DB 주소는 필요하지 않습니다.
 
 ```bash
-npm run dev  # http://127.0.0.1:5173
-# 또는 npm run build && npm start  # http://127.0.0.1:8787
+npm run dev  # http://127.0.0.1:3317
+# 또는 npm run build && npm start  # http://127.0.0.1:3318
 ```
 
 처음 로그인한 계정이 이 설치의 소유자가 됩니다. `<VIBE_TEACHER_HOME>/local-owner`에 Supabase 사용자 ID만 보관합니다. 소유자는 해당 기기의 소스·모델을 설정할 수 있지만 회원 승인 권한은 얻지 않습니다. 이후 다른 계정으로 로그인해도 이 노트북의 기록은 볼 수 없습니다. 계정을 잘못 연결했다면 앱을 종료하고 해당 파일을 삭제한 뒤 본인의 계정으로 다시 로그인하세요. 로컬 설치는 loopback 바인딩만 허용합니다.
@@ -132,7 +132,7 @@ AI 사용 승인은 공용 서버의 AI 호출 권한이며 API 키를 배포하
 ### Supabase 최초 설정 (관리자 1회)
 
 1. Supabase 프로젝트의 SQL Editor에서 [`supabase/migrations/202611030001_accounts_and_storage.sql`](supabase/migrations/202611030001_accounts_and_storage.sql)을 한 번 실행합니다. 또는 관리자 `.env.admin`에 해당 프로젝트의 `VIBE_TEACHER_SUPABASE_DATABASE_URL`(Session pooler, 5432)을 넣고 `npm run accounts:setup`을 실행합니다. 준비 명령은 이미 존재하는 회원 표를 덮어쓰지 않습니다. 기존 Auth 사용자는 회원 표에 추가되고, 이후 가입자는 자동 등록됩니다.
-2. Authentication에서 이메일/비밀번호 로그인을 활성화합니다. **Authentication → URL Configuration**의 Site URL을 현재 앱 주소(개발 기본 `http://127.0.0.1:5173/`, 배포 후에는 공용 서버의 HTTPS 주소)로 설정하고, Redirect URLs에는 각 설치에서 사용하는 주소를 추가합니다. 예: `http://127.0.0.1:5173/`, `http://localhost:5173/`, 빌드 실행용 `http://127.0.0.1:8787/`, 공용 서버의 `https://앱주소/`. 커스텀 포트는 실제 웹 포트를 등록하세요. 가입 요청은 브라우저의 웹 주소를 인증 후 복귀 주소로 전달합니다. 주소를 고정하려면 `.env`에 `VIBE_TEACHER_PUBLIC_URL`을 설정하고 같은 주소를 Redirect URLs에 등록합니다. 이메일 인증 링크로 인증을 마친 뒤 각 설치에서 이메일/비밀번호로 로그인합니다.
+2. Authentication에서 이메일/비밀번호 로그인을 활성화합니다. **Authentication → URL Configuration**의 Site URL을 현재 앱 주소(개발 기본 `http://127.0.0.1:3317/`, 배포 후에는 공용 서버의 HTTPS 주소)로 설정하고, Redirect URLs에는 각 설치에서 사용하는 주소를 추가합니다. 예: `http://127.0.0.1:3317/`, `http://localhost:3317/`, 빌드 실행용 `http://127.0.0.1:3318/`, 공용 서버의 `https://앱주소/`. 커스텀 포트는 실제 웹 포트를 등록하세요. 가입 요청은 브라우저의 웹 주소를 인증 후 복귀 주소로 전달합니다. 주소를 고정하려면 `.env`에 `VIBE_TEACHER_PUBLIC_URL`을 설정하고 같은 주소를 Redirect URLs에 등록합니다. 이메일 인증 링크로 인증을 마친 뒤 각 설치에서 이메일/비밀번호로 로그인합니다.
 3. 프로젝트의 publishable 키(기존 `anon` JWT도 지원)를 설치에 배포합니다. `service_role`, `sb_secret_`, PostgreSQL 암호는 사용자 설치에 넣지 않습니다.
 4. 관리자 본인도 회원가입한 뒤 SQL Editor에서 아래 SQL을 실행합니다. 다른 회원의 가입 정보로 관리자 권한을 지정하지 않도록 이메일을 확인하세요.
 
@@ -162,15 +162,17 @@ psql -v ON_ERROR_STOP=1 "$TEST_DATABASE_URL" -f supabase/tests/rls.sql
 
 우선순위는 **CLI 인자 > 셸 환경변수 > `.env` > 서버 전용 `.env.admin` > 설정 파일 > 기본값**입니다. 일반 사용자의 개인 키와 실행 설정은 `.env`, 관리자 전용 설정은 `.env.admin`에 둡니다. 기본 주소는 로컬 전용이며, 공용 서버는 위의 `shared` 설치 방법을 따릅니다.
 
+`npm run dev`는 프론트 `http://127.0.0.1:3317`과 백엔드 `http://127.0.0.1:3318`을 함께 실행합니다. `.env.example`의 두 포트 값을 기존 `.env`에도 넣으면 이전 설정 파일에 저장된 포트보다 우선합니다. 포트를 바꾼 뒤에는 서버를 재시작하고 Supabase Redirect URLs에도 새 프론트 주소를 등록하세요. 다른 앱과 충돌하면 아래처럼 두 포트를 함께 지정할 수 있습니다.
+
 ```bash
-npm run dev -- --port 3050 --api-port 3060          # 웹 3050, API 3060 (프록시도 3060 을 따라감)
+npm run dev -- --port 3337 --api-port 3338          # 웹 3337, API 3338 (프록시도 3338 을 따라감)
 npm run dev -- --host 0.0.0.0 --api-host 0.0.0.0    # shared 설치 + HTTPS 앞단을 준비한 경우
 npm run dev -- --home /srv/vibe-teacher             # 설정·캐시 디렉터리
 npm run dev -- --help
 
-npm start -- --port 3060 --host 127.0.0.1           # 배포용 서버 (API + UI 한 포트)
-npm run dev:server -- --port 3060                   # API 만
-npm run dev:web -- --port 3050                      # 웹만 (vite 옵션 그대로)
+npm start -- --port 3338 --host 127.0.0.1           # 배포용 서버 (API + UI 한 포트)
+npm run dev:server -- --port 3338                   # API 만
+npm run dev:web -- --port 3337                      # 웹만 (vite 옵션 그대로)
 ```
 
 두 예제 파일의 설정은 다음과 같습니다. 주석 처리된 선택값은 필요할 때만 사용합니다.
@@ -182,8 +184,8 @@ npm run dev:web -- --port 3050                      # 웹만 (vite 옵션 그대
 | `SUPABASE_PUBLISHABLE_KEY` | `.env` | 같은 프로젝트의 `sb_publishable_...` 공개 키, 회원 모드 필수 |
 | `VIBE_TEACHER_DEPLOYMENT` | `.env` | 예제 기본 `local`. 공용 서버는 `shared` |
 | `VIBE_TEACHER_PUBLIC_URL` | `.env` | 선택. 인증 후 돌아올 앱 주소. 생략하면 가입 요청의 웹 주소 사용 |
-| `VIBE_TEACHER_PORT` | `.env` | 선택. API·빌드 실행 포트, 기본 `8787` |
-| `VIBE_TEACHER_WEB_PORT` | `.env` | 선택. 개발 웹 포트, 기본 `5173` |
+| `VIBE_TEACHER_PORT` | `.env` | API·빌드 실행 포트, 예제·기본값 `3318` |
+| `VIBE_TEACHER_WEB_PORT` | `.env` | 개발 웹 포트, 예제·기본값 `3317` |
 | `OPENROUTER_API_KEY` | `.env` | 로컬 사용자의 개인 OpenRouter 키 |
 | `VIBE_TEACHER_LLM_PROVIDER` | `.env` | 예제는 `openrouter`. 로컬 Claude CLI 로그인은 `auto`, AI 중지는 `none` |
 | `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY` | `.env.admin` | 관리자 본인의 개발용 키. 일반 로컬 사용자에게 필요하지 않음 |
@@ -255,7 +257,7 @@ npm test
   "sources": [{ "id": "…", "provider": "claude-code", "path": "/mnt/backup/.claude/projects", "label": "백업", "enabled": true }],
   "disabledDefaultSourceIds": [],
   "llm": { "provider": "auto", "claudeCliPath": null, "model": null, "maxBudgetUsd": 0.5, "timeoutMs": 180000, "effort": "medium", "openrouterModel": "openrouter/free", "openaiModel": "gpt-5-mini", "autoText": true },
-  "server": { "host": "127.0.0.1", "port": 8787 },
+  "server": { "host": "127.0.0.1", "port": 3318 },
   "wiki": { "briefTokenBudget": 900, "maxPrerequisiteDepth": 2, "maxPrerequisitesPerBundle": 4, "maxOptionalQuestions": 2, "suggestQuestions": true }
 }
 ```
@@ -315,6 +317,8 @@ API 표는 **방식 → 경로 → 동작 설명 → 파일** 순서로 표시�
 <summary>기존 방식의 mem0·PostgreSQL 설정 펼치기</summary>
 
 기존 방식으로 실행하려면 `.env`의 `VIBE_TEACHER_AUTH_MODE`를 비워 둡니다. 인증 방식은 `config.auth.mode`를 따릅니다. 본인의 OpenRouter 키는 `.env`에 입력합니다.
+
+OSS 기능을 제공하는 `mem0ai` SDK `3.3.1`을 사용합니다. 저장소의 `npm install`로 설치하며 별도의 mem0 서비스 키는 필요하지 않습니다.
 
 ```dotenv
 # .env
@@ -510,7 +514,7 @@ sudo setfacl -R -d -m u:user99:rX /home/user01/.claude /home/user01/.codex /home
 기본은 `127.0.0.1` 에만 바인딩합니다. 다른 PC 에서 보려면 SSH 터널을 권장합니다.
 
 ```bash
-ssh -L 8787:127.0.0.1:8787 <server>
+ssh -L 3318:127.0.0.1:3318 <server>
 ```
 
 로그인 모드를 사용하지 않고 외부 주소로 열어야 하면 토큰이 필수입니다 (없으면 부팅을 거부합니다).

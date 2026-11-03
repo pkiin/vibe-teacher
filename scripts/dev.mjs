@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 개발 서버 실행기.
- *   npm run dev -- --port 3050 --api-port 3060 [--host 0.0.0.0] [--api-host 127.0.0.1] [--home ~/.vibe-teacher]
+ *   npm run dev -- --port 3337 --api-port 3338 [--host 0.0.0.0] [--api-host 127.0.0.1] [--home ~/.vibe-teacher]
  * 웹(Vite)과 API(Hono)를 함께 띄우고, 웹의 /api 프록시가 API 포트를 따라가도록 환경변수로 맞춘다.
  * 우선순위: CLI 인자 > 환경변수 > .env > 기본값 (API 는 설정 파일 server.port/host 도 읽음)
  */
@@ -55,9 +55,9 @@ if (values.host) env.VIBE_TEACHER_WEB_HOST = values.host;
 if (values['api-host']) env.VIBE_TEACHER_HOST = values['api-host'];
 if (values.home) env.VIBE_TEACHER_HOME = values.home;
 
-const webPort = env.VIBE_TEACHER_WEB_PORT ?? '5173';
+const webPort = env.VIBE_TEACHER_WEB_PORT ?? '3317';
 const webHost = env.VIBE_TEACHER_WEB_HOST ?? '127.0.0.1';
-const apiPort = env.VIBE_TEACHER_PORT ?? '8787 (설정 파일 값이 있으면 그 값)';
+const apiPort = env.VIBE_TEACHER_PORT ?? '3318 (설정 파일 값이 있으면 그 값)';
 const apiHost = env.VIBE_TEACHER_HOST ?? '127.0.0.1';
 console.log(`[dev] 웹 http://${webHost}:${webPort}  →  API http://${apiHost}:${apiPort}`);
 
@@ -76,14 +76,14 @@ result.then(
 
 function usage() {
   console.log(`사용법: npm run dev -- [옵션]
-  -p, --port <n>       웹(Vite) 포트            (기본 5173, 환경변수 VIBE_TEACHER_WEB_PORT)
+  -p, --port <n>       웹(Vite) 포트            (기본 3317, 환경변수 VIBE_TEACHER_WEB_PORT)
       --host <h>       웹 바인딩 주소            (기본 127.0.0.1, VIBE_TEACHER_WEB_HOST)
-      --api-port <n>   API(Hono) 포트           (기본 8787, VIBE_TEACHER_PORT 또는 설정 server.port)
+      --api-port <n>   API(Hono) 포트           (기본 3318, VIBE_TEACHER_PORT 또는 설정 server.port)
       --api-host <h>   API 바인딩 주소           (기본 127.0.0.1, VIBE_TEACHER_HOST; 외부 접근은 토큰 또는 로그인 필요)
       --home <dir>     설정/캐시 디렉터리        (기본 ~/.vibe-teacher, VIBE_TEACHER_HOME)
 회원 로그인: .env에 VIBE_TEACHER_AUTH_MODE=supabase와 SUPABASE_URL·SUPABASE_PUBLISHABLE_KEY 설정
 실행 방식: VIBE_TEACHER_DEPLOYMENT=local(기본, loopback) 또는 shared(HTTPS 공용 서버)
 인증 후 복귀: 가입한 웹 주소 사용. 고정하려면 VIBE_TEACHER_PUBLIC_URL 설정 및 Supabase Redirect URLs 등록
 서버 전용 비밀값은 .env.admin에 저장할 수 있습니다.
-예)  npm run dev -- --port 3050 --api-port 3060`);
+예)  npm run dev -- --port 3337 --api-port 3338`);
 }

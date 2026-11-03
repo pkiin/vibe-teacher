@@ -33,7 +33,7 @@ async function main() {
   if (!env.isLoopback && !env.token && cfg.auth.mode !== 'home-token' && !cloud) {
     console.error(
       `[vibe-teacher] ${env.host} 처럼 loopback 이 아닌 주소에 바인딩하려면 VIBE_TEACHER_TOKEN 환경변수 또는 로그인 모드(auth.mode=home-token)가 필요합니다. ` +
-        `여러 계정의 대화 기록을 다루므로 SSH 터널(ssh -L 8787:127.0.0.1:8787 <server>) 사용을 권장합니다.`,
+        `여러 계정의 대화 기록을 다루므로 SSH 터널(ssh -L ${env.port}:127.0.0.1:${env.port} <server>) 사용을 권장합니다.`,
     );
     process.exit(2);
   }
