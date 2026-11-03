@@ -47,7 +47,7 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
   src/adapters/    도구별 기록 파서. 도구마다 index(어댑터) · paths(기본 경로) · records(원본 레코드 타입) · parse(정규화)
   src/index/       계정 탐색, 소스, 세션 인덱스, 인덱스 디스크 캐시
   src/analyzers/   user-messages(내 메시지) · built/(파일·명령·패키지·커밋 원문 수집)
-  src/llm/         AI: digest(전송용 요약 + 비밀값 마스킹) · gate(AI 문장을 쓸 수 있는지와 못 쓰는 사유) · reader(읽는 사람 수준별 문체 지침, withReader) · claude-cli · openai-compat(OpenRouter 전용, fetch) · concepts(개념 ID·링크 검사) · models(모델 목록) · select(제공자 선택) · jobs · cache
+  src/llm/         AI: digest(전송용 요약 + 비밀값 마스킹) · gate(AI 문장을 쓸 수 있는지와 못 쓰는 사유) · reader(읽는 사람 수준별 문체 지침, withReader) · claude-cli · openai-compat(OpenRouter 전용, fetch) · concepts(개념 ID·링크 검사) · models(모델 목록) · select(제공자 선택) · credentials(로컬 개인 키·공용 서버 UUID별 키 선택) · jobs · cache
   src/auth/        홈 디렉터리 토큰 로그인·Supabase 이메일 회원가입/로그인·HttpOnly 세션 갱신, 쿠키, 미들웨어
   src/cloud/       공개 Supabase 설정·사용자 토큰 Data API, RLS 문서/추가 전용 원장 저장소, 사용자별 서비스·작업 큐
   src/config/      설정 스키마(zod)·저장소·환경변수/CLI 인자
@@ -107,7 +107,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **스캔 대상은 읽기 전용.** `~/.claude`, `~/.codex`, `~/.copilot`, VS Code 저장소 등 스캔하는 홈에는 아무것도 쓰지 않습니다. 파일 쓰기는 `VIBE_TEACHER_HOME`(기본 `~/.vibe-teacher`) 아래 설정·캐시·`wiki/`에 허용합니다. 장기 기억 검색 DB는 `VIBE_TEACHER_SUPABASE_DATABASE_URL` 우선, 없으면 `VIBE_TEACHER_MEMORY_DATABASE_URL`의 PostgreSQL에만 쓰며, 로컬 준비 명령은 프로젝트 `.env`에 DB 접속 설정을 저장하고 전용 Docker 볼륨을 사용합니다. JSON 파일 쓰기는 `server/src/lib/fsx.ts` 의 `writeJsonAtomic` 을 씁니다.
 - **LLM 에는 다이제스트만.** 원본 JSONL, 도구 출력 전문은 절대 보내지 않습니다. 보내는 내용은 `server/src/llm/digest.ts` 의 `buildDigest` 를 거치고 `maskSecrets` 로 마스킹합니다. 새 비밀값 형식을 발견하면 `SECRET_PATTERNS` 에 추가하고 테스트를 붙입니다.
 - **교육 내용은 AI가 생성한다.** 개념 선정·설명·위키 구성·주의사항·선행관계·연습 문항은 AI가 작성한다. 고정 카탈로그나 규칙 기반 대체 문장을 다시 넣지 않는다. 코드는 원문 수집·접근 권한·출처 참조·스키마·순환·출력 예산을 검사한다. AI를 쓸 수 없으면 실패 사유를 표시한다. GET은 AI를 호출하지 않고 POST로만 생성한다. `llm.autoText`는 자동 POST 여부이며 수동 생성은 유지한다.
-- **AI 생성·외부 문서 검색 API는 OpenRouter만 사용한다.** 기본 모델은 `openai/gpt-5-mini`. 일반 작업은 Claude CLI를 우선하고 CLI 실패·외부 문서 검색은 OpenRouter로 처리한다. 취소는 다른 제공자로 재시도하지 않는다. OpenAI·Anthropic 직접 호출이나 해당 API 키 사용을 추가하지 않는다. 문서 검색에는 공개 개념 이름만 보내고 프로젝트 원문·사설 경로는 넣지 않는다. 참고 링크는 실제 API 검색 출처와 대조한다. 개인 기억 정리·임베딩도 OpenRouter를 사용한다. 명시적으로 선택한 Supermemory 클라우드 어댑터만 아래 장기 기억 규칙에 따라 별도 API를 사용한다.
+- **AI 생성·외부 문서 검색 API는 OpenRouter만 사용한다.** 기본 모델은 `openai/gpt-5-mini`. 로컬의 auto 설정은 Claude CLI를 우선하고 CLI 실패·외부 문서 검색은 OpenRouter로 처리한다. 공용 서버 shared는 사용자별 키 추적을 위해 OpenRouter로 실행한다. 취소는 다른 제공자로 재시도하지 않는다. OpenAI·Anthropic 직접 호출이나 해당 API 키 사용을 추가하지 않는다. 문서 검색에는 공개 개념 이름만 보내고 프로젝트 원문·사설 경로는 넣지 않는다. 참고 링크는 실제 API 검색 출처와 대조한다. 개인 기억 정리·임베딩도 OpenRouter를 사용한다. 명시적으로 선택한 Supermemory 클라우드 어댑터만 아래 장기 기억 규칙에 따라 별도 API를 사용한다.
 - **기본 바인딩은 `127.0.0.1`.** loopback 이 아닌 주소는 `VIBE_TEACHER_TOKEN`, `auth.mode=home-token` 또는 Supabase shared 로그인 없이는 부팅을 거부합니다 (`server/src/index.ts`). Supabase local은 loopback만 허용하고 처음 인증한 UUID를 앱 저장소 `local-owner`에 묶습니다.
 - **Supabase 회원 데이터는 사용자 JWT + RLS.** `VIBE_TEACHER_AUTH_MODE=supabase`가 기존 인증보다 우선합니다. `/auth/v1/user`로 검증한 UUID만 학습자·저장소 주체로 사용하고 사용자 metadata·이메일·OS 사용자명·요청의 userId로 권한을 만들지 않습니다. 공개 키만 일반 설치에 배포하며 관리자 AI 키는 `.env.admin`에 둡니다. 서비스 키나 DB 암호를 사용자의 브라우저·로컬 설치로 내려주지 않습니다. 회원의 승인·관리자·OS 계정 연결은 `vt_members`와 검증하는 SQL RPC에서만 변경합니다. Supabase 관리자도 연결된 OS 계정과 본인 학습 행만 조회하며 회원 관리 목록만 별도 허용합니다.
 - **회원 모드 저장과 작업을 분리한다.** `CloudRuntime`에서 사용자별 `WikiStorage`·AI 분석 캐시·작업 큐를 만듭니다. 새 위키·질문·학습·설정 서비스는 `deps.storage`를 재사용해야 하며 파일 저장소를 새로 만들어 우회하지 않습니다. CloudStorage는 실패 시 로컬로 대체 저장하지 않습니다. 원본 로그·소스 파일은 현재 기기에서 읽고 업로드하지 않습니다. 회원 모드는 Supabase 공유 원장의 키워드 검색을 사용하며 mem0 직접 DB 설정을 적용하지 않습니다. 기존 비회원/홈 토큰 데이터는 자동으로 업로드하거나 합치지 않습니다.
@@ -132,6 +132,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **Codex 하위 세션과 자동 문맥을 구분한다.** `session_meta.source.subagent` 또는 `parent_thread_id`가 있는 세션은 목록에서 제외하고 직접 읽어도 사용자 입력으로 세지 않습니다. IDE 문맥의 `My request` 본문과 알려진 자동 태그는 `adapters/codex/classify.ts`에서 구분하며, 긴 자동 문맥을 지운 다음 길이를 제한합니다. 코드 블록·인라인 코드의 태그 예시를 지우지 않습니다.
 
 - **메일 인증의 복귀 주소는 앱 주소다.** 가입 요청에 `redirect_to`를 전달한다. `VIBE_TEACHER_PUBLIC_URL` > 요청 Origin > 요청 URL의 origin 순서로 정하며 Vite 프록시 뒤에서도 웹 포트를 보존한다. local은 loopback, shared는 HTTPS만 허용하고 사용자 정보·경로·쿼리·해시가 붙은 주소는 거절한다. Supabase 대시보드의 Redirect URLs 등록은 별도이며 앱 환경변수로 자동 변경하지 않는다. 콜백의 로그인 토큰은 URL 기록에서 지우고 로그·오류·문서에 재출력하지 않는다.
+
+- **공용 서버 AI 키는 인증 UUID로 선택한다.** `llm/credentials.ts`는 `shared` 요청에 `VIBE_TEACHER_USER_OPENROUTER_KEYS`의 본인 UUID 키만 전달합니다. 일반 회원은 관리자 키·서버의 공통 키·CLI로 우회하지 못합니다. 관리자 계정만 본인 매핑이 없을 때 개발용 키를 사용할 수 있습니다. 승인 검사는 별도로 유지합니다. 키 목록과 관리자 전용 변수는 하위 제공자 환경에서 지우고 응답·로그에 노출하지 않습니다. `CloudRuntime`은 사용자별 환경을 분리하고 키·관리자 상태가 바뀌면 제공자 캐시를 무효화합니다. 로컬 사용자는 `.env`의 본인 키를 사용하며 관리자 개발용 키는 관리자에게만 적용합니다.
 
 ## 6. 코드 규칙
 
@@ -166,6 +168,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 ### 환경변수 / CLI 인자 추가
 - `server/src/config/env.ts` 와 `scripts/dev.mjs` (`usage()` 포함), 필요하면 `web/vite.config.ts` 까지 맞춥니다. 우선순위는 **CLI 인자 > 환경변수 > .env > 설정 파일 > 기본값**.
 - 사용자가 설정할 만한 값이면 `.env.example` 에도 주석과 함께 추가합니다. 관리자 비밀값 예제는 `.env.admin.example`에 둡니다. `.env` 는 `server/src/config/dotenv.ts` 와 `scripts/dev.mjs` 가 읽고 `.env.admin`은 API 서버·DB 관리 스크립트만 읽습니다. 우선순위는 셸 > `.env` > `.env.admin`입니다. 실제 값이 든 환경 파일은 절대 커밋하지 않습니다.
+- 환경 예제에는 회원 모드의 필수값과 자주 바꾸는 옵션만 둡니다. 일반 로컬 사용자는 `.env.example`을 복사한 `.env`에 본인의 `OPENROUTER_API_KEY`를 넣습니다. `.env.admin.example`은 관리자·개발 서버 전용이며 `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY`·`VIBE_TEACHER_USER_OPENROUTER_KEYS`·관리자 DB 주소를 둡니다. 두 예제의 활성 변수를 중복하지 않습니다. 기존 모드·장기 기억·고급 옵션은 README의 해당 절에 두고 파일별 배치와 복사 명령을 일치시킵니다.
 - README 표와 예시를 고칩니다.
 
 ### API 라우트 추가

@@ -51,6 +51,7 @@ export const ko = {
     },
   },
   members: {
+    keyUserId: 'API 키 연결용 사용자 ID:',
     nav: '회원 관리', title: '회원 승인과 기록 연결',
     subtitle: 'AI 사용을 승인하고, 공용 서버의 OS 계정을 해당 회원에게 연결하세요. 다른 회원의 학습 데이터는 조회하지 않습니다.',
     forbidden: 'Supabase 관리자만 회원을 관리할 수 있습니다.', approve: 'AI 사용 승인', accounts: '공용 서버에서 볼 수 있는 OS 계정',

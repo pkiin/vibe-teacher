@@ -35,6 +35,7 @@ function MemberCard({ member, accounts, onSaved }: { member: Member; accounts: A
   };
   return <section className="card form-grid">
     <h2 className="member-email">{member.email}</h2>
+    <p className="muted small">{ko.members.keyUserId} <code>{member.user_id}</code></p>
     {member.is_admin && <span className="pill pill-blue">{ko.login.admin}</span>}
     <label><input type="checkbox" checked={approved} onChange={(e) => setApproved(e.target.checked)} /> {ko.members.approve}</label>
     <fieldset><legend>{ko.members.accounts}</legend>

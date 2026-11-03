@@ -41,7 +41,7 @@ export function settingsRoutes(deps: AppDeps): Hono<AppEnv> {
 
   const respond = async (): Promise<SettingsResponse> => {
     const cfg = deps.store.get();
-    const envOverride = process.env.VIBE_TEACHER_LLM_PROVIDER?.trim();
+    const envOverride = deps.enrich.providerEnvOverride;
     return {
       scan: cfg.scan,
       llm: cfg.llm,

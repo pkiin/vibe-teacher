@@ -22,20 +22,42 @@
 
 ## 빠른 시작
 
-Node.js 20 이상이 필요합니다 (`node --version` 으로 확인).
+Node.js 20.12 이상이 필요합니다. 관리자가 Supabase 최초 설정을 마친 프로젝트에 연결하는 순서입니다. 직접 운영한다면 아래 [Supabase 최초 설정](#supabase-최초-설정-관리자-1회)도 진행하세요.
 
 ```bash
 npm install
-npm run dev        # API http://127.0.0.1:8787 + 웹 http://127.0.0.1:5173
+cp .env.example .env
+chmod 600 .env
 ```
 
-장기 기억의 의미 검색을 쓰려면 OpenRouter 키와 PostgreSQL + pgvector가 필요합니다. Docker·Compose가 설치되어 있으면 `npm run memory:db`로 로컬 DB와 접속 설정을 준비한 뒤 앱을 다시 시작하세요. Supabase를 쓰면 `VIBE_TEACHER_SUPABASE_DATABASE_URL`을 설정하고 `npm run memory:check`로 검사합니다. 기존 DB 연결과 상세 설정은 아래 "장기 기억: mem0 + PostgreSQL + OpenRouter" 절을 참고하세요.
-
-배포용:
+`.env`에서 **`SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`OPENROUTER_API_KEY`**를 채운 뒤 실행합니다. Supabase 두 값은 관리자에게 받은 공통 연결 정보, OpenRouter 키는 본인에게 발급된 개인 키입니다. 예제는 `local` 실행과 `openrouter` 제공자로 준비되어 있습니다.
 
 ```bash
-npm run build && npm start   # http://127.0.0.1:8787 에서 UI 와 API 를 함께 서빙
+npm run dev  # 웹 http://127.0.0.1:5173 / API http://127.0.0.1:8787
 ```
+
+회원가입 → 이메일 인증 → 로그인 → 준비 단계 선택 순서로 시작합니다. 회원 모드의 AI 사용에는 관리자 승인도 필요합니다. Claude CLI 로그인을 쓰려면 `.env`의 `VIBE_TEACHER_LLM_PROVIDER`를 `auto`로 바꿉니다. 키나 CLI 로그인이 없어도 기본 기록 조회·저장은 사용할 수 있습니다.
+
+## 환경파일 구성
+
+| 사용하는 방식 | 필요한 설정 |
+|---|---|
+| GitHub에서 내려받아 본인 노트북에서 실행 | [`.env.example`](.env.example)을 `.env`로 복사하고 본인의 `OPENROUTER_API_KEY` 입력 |
+| 공용 서버 링크에 브라우저로 접속 | 방문자는 환경파일을 만들지 않음. 관리자가 서버에서 사용자별 키를 연결 |
+| 관리자의 개발·공용 서버 운영 | 공통 실행 설정은 `.env`, 관리자 개발용 키·사용자별 키 목록·DB 접속 정보는 [`.env.admin.example`](.env.admin.example)을 복사한 `.env.admin`에 입력 |
+
+일반 로컬 사용자는 `.env.admin`을 만들 필요가 없습니다. `.env` 하나에 본인 실행 설정과 개인 API 키를 넣으면 됩니다. API 키가 들어 있는 실제 `.env`와 `.env.admin`은 모두 공유하지 않습니다.
+
+관리자는 다음 파일을 추가로 준비합니다.
+
+```bash
+cp .env.admin.example .env.admin
+chmod 600 .env.admin
+```
+
+관리자 본인의 개발용 키는 `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY`, 공용 서버 사용자별 키는 `VIBE_TEACHER_USER_OPENROUTER_KEYS`입니다. 일반 `.env`의 `OPENROUTER_API_KEY`가 빈 값이어도 관리자용 변수와 이름이 달라 값을 가리지 않습니다. 기존 `.env.admin`에 `OPENROUTER_API_KEY`로 넣어 두었던 관리자 키는 `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY`로 변수 이름을 바꿉니다.
+
+파일은 `.env` → `.env.admin` 순서로 읽고, 같은 변수는 먼저 읽은 값이 우선합니다. 두 파일에 같은 변수를 중복하지 마세요. 환경파일을 바꾸면 서버를 다시 시작합니다. 나머지 옵션은 [고급 환경변수](#고급-환경변수)를 참고하세요.
 
 ## 회원가입을 사용하는 두 가지 실행 방법
 
@@ -50,13 +72,11 @@ cp .env.admin.example .env.admin
 chmod 600 .env .env.admin
 ```
 
-`.env`에 다음을 설정하고, 서버의 AI 키는 `.env.admin`의 `OPENROUTER_API_KEY`에 넣습니다.
+`.env`의 Supabase URL·공개 키를 채우고 다음 두 설정을 바꿉니다. `VIBE_TEACHER_PUBLIC_URL`에는 브라우저에서 접속할 실제 HTTPS 주소를 넣습니다. 관리자 본인 키와 회원별 키는 아래 방식으로 `.env.admin`에 등록합니다.
 
 ```dotenv
-VIBE_TEACHER_AUTH_MODE=supabase
 VIBE_TEACHER_DEPLOYMENT=shared
-SUPABASE_URL=https://PROJECT_REF.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_관리자가_안내한_공개키
+VIBE_TEACHER_PUBLIC_URL=https://app.example.com/
 ```
 
 ```bash
@@ -68,6 +88,24 @@ HTTPS 리버스 프록시 뒤에서 운영하세요. 공용 서버는 항상 `Se
 
 관리자는 **회원 관리**에서 AI 사용을 승인하고 해당 회원이 볼 OS 계정을 연결합니다. 연결 전에는 서버의 채팅 기록이 보이지 않습니다. 같은 OS 계정은 두 회원에게 중복 배정할 수 없습니다. 서버의 다른 홈도 읽으려면 아래 "다중 계정 운영"의 스캔 설정과 ACL 준비가 필요합니다. Supabase 관리자도 작업 기록은 연결된 본인 계정 범위만 조회합니다. 회원 관리에서 보는 목록은 이메일·승인·계정 연결 정보입니다.
 
+### 공용 서버의 사용자별 API 키
+
+공용 서버 방문자는 링크로 접속해 로그인하면 됩니다. 서버 관리자가 **회원 관리**에서 AI 사용을 승인하고, 카드에 표시되는 "API 키 연결용 사용자 ID"를 복사합니다. Supabase Authentication → Users의 사용자 UUID도 같은 값입니다.
+
+`.env.admin`의 `VIBE_TEACHER_USER_OPENROUTER_KEYS`를 다음처럼 작성합니다. UUID와 키는 해당 회원의 실제 값으로 바꿉니다. 아래 두 UUID는 합성 예시입니다.
+
+```dotenv
+VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY=관리자_본인의_개발용키
+VIBE_TEACHER_USER_OPENROUTER_KEYS='{
+  "11111111-1111-4111-8111-111111111111": "첫_사용자의_OpenRouter_키",
+  "22222222-2222-4222-8222-222222222222": "두번째_사용자의_OpenRouter_키"
+}'
+```
+
+공용 서버는 검증된 로그인 UUID에 연결한 키로 OpenRouter를 호출합니다. 서로 다른 키를 등록하면 요청도 각 사용자의 키로 나뉩니다. 사용자별 추적을 유지하기 위해 `shared`에서는 Claude CLI를 사용하지 않습니다. `VIBE_TEACHER_LLM_PROVIDER=none`으로 AI를 끌 수 있습니다.
+
+**회원 승인과 키 등록은 각각 필요합니다.** 일반 회원의 키가 없으면 키 등록 안내를 표시하며, 관리자 개발용 키나 다른 회원의 키를 사용하지 않습니다. 관리자 계정은 본인 UUID에 연결된 키를 우선하고, 미등록 시 관리자 개발용 키를 사용합니다. 키 목록과 키 값은 브라우저 응답에 포함하지 않습니다. 환경파일을 수정한 뒤 서버를 다시 시작하세요. 실제 OpenRouter 키 발급은 관리자가 별도로 진행합니다.
+
 ### 2. 각자의 노트북에서 실행
 
 ```bash
@@ -76,14 +114,7 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-관리자에게 받은 **같은 프로젝트의 공개 연결 정보**를 `.env`에 넣습니다. 관리자 키·DB 암호는 필요하지 않습니다.
-
-```dotenv
-VIBE_TEACHER_AUTH_MODE=supabase
-VIBE_TEACHER_DEPLOYMENT=local
-SUPABASE_URL=https://PROJECT_REF.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_관리자가_안내한_공개키
-```
+예제의 `VIBE_TEACHER_DEPLOYMENT=local`을 그대로 두고, 관리자에게 받은 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`와 본인의 `OPENROUTER_API_KEY`를 `.env`에 채웁니다. `.env.admin`과 관리자 DB 주소는 필요하지 않습니다.
 
 ```bash
 npm run dev  # http://127.0.0.1:5173
@@ -129,11 +160,11 @@ psql -v ON_ERROR_STOP=1 "$TEST_DATABASE_URL" -f supabase/tests/rls.sql
 
 ## 포트와 주소 지정
 
-우선순위는 **CLI 인자 > 셸 환경변수 > `.env` > 서버 전용 `.env.admin` > 설정 파일(`server.port`/`server.host`) > 기본값** 입니다. 환경변수는 저장소 루트의 `.env` 에 적어 둘 수도 있습니다 (`cp .env.example .env`, 아래 "AI 문장과 제공자" 참고).
+우선순위는 **CLI 인자 > 셸 환경변수 > `.env` > 서버 전용 `.env.admin` > 설정 파일 > 기본값**입니다. 일반 사용자의 개인 키와 실행 설정은 `.env`, 관리자 전용 설정은 `.env.admin`에 둡니다. 기본 주소는 로컬 전용이며, 공용 서버는 위의 `shared` 설치 방법을 따릅니다.
 
 ```bash
 npm run dev -- --port 3050 --api-port 3060          # 웹 3050, API 3060 (프록시도 3060 을 따라감)
-npm run dev -- --host 0.0.0.0 --api-host 0.0.0.0    # 외부에서 접속 (VIBE_TEACHER_TOKEN 필요)
+npm run dev -- --host 0.0.0.0 --api-host 0.0.0.0    # shared 설치 + HTTPS 앞단을 준비한 경우
 npm run dev -- --home /srv/vibe-teacher             # 설정·캐시 디렉터리
 npm run dev -- --help
 
@@ -142,30 +173,50 @@ npm run dev:server -- --port 3060                   # API 만
 npm run dev:web -- --port 3050                      # 웹만 (vite 옵션 그대로)
 ```
 
-| 환경변수 | 뜻 | 기본값 |
+두 예제 파일의 설정은 다음과 같습니다. 주석 처리된 선택값은 필요할 때만 사용합니다.
+
+| 변수 | 파일 | 입력 기준 |
 |---|---|---|
-| `VIBE_TEACHER_PORT` | API(Hono) 포트. 웹 개발 서버의 `/api` 프록시 대상도 이 값을 따름 | 8787 |
-| `VIBE_TEACHER_HOST` | API 바인딩 주소 (외부 접근은 토큰 또는 로그인 필수, Supabase local은 loopback만 허용) | 127.0.0.1 |
-| `VIBE_TEACHER_WEB_PORT` | 웹(Vite) 개발 서버 포트 | 5173 |
-| `VIBE_TEACHER_WEB_HOST` | 웹 개발 서버 바인딩 주소 | 127.0.0.1 |
-| `VIBE_TEACHER_API_URL` | 웹 개발 서버가 프록시할 API 주소를 통째로 지정 (원격 API 등) | `http://127.0.0.1:$VIBE_TEACHER_PORT` |
-| `VIBE_TEACHER_HOME` | 설정 파일과 캐시 위치 | `~/.vibe-teacher` |
-| `VIBE_TEACHER_TOKEN` | 비-loopback 바인딩 시 요구되는 Bearer 토큰 | 없음 |
-| `VIBE_TEACHER_AUTH_MODE` | `supabase`로 설정하면 이메일 회원가입·로그인과 RLS 저장소 사용 | 미설정 시 기존 `config.auth.mode` |
-| `VIBE_TEACHER_DEPLOYMENT` | Supabase 설치 방식: `local`(노트북) 또는 `shared`(공용 서버) | `local` |
-| `VIBE_TEACHER_PUBLIC_URL` | 이메일 인증 후 돌아올 브라우저 앱 주소. Supabase Redirect URLs에도 등록. local은 loopback, shared는 HTTPS | 가입 요청의 Origin, 없으면 요청 URL의 origin |
-| `SUPABASE_URL` | 두 실행 방식에서 공유할 Supabase 프로젝트 HTTPS 주소 | 없음 |
-| `SUPABASE_PUBLISHABLE_KEY` | 해당 프로젝트의 publishable 키 또는 기존 anon JWT | 없음 |
-| `VIBE_TEACHER_COOKIE_SECURE` | `1`이면 HTTPS 전용 쿠키. Supabase shared에서는 항상 적용 | 미설정 |
-| `OPENROUTER_API_KEY` | API 생성·Claude CLI 실패 재시도·외부 문서 검색·mem0 기억 정리와 임베딩에 사용하는 키 | 없음 |
-| `VIBE_TEACHER_LLM_PROVIDER` | AI 제공자 강제 (`auto` · `claude-cli` · `openrouter` · `none`), 화면에서 고른 값보다 우선 | 설정값 (`auto`) |
-| `VIBE_TEACHER_MEMORY_BACKEND` | 장기 기억 검색 (`mem0` · `local` · `supermemory`). `local`은 API 없이 키워드 검색 | `mem0` |
-| `VIBE_TEACHER_MEMORY_MODEL` | mem0 기억 정리 모델. 임베딩은 `openai/text-embedding-3-small` (1536차원) | 설정된 OpenRouter 모델 (`openai/gpt-5-mini`) |
-| `VIBE_TEACHER_SUPABASE_DATABASE_URL` | Supabase PostgreSQL 접속 주소. 설정 시 일반·로컬 DB 주소보다 우선. Session pooler(5432) 권장 | 없음 |
-| `VIBE_TEACHER_MEMORY_DATABASE_URL` | mem0 기억 검색용 PostgreSQL 접속 주소. 해당 DB에 `pgvector` 확장 필요 | 없음 (`npm run memory:db`로 로컬 설정 생성) |
-| `VIBE_TEACHER_POSTGRES_PORT` | 프로젝트 전용 Docker PostgreSQL의 로컬 포트 | `55432` |
-| `VIBE_TEACHER_POSTGRES_PASSWORD` | 프로젝트 전용 Docker PostgreSQL 암호. 서버 응답에 포함하지 않음 | `memory:db` 실행 시 임의 생성하여 `.env`에 저장 |
-| `SUPERMEMORY_API_KEY` | Supermemory 검색·인덱스 갱신에 사용하는 서버 전용 키 | 없음 |
+| `VIBE_TEACHER_AUTH_MODE` | `.env` | 예제는 `supabase`. 비우면 기존 `config.auth.mode` 사용 |
+| `SUPABASE_URL` | `.env` | 연결할 프로젝트의 HTTPS URL, 회원 모드 필수 |
+| `SUPABASE_PUBLISHABLE_KEY` | `.env` | 같은 프로젝트의 `sb_publishable_...` 공개 키, 회원 모드 필수 |
+| `VIBE_TEACHER_DEPLOYMENT` | `.env` | 예제 기본 `local`. 공용 서버는 `shared` |
+| `VIBE_TEACHER_PUBLIC_URL` | `.env` | 선택. 인증 후 돌아올 앱 주소. 생략하면 가입 요청의 웹 주소 사용 |
+| `VIBE_TEACHER_PORT` | `.env` | 선택. API·빌드 실행 포트, 기본 `8787` |
+| `VIBE_TEACHER_WEB_PORT` | `.env` | 선택. 개발 웹 포트, 기본 `5173` |
+| `OPENROUTER_API_KEY` | `.env` | 로컬 사용자의 개인 OpenRouter 키 |
+| `VIBE_TEACHER_LLM_PROVIDER` | `.env` | 예제는 `openrouter`. 로컬 Claude CLI 로그인은 `auto`, AI 중지는 `none` |
+| `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY` | `.env.admin` | 관리자 본인의 개발용 키. 일반 로컬 사용자에게 필요하지 않음 |
+| `VIBE_TEACHER_USER_OPENROUTER_KEYS` | `.env.admin` | 공용 서버의 Supabase 사용자 UUID → OpenRouter 키 JSON 객체 |
+| `VIBE_TEACHER_SUPABASE_DATABASE_URL` | `.env.admin` | 선택. `accounts:setup` 또는 기존 mem0 SQL 접속용 Session pooler URI |
+
+`VIBE_TEACHER_PUBLIC_URL`은 Supabase의 Redirect URLs에도 등록합니다. `local`은 loopback, `shared`는 HTTPS 주소를 사용합니다. 공개 키는 기존 `anon` JWT도 지원합니다. `sb_secret_...`·`service_role` 키는 현재 회원 모드 설정에 필요하지 않습니다.
+
+### 고급 환경변수
+
+<details>
+<summary>서버 주소·AI 제공자·기존 기억 검색 옵션 펼치기</summary>
+
+아래 값은 예제에 기본으로 넣지 않습니다. 필요한 항목만 지정한 파일에 추가하세요. 기존 mem0·Supermemory 옵션은 Supabase 회원 모드에 적용되지 않습니다.
+
+| 변수 | 파일 | 용도·기본값 |
+|---|---|---|
+| `VIBE_TEACHER_HOST` | `.env` | API 바인딩 주소, 기본 `127.0.0.1`. 외부 접근은 인증 필요, 회원 모드 `local`은 loopback만 허용 |
+| `VIBE_TEACHER_WEB_HOST` | `.env` | 개발 웹 바인딩 주소, 기본 `127.0.0.1` |
+| `VIBE_TEACHER_API_URL` | `.env` | 개발 웹의 `/api` 프록시 대상, 기본 `http://127.0.0.1:$VIBE_TEACHER_PORT` |
+| `VIBE_TEACHER_HOME` | `.env` | 설정·캐시 위치, 기본 `~/.vibe-teacher` |
+| `VIBE_TEACHER_COOKIE_SECURE` | `.env` | `1`이면 HTTPS 전용 쿠키. 회원 모드 `shared`는 항상 적용 |
+| `VIBE_TEACHER_TOKEN` | `.env.admin` | 기존 인증 방식의 관리자 Bearer 토큰. Supabase 회원 모드에서는 사용하지 않음 |
+| `VIBE_TEACHER_MEMORY_BACKEND` | `.env` | 기존 기억 검색: `mem0`(기본) · `local` · `supermemory` |
+| `VIBE_TEACHER_MEMORY_MODEL` | `.env` | mem0 기억 정리 모델. 생략하면 앱의 OpenRouter 모델 사용 |
+| `VIBE_TEACHER_MEMORY_DATABASE_URL` | `.env` | 본인의 기존 mem0용 PostgreSQL URI. Supabase 전용 DB 주소가 있으면 그 주소가 우선 |
+| `VIBE_TEACHER_POSTGRES_PORT` | `.env` | `memory:db`가 준비하는 로컬 PostgreSQL 포트, 기본 `55432` |
+| `VIBE_TEACHER_POSTGRES_PASSWORD` | `.env` | 본인의 로컬 DB 암호. 미지정 시 `memory:db`가 생성 |
+| `SUPERMEMORY_API_KEY` | `.env` | 본인의 기존 `supermemory` 검색 어댑터 API 키 |
+
+`memory:db`의 자동 생성 DB 주소·암호는 기존 동작대로 스크립트와 Docker Compose가 함께 읽는 `.env`에서 관리합니다. 관리자 프로젝트의 DB 접속 주소는 `.env.admin`에 보관합니다.
+
+</details>
 
 지정한 포트가 이미 사용 중이면 다른 포트로 조용히 옮기지 않고 바로 실패합니다(`strictPort`).
 
@@ -258,6 +309,18 @@ API 표는 **방식 → 경로 → 동작 설명 → 파일** 순서로 표시�
 
 ### 장기 기억: mem0 + PostgreSQL + OpenRouter
 
+**Supabase 회원 모드는 공유 원장의 키워드 검색을 사용하므로 이 설정이 필요하지 않습니다.** 아래는 기존 비회원·홈 토큰 방식에서 mem0 의미 검색을 사용할 때의 설정입니다.
+
+<details>
+<summary>기존 방식의 mem0·PostgreSQL 설정 펼치기</summary>
+
+기존 방식으로 실행하려면 `.env`의 `VIBE_TEACHER_AUTH_MODE`를 비워 둡니다. 인증 방식은 `config.auth.mode`를 따릅니다. 본인의 OpenRouter 키는 `.env`에 입력합니다.
+
+```dotenv
+# .env
+VIBE_TEACHER_AUTH_MODE=
+```
+
 **내 지식 → 내 기억 검색**에서 예전 질문·연습 결과·설명 선호를 검색할 수 있습니다. **mem0 OSS 하네스는 앱 안에서 실행하고 기억 검색 DB는 PostgreSQL + pgvector를 사용**합니다. 기억 정리와 임베딩은 OpenRouter API로 처리하며 로컬 모델 설치나 별도 메모리 서비스 구독이 필요 없습니다. OpenRouter API 사용량에 따른 비용은 발생합니다.
 
 로컬 DB는 Docker와 Docker Compose를 설치한 뒤 다음 명령으로 준비합니다.
@@ -277,17 +340,17 @@ docker compose up -d --wait memory-db
 docker compose stop memory-db
 ```
 
-**기존 PostgreSQL도 연결할 수 있습니다.** 해당 DB에서 `CREATE EXTENSION IF NOT EXISTS vector;`를 실행하고, 앱 계정에 이 전용 DB의 테이블·인덱스 생성 권한을 부여합니다. 기존 DB를 쓰면 `memory:db`를 실행할 필요가 없습니다. `.env` 예시:
+**기존 PostgreSQL도 연결할 수 있습니다.** 해당 DB에서 `CREATE EXTENSION IF NOT EXISTS vector;`를 실행하고, 앱 계정에 이 전용 DB의 테이블·인덱스 생성 권한을 부여합니다. 기존 DB를 쓰면 `memory:db`를 실행할 필요가 없습니다. 본인의 `.env`에 검색 옵션·개인 키·DB 접속 주소를 추가합니다.
 
 ```dotenv
-OPENROUTER_API_KEY=발급받은_OpenRouter_키
+# .env
+OPENROUTER_API_KEY=발급받은_개인_OpenRouter_키
 VIBE_TEACHER_MEMORY_BACKEND=mem0
 VIBE_TEACHER_MEMORY_DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME
-# 기억 정리 모델만 따로 지정할 때 (생략하면 설정된 OpenRouter 모델)
 # VIBE_TEACHER_MEMORY_MODEL=openai/gpt-5-mini
 ```
 
-**Supabase 연결**은 다음 설정을 사용합니다. 프로젝트의 **Connect → Connection string → Session pooler**에서 포트 5432 URI를 복사하고, `[YOUR-PASSWORD]` 부분에 프로젝트의 **DB 비밀번호**를 넣습니다. 암호의 특수문자는 URL 인코딩하세요.
+**Supabase PostgreSQL에 SQL로 연결**하려면 `.env.admin`에 다음 설정을 사용합니다. 프로젝트의 **Connect → Connection string → Session pooler**에서 포트 5432 URI를 복사하고, `[YOUR-PASSWORD]` 부분에 프로젝트의 **DB 비밀번호**를 넣습니다. 암호의 특수문자는 URL 인코딩하세요.
 
 ```dotenv
 VIBE_TEACHER_SUPABASE_DATABASE_URL=postgresql://postgres.PROJECT_REF:DB_PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres
@@ -314,7 +377,7 @@ Supabase 모드에서는 기억 테이블을 `vibe_teacher` 비공개 스키마�
 
 TLS는 호스트와 인증서를 검증합니다. 기본 [Supabase 공개 CA](https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt)를 앱에 포함했으며, 별도 CA가 필요하면 DB URI의 `sslrootcert=/absolute/path/to/ca.crt`로 지정할 수 있습니다. 현재 환경에서 Direct connection이 IPv6 문제로 실패하면 IPv4를 지원하는 Session pooler를 사용하세요. Transaction pooler(6543)는 세션 설정을 유지하는 이 경로에서 사용하지 않습니다. [Supabase 연결 문서](https://supabase.com/docs/guides/database/connecting-to-postgres), [TLS 문서](https://supabase.com/docs/guides/platform/ssl-enforcement)
 
-`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWKS_URL`은 API·인증 확장에 사용할 수 있는 별도 설정입니다. 현재 mem0는 DB 접속 주소로 SQL을 사용하며, 이 키만으로 SQL 연결을 대신하지 않습니다. 기존 로그인은 유지합니다. Secret Key는 서버 환경에만 보관합니다.
+회원 모드의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`는 로그인과 RLS Data API 연결에 사용합니다. 이 절의 mem0 SQL 연결은 DB 접속 주소를 사용하며 공개 키로 대신할 수 없습니다. 앱은 `SUPABASE_SECRET_KEY`·`SUPABASE_JWKS_URL`을 읽지 않습니다.
 
 일반 PostgreSQL URL에는 사용자명·암호·호스트·DB 이름을 채웁니다. 암호의 특수문자는 URL 인코딩하고, TLS가 필요한 서버는 제공자의 인증서·연결 설정을 따릅니다. 위의 로컬 준비 명령을 사용했다면 생성된 URL을 그대로 쓰세요.
 
@@ -334,7 +397,11 @@ PostgreSQL 연동 검사는 **검사용 DB**의 연결 주소를 지정해 실�
 VIBE_TEACHER_TEST_DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/TEST_DB' npx vitest run server/test/memory/postgres.test.ts
 ```
 
+</details>
+
 ## AI 제공자와 외부 문서 검색
+
+다음 표는 로컬 실행 기준입니다. 공용 서버의 `shared` 모드는 사용자별 키 추적을 위해 OpenRouter로 실행하며, `none`은 두 방식 모두에서 AI 생성을 중지합니다.
 
 | 설정 | 실행 방식 |
 |---|---|
@@ -345,18 +412,21 @@ VIBE_TEACHER_TEST_DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/TEST_DB' np
 
 AI 문장 생성·외부 문서 검색 API는 **OpenRouter**를 사용하며 기본 모델은 **`openai/gpt-5-mini`**입니다. 기존 `openai`·`anthropic-sdk` 제공자 설정은 OpenRouter로 이관됩니다. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`로 직접 API를 호출하지 않습니다. 예전 기본값 `openrouter/free`는 `openai/gpt-5-mini`로 바뀝니다. mem0 기억 정리·임베딩도 같은 OpenRouter 키를 사용합니다. 기억 API 호출은 설명 제공자와 별도로 `VIBE_TEACHER_MEMORY_BACKEND=local`로 끌 수 있습니다.
 
-저장소 루트의 `.env`에 키를 넣고 서버를 다시 시작하세요.
+로컬 사용자는 본인의 `.env`에 API 키와 제공자를 설정합니다.
 
 ```dotenv
-OPENROUTER_API_KEY=발급받은_OpenRouter_키
-VIBE_TEACHER_LLM_PROVIDER=auto
+# .env
+OPENROUTER_API_KEY=발급받은_개인_OpenRouter_키
+VIBE_TEACHER_LLM_PROVIDER=openrouter
 ```
+
+관리자는 본인 개발용 키를 `.env.admin`의 `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY`에 넣습니다. 공용 서버는 위 [사용자별 API 키](#공용-서버의-사용자별-api-키) 설정을 따릅니다. 환경파일을 바꾸면 서버를 다시 시작하세요.
 
 모델은 소스 설정의 OpenRouter 모델 선택에서 바꿀 수 있습니다. 모델 목록 조회도 OpenRouter만 사용합니다.
 
 세션 개념을 생성한 뒤에는 **OpenRouter 웹 검색**으로 공식 문서를 찾아 정의와 설명을 확인합니다. 검색에는 개념 이름만 전달하고 세션 원문·프로젝트 경로를 넣지 않습니다. 모델이 임의로 적은 주소는 새 참고 링크로 채택하지 않으며, API 검색 응답의 실제 출처 URL과 대조합니다. 검색이 실패하면 AI 설명은 보존하고 문서 조회 실패를 표시합니다. 검색과 API 생성에는 OpenRouter 크레딧이 사용됩니다.
 
-AI 미설정·권한 부족·취소·오류 상태에서는 새 설명을 생성하지 않습니다. 이미 저장된 AI 결과는 계속 볼 수 있습니다. 자동 생성은 `llm.autoText`로 조절하고, 생성 권한은 `auth.enrichFor`로 정합니다. 전송 내용은 화면의 미리 보기에서 확인할 수 있으며, 비밀값을 마스킹하고 길이를 제한한 발췌만 전달합니다.
+AI 미설정·권한 부족·취소·오류 상태에서는 새 설명을 생성하지 않습니다. 이미 저장된 AI 결과는 계속 볼 수 있습니다. 자동 생성은 `llm.autoText`로 조절합니다. 생성 권한은 Supabase 회원 모드의 관리자 승인(`vt_members.approved` 또는 `is_admin`), 기존 방식의 `auth.enrichFor`를 따릅니다. 전송 내용은 화면의 미리 보기에서 확인할 수 있으며, 비밀값을 마스킹하고 길이를 제한한 발췌만 전달합니다.
 
 ### 읽는 사람 수준과 화면 설정
 
