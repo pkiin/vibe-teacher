@@ -9,9 +9,9 @@ function Gate() {
   const { me, loading, error } = useAuth();
   if (loading) return <Loading />;
   if (!me) return <div className="notice notice-error">서버에 연결하지 못했습니다{error ? `: ${error}` : ''}</div>;
-  if (me.mode === 'home-token' && !me.authenticated) return <LoginPage />;
+  if (me.mode !== 'none' && !me.authenticated) return <LoginPage />;
   return (
-    <Layout>
+    <Layout key={me.username ?? me.mode}>
       <AppRoutes />
     </Layout>
   );

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { LlmModelsResponse, SettingsResponse, SettingsUpdateRequest } from '@vibe-teacher/shared';
 import { LlmSchema } from '../config/schema';
 import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENROUTER_MODEL } from '../llm/models';
-import { HttpError, requireAdmin, type AppDeps, type AppEnv } from './deps';
+import { HttpError, requireInstallationAdmin, type AppDeps, type AppEnv } from './deps';
 
 const UpdateSchema = z.object({
   scan: z
@@ -56,13 +56,13 @@ export function settingsRoutes(deps: AppDeps): Hono<AppEnv> {
   };
 
   app.get('/', async (c) => {
-    requireAdmin(c);
+    requireInstallationAdmin(c);
     return c.json(await respond());
   });
 
   /** 모델 선택 목록 (OpenRouter 공개 목록 / OpenAI 계정 목록). ?refresh=1 이면 캐시를 무시 */
   app.get('/llm-models', async (c) => {
-    requireAdmin(c);
+    requireInstallationAdmin(c);
     const provider = c.req.query('provider');
     if (provider !== 'openrouter' && provider !== 'openai') throw new HttpError(422, 'invalid_query', 'provider 는 openrouter 또는 openai 여야 합니다');
     try {
@@ -75,7 +75,7 @@ export function settingsRoutes(deps: AppDeps): Hono<AppEnv> {
   });
 
   app.put('/', async (c) => {
-    requireAdmin(c);
+    requireInstallationAdmin(c);
     const parsed = UpdateSchema.safeParse(await c.req.json<SettingsUpdateRequest>().catch(() => ({})));
     if (!parsed.success) throw new HttpError(400, 'bad_request', '설정 형식이 올바르지 않습니다');
     const scanChanged = !!parsed.data.scan;

@@ -48,7 +48,8 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
   src/index/       계정 탐색, 소스, 세션 인덱스, 인덱스 디스크 캐시
   src/analyzers/   user-messages(내 메시지) · built/(파일·명령·패키지·커밋 원문 수집)
   src/llm/         AI: digest(전송용 요약 + 비밀값 마스킹) · gate(AI 문장을 쓸 수 있는지와 못 쓰는 사유) · reader(읽는 사람 수준별 문체 지침, withReader) · claude-cli · openai-compat(OpenRouter 전용, fetch) · concepts(개념 ID·링크 검사) · models(모델 목록) · select(제공자 선택) · jobs · cache
-  src/auth/        홈 디렉터리 토큰 로그인, 쿠키, 미들웨어
+  src/auth/        홈 디렉터리 토큰 로그인·Supabase 이메일 회원가입/로그인·HttpOnly 세션 갱신, 쿠키, 미들웨어
+  src/cloud/       공개 Supabase 설정·사용자 토큰 Data API, RLS 문서/추가 전용 원장 저장소, 사용자별 서비스·작업 큐
   src/config/      설정 스키마(zod)·저장소·환경변수/CLI 인자
   src/routes/      API 라우트. 공통 의존성과 HttpError 는 routes/deps.ts
   src/lib/         fsx(안전한 파일 IO) · jsonl · shell(셸 명령 파서) · text · hash
@@ -73,8 +74,9 @@ web/               Vite + React 19 + react-router UI (한국어)
   src/components/RepoSourceViewer.tsx   근거 파일 원문·줄 강조·검색, RepoFlowView.tsx 는 검증된 파일 연결을 SVG로 표시
   src/components/SecurityReview.tsx    AI가 선정한 보안·데이터 주의사항과 출처 표시
   src/components/HelpPanel.tsx          도움 패널 (설명/질문/퀴즈), src/context/FocusContext.tsx 가 지금 보는 대상을 공유
-scripts/           dev.mjs(웹+API 동시 실행), memory-db.mjs(로컬 PostgreSQL 준비), check-memory-db.ts(Supabase·PostgreSQL 접속 검사), postgres-init.sql(pgvector 확장), grant-read-acl.sh(다중 계정 읽기 ACL)
+scripts/           dev.mjs(웹+API 동시 실행), memory-db.mjs(로컬 PostgreSQL 준비), check-memory-db.ts(Supabase·PostgreSQL 접속 검사), setup-accounts.ts(관리자 회원 스키마 준비), postgres-init.sql(pgvector 확장), grant-read-acl.sh(다중 계정 읽기 ACL)
 compose.yaml       프로젝트 전용 PostgreSQL + pgvector, loopback 바인딩과 이름 있는 볼륨
+supabase/migrations/ 회원·관리자 승인·본인 데이터 RLS·기기 간 쓰기 잠금 SQL (관리자가 1회 적용)
 ```
 
 ## 4. 명령어
@@ -85,6 +87,7 @@ Node.js 20 이상이 필요합니다 (루트 `package.json` 의 `engines`). 개�
 npm install
 npm run memory:db                   # 로컬 PostgreSQL + pgvector 준비 (.env에 접속 설정 생성)
 npm run memory:check                # 설정된 Supabase·PostgreSQL 접속과 합성 쓰기·검색 검사 (AI 호출 없음)
+npm run accounts:setup              # 관리자: 같은 프로젝트의 Supabase 회원·승인·RLS 스키마 최초 준비
 npm run dev                         # API :8787 + 웹 :5173 (웹의 /api 는 API 로 프록시)
 npm run dev:server                  # API 만
 npm run dev:web                     # 웹만
@@ -105,7 +108,9 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **LLM 에는 다이제스트만.** 원본 JSONL, 도구 출력 전문은 절대 보내지 않습니다. 보내는 내용은 `server/src/llm/digest.ts` 의 `buildDigest` 를 거치고 `maskSecrets` 로 마스킹합니다. 새 비밀값 형식을 발견하면 `SECRET_PATTERNS` 에 추가하고 테스트를 붙입니다.
 - **교육 내용은 AI가 생성한다.** 개념 선정·설명·위키 구성·주의사항·선행관계·연습 문항은 AI가 작성한다. 고정 카탈로그나 규칙 기반 대체 문장을 다시 넣지 않는다. 코드는 원문 수집·접근 권한·출처 참조·스키마·순환·출력 예산을 검사한다. AI를 쓸 수 없으면 실패 사유를 표시한다. GET은 AI를 호출하지 않고 POST로만 생성한다. `llm.autoText`는 자동 POST 여부이며 수동 생성은 유지한다.
 - **AI 생성·외부 문서 검색 API는 OpenRouter만 사용한다.** 기본 모델은 `openai/gpt-5-mini`. 일반 작업은 Claude CLI를 우선하고 CLI 실패·외부 문서 검색은 OpenRouter로 처리한다. 취소는 다른 제공자로 재시도하지 않는다. OpenAI·Anthropic 직접 호출이나 해당 API 키 사용을 추가하지 않는다. 문서 검색에는 공개 개념 이름만 보내고 프로젝트 원문·사설 경로는 넣지 않는다. 참고 링크는 실제 API 검색 출처와 대조한다. 개인 기억 정리·임베딩도 OpenRouter를 사용한다. 명시적으로 선택한 Supermemory 클라우드 어댑터만 아래 장기 기억 규칙에 따라 별도 API를 사용한다.
-- **기본 바인딩은 `127.0.0.1`.** loopback 이 아닌 주소는 `VIBE_TEACHER_TOKEN` 또는 `auth.mode=home-token` 없이는 부팅을 거부합니다 (`server/src/index.ts`).
+- **기본 바인딩은 `127.0.0.1`.** loopback 이 아닌 주소는 `VIBE_TEACHER_TOKEN`, `auth.mode=home-token` 또는 Supabase shared 로그인 없이는 부팅을 거부합니다 (`server/src/index.ts`). Supabase local은 loopback만 허용하고 처음 인증한 UUID를 앱 저장소 `local-owner`에 묶습니다.
+- **Supabase 회원 데이터는 사용자 JWT + RLS.** `VIBE_TEACHER_AUTH_MODE=supabase`가 기존 인증보다 우선합니다. `/auth/v1/user`로 검증한 UUID만 학습자·저장소 주체로 사용하고 사용자 metadata·이메일·OS 사용자명·요청의 userId로 권한을 만들지 않습니다. 공개 키만 일반 설치에 배포하며 관리자 AI 키는 `.env.admin`에 둡니다. 서비스 키나 DB 암호를 사용자의 브라우저·로컬 설치로 내려주지 않습니다. 회원의 승인·관리자·OS 계정 연결은 `vt_members`와 검증하는 SQL RPC에서만 변경합니다. Supabase 관리자도 연결된 OS 계정과 본인 학습 행만 조회하며 회원 관리 목록만 별도 허용합니다.
+- **회원 모드 저장과 작업을 분리한다.** `CloudRuntime`에서 사용자별 `WikiStorage`·AI 분석 캐시·작업 큐를 만듭니다. 새 위키·질문·학습·설정 서비스는 `deps.storage`를 재사용해야 하며 파일 저장소를 새로 만들어 우회하지 않습니다. CloudStorage는 실패 시 로컬로 대체 저장하지 않습니다. 원본 로그·소스 파일은 현재 기기에서 읽고 업로드하지 않습니다. 회원 모드는 Supabase 공유 원장의 키워드 검색을 사용하며 mem0 직접 DB 설정을 적용하지 않습니다. 기존 비회원/홈 토큰 데이터는 자동으로 업로드하거나 합치지 않습니다.
 - **계정 범위 밖은 404.** 다른 계정의 리소스는 403 이 아니라 404 로 존재 자체를 숨깁니다. 계정에 딸린 라우트에는 `assertAccount` 를 호출합니다 (`server/src/routes/deps.ts`).
 - **권한 없는 홈은 오류가 아니라 상태.** 읽을 수 없는 계정은 `readable: 'denied'` 로 표시하고 나머지는 계속 동작해야 합니다.
 - **자식 프로세스 환경.** `claude` CLI 를 띄울 때 `CLAUDE_CONFIG_DIR` 를 제외한 `CLAUDE*` 환경변수를 지웁니다 (Claude Code 안에서 실행해도 중첩 실행이 막히지 않도록).
@@ -125,6 +130,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **정답은 제출 전에 내보내지 않는다.** 브라우저로 가는 문항은 `toPublicQuestion` 을 거친다.
 - **"내 메시지"는 사람이 실제로 입력한 것만.** 도구 결과, `<system-reminder>` 같은 주입 메시지, 사이드체인은 `human` 으로 분류하지 않습니다. 분류 규칙을 바꾸면 해당 어댑터의 분류 테스트를 갱신합니다.
 - **Codex 하위 세션과 자동 문맥을 구분한다.** `session_meta.source.subagent` 또는 `parent_thread_id`가 있는 세션은 목록에서 제외하고 직접 읽어도 사용자 입력으로 세지 않습니다. IDE 문맥의 `My request` 본문과 알려진 자동 태그는 `adapters/codex/classify.ts`에서 구분하며, 긴 자동 문맥을 지운 다음 길이를 제한합니다. 코드 블록·인라인 코드의 태그 예시를 지우지 않습니다.
+
+- **메일 인증의 복귀 주소는 앱 주소다.** 가입 요청에 `redirect_to`를 전달한다. `VIBE_TEACHER_PUBLIC_URL` > 요청 Origin > 요청 URL의 origin 순서로 정하며 Vite 프록시 뒤에서도 웹 포트를 보존한다. local은 loopback, shared는 HTTPS만 허용하고 사용자 정보·경로·쿼리·해시가 붙은 주소는 거절한다. Supabase 대시보드의 Redirect URLs 등록은 별도이며 앱 환경변수로 자동 변경하지 않는다. 콜백의 로그인 토큰은 URL 기록에서 지우고 로그·오류·문서에 재출력하지 않는다.
 
 ## 6. 코드 규칙
 
@@ -158,7 +165,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 
 ### 환경변수 / CLI 인자 추가
 - `server/src/config/env.ts` 와 `scripts/dev.mjs` (`usage()` 포함), 필요하면 `web/vite.config.ts` 까지 맞춥니다. 우선순위는 **CLI 인자 > 환경변수 > .env > 설정 파일 > 기본값**.
-- 사용자가 설정할 만한 값이면 `.env.example` 에도 주석과 함께 추가합니다. `.env` 는 `server/src/config/dotenv.ts` 와 `scripts/dev.mjs` 가 읽고, 실제 값이 든 `.env` 는 절대 커밋하지 않습니다.
+- 사용자가 설정할 만한 값이면 `.env.example` 에도 주석과 함께 추가합니다. 관리자 비밀값 예제는 `.env.admin.example`에 둡니다. `.env` 는 `server/src/config/dotenv.ts` 와 `scripts/dev.mjs` 가 읽고 `.env.admin`은 API 서버·DB 관리 스크립트만 읽습니다. 우선순위는 셸 > `.env` > `.env.admin`입니다. 실제 값이 든 환경 파일은 절대 커밋하지 않습니다.
 - README 표와 예시를 고칩니다.
 
 ### API 라우트 추가
@@ -218,6 +225,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 테스트는 실제 `~/.claude` 등에 의존하지 않습니다. 경로는 픽스처 디렉터리나 임시 디렉터리를 넘깁니다.
 - LLM 호출은 테스트에서 실제로 하지 않습니다 (가짜 제공자나 스텁 사용).
 - `server/test/memory/postgres.test.ts`는 `VIBE_TEACHER_TEST_DATABASE_URL`을 명시할 때만 실제 PostgreSQL에 접속합니다. 합성 AI 응답을 쓰고 검사에서 만든 임시 테이블만 정리합니다. 미지정 시 해당 통합 검사만 건너뜁니다.
+- `server/test/cloud.test.ts`는 합성 Supabase HTTP로 기기 간 저장·인증·권한·장애를 검사합니다. 실제 RLS는 `supabase/tests/rls.sql`을 마이그레이션을 적용한 폐기용 DB에서 실행합니다. 합성 회원을 만들며 마지막에 전체를 롤백합니다. 운영 DB에서 실행하지 않습니다.
 
 ## 9. 구현 상태
 

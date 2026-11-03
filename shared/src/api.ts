@@ -98,10 +98,11 @@ export interface LlmStatus {
   cliVersion?: string;
 }
 
-export type AuthMode = 'none' | 'home-token';
+export type AuthMode = 'none' | 'home-token' | 'supabase';
 
 export interface AuthSettings {
-  mode: AuthMode;
+  /** Supabase 모드는 설치 환경변수로 지정하며 일반 설정 화면에서 바꾸지 않는다. */
+  mode: Exclude<AuthMode, 'supabase'>;
   admins: string[];
   sessionTtlHours: number;
   enrichFor: 'admins' | 'everyone';
@@ -124,6 +125,11 @@ export interface AuthMeResponse {
   autoText: boolean;
   /** 로그인한 사용자의 읽는 사람 수준 (AI 문장의 단어·설명 깊이) */
   reader: ReaderPrefs | null;
+  email?: string;
+  approved?: boolean;
+  deployment?: 'local' | 'shared';
+  localOwner?: boolean;
+  canManageInstallation?: boolean;
 }
 
 export interface LoginRequest {

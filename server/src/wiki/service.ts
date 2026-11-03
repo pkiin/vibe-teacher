@@ -120,11 +120,12 @@ export function createWikiServices(
   store: ConfigStore,
   resolveProvider: () => Promise<ResolvedLlm>,
   projectIds?: (id: string) => string[],
+  suppliedStorage?: WikiStorage,
 ): { wiki: WikiService; learner: LearnerService; assessments: AssessmentService; wikiAi: WikiAiService; help: HelpService; prefs: PrefsService; memory: MemoryService } {
-  const storage = new WikiStorage(home, projectIds);
+  const storage = suppliedStorage ?? new WikiStorage(home, projectIds);
   const learner = new LearnerService(storage);
   const wiki = new WikiService(storage, store);
   const wikiAi = new WikiAiService({ storage, store, wiki, resolveProvider });
-  const memory = new MemoryService(storage, learner, { projectIds, model: () => store.get().llm.openrouterModel });
+  const memory = new MemoryService(storage, learner, { projectIds, model: () => store.get().llm.openrouterModel, ...(storage.backend ? { env: { VIBE_TEACHER_MEMORY_BACKEND: 'local' } } : {}) });
   return { wiki, learner, memory, assessments: new AssessmentService(learner, () => wiki.bank(), { resolveProvider, timeoutMs: () => store.get().llm.timeoutMs }), wikiAi, help: new HelpService({ storage, store, wiki, wikiAi, learner, memory, resolveProvider }), prefs: new PrefsService(storage) };
 }

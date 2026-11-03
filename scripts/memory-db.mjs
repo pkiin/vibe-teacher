@@ -9,6 +9,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const envFile = path.join(root, '.env');
 let contents = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf8') : '';
 if (contents && typeof process.loadEnvFile === 'function') process.loadEnvFile(envFile);
+const adminEnvFile = path.join(root, '.env.admin');
+if (fs.existsSync(adminEnvFile) && typeof process.loadEnvFile === 'function') process.loadEnvFile(adminEnvFile);
 
 // Supabase 설정이 있으면 로컬 DB를 띄우거나 접속 주소를 덮어쓰지 않는다.
 if (process.env.VIBE_TEACHER_SUPABASE_DATABASE_URL) {

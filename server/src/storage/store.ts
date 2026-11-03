@@ -12,6 +12,14 @@ import { readJsonl } from '../lib/jsonl';
 
 const SEGMENT = /^[A-Za-z0-9_-]{1,80}$/;
 
+export interface StorageBackend {
+  readJson<T>(file: string): Promise<T | null>;
+  writeJson(file: string, value: unknown): Promise<void>;
+  appendJsonl(file: string, value: unknown): Promise<void>;
+  readJsonl<T>(file: string): Promise<{ items: T[]; warnings: string[] }>;
+  lock<T>(key: string, fn: () => Promise<T>): Promise<T>;
+}
+
 /** 경로 조각으로 쓸 ID 검사. ../ 같은 값으로 저장소 밖에 쓰지 못하게 한다. */
 export function safeSegment(value: string, what: string): string {
   if (!SEGMENT.test(value)) throw new Error(`경로에 쓸 수 없는 ${what}: ${JSON.stringify(value).slice(0, 40)}`);
@@ -42,7 +50,7 @@ export class WikiStorage {
   readonly root: string;
   private readonly mutex = new KeyedMutex();
 
-  constructor(home: string, private readonly projectIds: (id: string) => string[] = (id) => [id]) {
+  constructor(home: string, private readonly projectIds: (id: string) => string[] = (id) => [id], readonly backend?: StorageBackend) {
     this.root = path.join(home, 'wiki');
   }
 
@@ -59,7 +67,7 @@ export class WikiStorage {
   }
 
   lock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    return this.mutex.run(key, fn);
+    return this.mutex.run(key, () => this.backend ? this.backend.lock(key, fn) : fn());
   }
 
   /** 예전 프로젝트 폴더는 옮기거나 덮어쓰지 않고 함께 읽는다. 새 쓰기는 대표 ID로 한다. */
@@ -72,20 +80,22 @@ export class WikiStorage {
   }
 
   readJson<T>(file: string): Promise<T | null> {
-    return readJsonSafe<T>(file);
+    return this.backend ? this.backend.readJson<T>(file) : readJsonSafe<T>(file);
   }
 
   writeJson(file: string, value: unknown): Promise<void> {
-    return writeJsonAtomic(file, value);
+    return this.backend ? this.backend.writeJson(file, value) : writeJsonAtomic(file, value);
   }
 
   async appendJsonl(file: string, value: unknown): Promise<void> {
+    if (this.backend) return this.backend.appendJsonl(file, value);
     await ensureDir(path.dirname(file));
     await fsp.appendFile(file, `${JSON.stringify(value)}\n`, 'utf8');
   }
 
   /** 깨진 줄(쓰는 도중 끊긴 마지막 줄 포함)은 건너뛰고 경고로 돌려준다. */
   async readJsonl<T>(file: string): Promise<{ items: T[]; warnings: string[] }> {
+    if (this.backend) return this.backend.readJsonl<T>(file);
     const warnings: string[] = [];
     const items: T[] = [];
     if (!(await pathExists(file))) return { items, warnings };

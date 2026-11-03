@@ -13,6 +13,7 @@ import type { HelpService } from '../help/service';
 import type { WikiAiService } from '../wiki/ai-service';
 import type { WikiService } from '../wiki/service';
 import type { MemoryService } from '../memory/service';
+import type { WikiStorage } from '../storage/store';
 
 export interface AppDeps {
   store: ConfigStore;
@@ -28,10 +29,11 @@ export interface AppDeps {
   help: HelpService;
   prefs: PrefsService;
   memory: MemoryService;
+  storage?: WikiStorage;
   version: string;
 }
 
-export type AppEnv = { Variables: { user: AuthUser } };
+export type AppEnv = { Variables: { user: AuthUser }; Bindings: { authUser?: AuthUser } };
 
 export class HttpError extends Error {
   constructor(
@@ -54,6 +56,13 @@ export function currentUser(c: Context<AppEnv>): AuthUser {
 export function requireAdmin(c: Context<AppEnv>): AuthUser {
   const user = currentUser(c);
   if (!user.isAdmin) throw new HttpError(403, 'forbidden', '관리자만 할 수 있습니다');
+  return user;
+}
+
+/** 로컬 소유자는 자기 기기의 소스·모델만 관리하며 회원 승인 권한은 얻지 않는다. */
+export function requireInstallationAdmin(c: Context<AppEnv>): AuthUser {
+  const user = currentUser(c);
+  if (!user.isAdmin && !user.cloud?.localOwner) throw new HttpError(403, 'forbidden', '설치 관리자만 할 수 있습니다');
   return user;
 }
 

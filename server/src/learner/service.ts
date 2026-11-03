@@ -48,7 +48,7 @@ export class LearnerService {
     const all = [...(await this.storage.readJsonl<LearnerEvent>(files.events)).items];
     let legacy: string[] = [];
     try {
-      legacy = await fs.readdir(path.join(files.dir, 'projects'));
+      legacy = this.storage.backend ? [] : await fs.readdir(path.join(files.dir, 'projects'));
     } catch {
       legacy = [];
     }

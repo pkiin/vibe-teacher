@@ -9,6 +9,8 @@ import { SYSTEM_PROMPT, buildUserPrompt } from './prompts';
 import { withReader } from './reader';
 import { ModelCatalog } from './models';
 import { modelFor, probeProviders, resolveLlm, type ResolvedLlm } from './select';
+import path from 'node:path';
+import type { WikiStorage } from '../storage/store';
 import type { LlmProvider } from './types';
 
 export interface EnrichServiceOptions {
@@ -20,6 +22,7 @@ export interface EnrichServiceOptions {
   /** 테스트용 네트워크 주입 (OpenRouter·OpenAI) */
   fetch?: typeof fetch;
   buildBuilt?: (session: NormalizedSession) => BuiltSummary;
+  storage?: WikiStorage;
 }
 
 export class EnrichService {
@@ -83,7 +86,7 @@ export class EnrichService {
     const { status } = await this.resolve();
     const levels = level === 'any' ? READER_LEVELS : [level];
     for (const k of this.candidateKeys(session, status.resolvedProvider, levels)) {
-      const rec = await readEnrichment(this.opts.paths.enrichCacheDir, k);
+      const rec = this.opts.storage ? await this.opts.storage.readJson<EnrichmentRecord>(path.join(this.opts.storage.root, 'enrich', `${k}.json`)) : await readEnrichment(this.opts.paths.enrichCacheDir, k);
       if (rec) return rec;
     }
     return null;
@@ -152,7 +155,8 @@ export class EnrichService {
         })) },
       };
       const actualKey = enrichCacheKey(session, res.provider, modelFor(res.provider, cfg), ENRICH_PROMPT_VERSION, level);
-      await writeEnrichment(this.opts.paths.enrichCacheDir, actualKey, record);
+      if (this.opts.storage) await this.opts.storage.writeJson(path.join(this.opts.storage.root, 'enrich', `${actualKey}.json`), record);
+      else await writeEnrichment(this.opts.paths.enrichCacheDir, actualKey, record);
       return record;
     });
     return { status: job.state === 'running' ? 'running' : 'queued', jobId: job.id };

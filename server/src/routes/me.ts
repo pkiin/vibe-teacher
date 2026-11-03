@@ -20,8 +20,9 @@ const MemorySearchSchema = z.object({ query: z.string().trim().max(2000).default
 export function meRoutes(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
   const knowledge = new KnowledgeService({ index: deps.index, analysis: deps.analysis, wiki: deps.wiki, learner: deps.learner, enrich: deps.enrich });
-  const texts = new KnowledgeTextService({ storage: new WikiStorage(deps.paths.home), store: deps.store });
+  const texts = new KnowledgeTextService({ storage: deps.storage ?? new WikiStorage(deps.paths.home), store: deps.store });
   const me = (c: Context<AppEnv>) => learnerIdFor(currentUser(c).username);
+  const accountScope = (c: Context<AppEnv>) => currentUser(c).cloud ? { accountIds: new Set(deps.index.getAccounts().filter((a) => deps.auth.canAccessAccount(currentUser(c), a.id)).map((a) => a.id)) } : {};
   const gate = (c: Context<AppEnv>) => textGate({ store: deps.store, resolveProvider: () => deps.enrich.resolveProvider(), allowed: deps.auth.canEnrich(currentUser(c)) });
 
   /** 범위(전체·프로젝트·세션)를 검사하고 지식 위키 항목을 모은 뒤, 저장된 AI 문장을 입힌다 */
@@ -36,7 +37,7 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
       projectId = p.id;
     }
     const session = sessionKey ? await sessionSummaryFor(c, deps, sessionKey) : undefined;
-    const base = await knowledge.wiki({ username: currentUser(c).username, learnerId: me(c), ...(projectId ? { projectId } : {}), ...(session ? { session } : {}) });
+    const base = await knowledge.wiki({ username: currentUser(c).username, learnerId: me(c), ...accountScope(c), ...(projectId ? { projectId } : {}), ...(session ? { session } : {}) });
     const level = await deps.prefs.level(me(c));
     const applied = await texts.apply(me(c), base.entries, level);
     return { base, level, ...applied };
@@ -126,7 +127,7 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
     const { projectId, snapshot } = await sessionContext(c, req.sessionKey);
     if (snapshot) await deps.learner.rememberConcepts(me(c), snapshot.concepts ?? [], projectId && req.sessionKey ? { projectId, sessionKey: req.sessionKey } : undefined);
     else if ('conceptId' in req.event && req.event.conceptId) {
-      const base = await knowledge.wiki({ username: currentUser(c).username, learnerId: me(c) });
+      const base = await knowledge.wiki({ username: currentUser(c).username, learnerId: me(c), ...accountScope(c) });
       const concept = base.concepts?.[req.event.conceptId];
       if (concept) {
         const sources = base.entries.find((e) => e.conceptId === concept.id)?.sources ?? [];

@@ -9,10 +9,12 @@
 - 프로젝트마다 **레포 위키**(이 레포가 무엇이고 어떻게 동작하는지)를, 사용자마다 **내 지식 위키**(어떤 개념을 어디서 만났고 무엇으로 확인했는지)를 계속 갱신하고 (실험 기능, 아래 참고)
 - **보안 및 취약점 점검**에서 근거가 있는 주의사항과 추가 확인 방법을 따로 살펴보고
 - 오른쪽 위 **설정(톱니바퀴)**에서 글씨·화면 밀도·테마·설명 난이도를 고르고
+- **시작하기**에서 아이디어 탐색·방향 정리·기능 구체화·기존 저장소 중 준비 단계를 골라 다음 할 일과 AI에게 보낼 첫 요청을 받고
+- **Supabase 이메일 회원가입·로그인**으로 공용 서버와 로컬 설치에서 같은 개인 설정과 학습 원장을 사용하고 (아래 설치 설정 필요)
 - 근거 파일을 **코드 팝업**에서 읽고, **코드 연결 흐름도**에서 실제 파일을 따라가며 이해하고
 - 이 모든 설명 문장을 **읽는 사람 수준**(비개발자 · 입문 · 주니어 · 숙련, 기본은 비개발자)에 맞춰 AI 가 쓰는
 
-로컬 웹 앱입니다. 계정(홈 디렉터리) › 프로젝트(작업 폴더) › 세션 계층으로 정리합니다.
+웹 앱입니다. 공용 서버 또는 각자의 노트북에서 실행하며, 계정(홈 디렉터리) › 프로젝트(작업 폴더) › 세션 계층으로 정리합니다.
 
 같은 계정에서 여러 도구가 **같은 실제 폴더**를 가리키면 하나의 프로젝트로 모읍니다. 심볼릭 링크 때문에 기록된 경로가 달라도 실제 경로를 확인해 세션을 합칩니다. 이름이 같아도 다른 폴더이거나 다른 계정이면 별개로 유지하며, 없거나 읽을 수 없는 폴더는 기록된 경로를 사용합니다. Git 원격 주소가 같아도 별도로 복제한 폴더나 worktree는 자동으로 합치지 않습니다.
 
@@ -35,9 +37,99 @@ npm run dev        # API http://127.0.0.1:8787 + 웹 http://127.0.0.1:5173
 npm run build && npm start   # http://127.0.0.1:8787 에서 UI 와 API 를 함께 서빙
 ```
 
-### 포트와 주소 지정
+## 회원가입을 사용하는 두 가지 실행 방법
 
-우선순위는 **CLI 인자 > 환경변수 > `.env` > 설정 파일(`server.port`/`server.host`) > 기본값** 입니다. 환경변수는 저장소 루트의 `.env` 에 적어 둘 수도 있습니다 (`cp .env.example .env`, 아래 "AI 문장과 제공자" 참고).
+관리자는 먼저 아래 "Supabase 최초 설정"을 완료합니다. 공용 서버와 모든 로컬 설치에 **같은 `SUPABASE_URL`·공개 키**를 사용하고, 사용자는 같은 이메일 계정으로 로그인합니다.
+
+### 1. 공용 서버에 설치
+
+```bash
+npm install
+cp .env.example .env
+cp .env.admin.example .env.admin
+chmod 600 .env .env.admin
+```
+
+`.env`에 다음을 설정하고, 서버의 AI 키는 `.env.admin`의 `OPENROUTER_API_KEY`에 넣습니다.
+
+```dotenv
+VIBE_TEACHER_AUTH_MODE=supabase
+VIBE_TEACHER_DEPLOYMENT=shared
+SUPABASE_URL=https://PROJECT_REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_관리자가_안내한_공개키
+```
+
+```bash
+npm run build
+npm start -- --host 0.0.0.0
+```
+
+HTTPS 리버스 프록시 뒤에서 운영하세요. 공용 서버는 항상 `Secure` 쿠키를 사용하므로 일반 HTTP 주소에서는 로그인 세션이 유지되지 않습니다. 사용자는 브라우저에서 **회원가입 → 이메일 인증 → 로그인 → 준비 단계 선택**으로 시작합니다. Supabase에서 이메일 인증을 끈 경우 회원가입 후 바로 로그인됩니다.
+
+관리자는 **회원 관리**에서 AI 사용을 승인하고 해당 회원이 볼 OS 계정을 연결합니다. 연결 전에는 서버의 채팅 기록이 보이지 않습니다. 같은 OS 계정은 두 회원에게 중복 배정할 수 없습니다. 서버의 다른 홈도 읽으려면 아래 "다중 계정 운영"의 스캔 설정과 ACL 준비가 필요합니다. Supabase 관리자도 작업 기록은 연결된 본인 계정 범위만 조회합니다. 회원 관리에서 보는 목록은 이메일·승인·계정 연결 정보입니다.
+
+### 2. 각자의 노트북에서 실행
+
+```bash
+npm install
+cp .env.example .env
+chmod 600 .env
+```
+
+관리자에게 받은 **같은 프로젝트의 공개 연결 정보**를 `.env`에 넣습니다. 관리자 키·DB 암호는 필요하지 않습니다.
+
+```dotenv
+VIBE_TEACHER_AUTH_MODE=supabase
+VIBE_TEACHER_DEPLOYMENT=local
+SUPABASE_URL=https://PROJECT_REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_관리자가_안내한_공개키
+```
+
+```bash
+npm run dev  # http://127.0.0.1:5173
+# 또는 npm run build && npm start  # http://127.0.0.1:8787
+```
+
+처음 로그인한 계정이 이 설치의 소유자가 됩니다. `<VIBE_TEACHER_HOME>/local-owner`에 Supabase 사용자 ID만 보관합니다. 소유자는 해당 기기의 소스·모델을 설정할 수 있지만 회원 승인 권한은 얻지 않습니다. 이후 다른 계정으로 로그인해도 이 노트북의 기록은 볼 수 없습니다. 계정을 잘못 연결했다면 앱을 종료하고 해당 파일을 삭제한 뒤 본인의 계정으로 다시 로그인하세요. 로컬 설치는 loopback 바인딩만 허용합니다.
+
+두 방식 모두 온보딩 답변·설명 수준·학습 활동·질문 원장·세션 위키·레포 위키·AI 분석 결과를 Supabase의 사용자별 저장소에 기록합니다. 장애가 나면 저장 오류를 표시하며 로컬에만 저장하고 성공한 것처럼 처리하지 않습니다. 다른 기기의 동시 쓰기는 사용자별 잠금으로 조정합니다. 잠금 충돌이 표시되면 잠시 뒤 다시 저장하세요. 비정상 종료한 잠금은 5분 뒤 만료됩니다.
+
+**원본 채팅 파일과 저장소 자체는 자동으로 업로드·복제하지 않습니다.** 프로젝트·세션 목록과 코드 보기는 현재 실행 기기에서 읽을 수 있는 파일을 기준으로 합니다. 같은 Git 원격 주소여도 다른 기기의 복제 폴더를 자동으로 같은 프로젝트로 묶지 않습니다. 개인 학습 상태와 설정은 같은 사용자 ID로 이어집니다. 기존 비회원/홈 토큰 모드의 로컬 학습 파일은 그대로 보존하며 회원 데이터로 자동 이전하지 않습니다.
+
+AI 사용 승인은 공용 서버의 AI 호출 권한이며 API 키를 배포하는 기능이 아닙니다. 로컬 AI 생성에는 그 노트북의 Claude CLI 로그인 또는 본인의 OpenRouter 키가 필요합니다. 관리자 서버의 AI를 로컬에서 대신 호출하는 중계와 키 자동 배포는 아직 구현하지 않았습니다. 공용 키를 내려주는 대신 승인 검사·사용량 제한을 갖춘 서버 중계를 추가하는 방향을 권장합니다. Supabase 회원 모드의 기억 검색은 공유 원장의 키워드 검색을 사용하고 mem0 직접 DB 연결은 사용하지 않습니다.
+
+### Supabase 최초 설정 (관리자 1회)
+
+1. Supabase 프로젝트의 SQL Editor에서 [`supabase/migrations/202611030001_accounts_and_storage.sql`](supabase/migrations/202611030001_accounts_and_storage.sql)을 한 번 실행합니다. 또는 관리자 `.env.admin`에 해당 프로젝트의 `VIBE_TEACHER_SUPABASE_DATABASE_URL`(Session pooler, 5432)을 넣고 `npm run accounts:setup`을 실행합니다. 준비 명령은 이미 존재하는 회원 표를 덮어쓰지 않습니다. 기존 Auth 사용자는 회원 표에 추가되고, 이후 가입자는 자동 등록됩니다.
+2. Authentication에서 이메일/비밀번호 로그인을 활성화합니다. **Authentication → URL Configuration**의 Site URL을 현재 앱 주소(개발 기본 `http://127.0.0.1:5173/`, 배포 후에는 공용 서버의 HTTPS 주소)로 설정하고, Redirect URLs에는 각 설치에서 사용하는 주소를 추가합니다. 예: `http://127.0.0.1:5173/`, `http://localhost:5173/`, 빌드 실행용 `http://127.0.0.1:8787/`, 공용 서버의 `https://앱주소/`. 커스텀 포트는 실제 웹 포트를 등록하세요. 가입 요청은 브라우저의 웹 주소를 인증 후 복귀 주소로 전달합니다. 주소를 고정하려면 `.env`에 `VIBE_TEACHER_PUBLIC_URL`을 설정하고 같은 주소를 Redirect URLs에 등록합니다. 이메일 인증 링크로 인증을 마친 뒤 각 설치에서 이메일/비밀번호로 로그인합니다.
+3. 프로젝트의 publishable 키(기존 `anon` JWT도 지원)를 설치에 배포합니다. `service_role`, `sb_secret_`, PostgreSQL 암호는 사용자 설치에 넣지 않습니다.
+4. 관리자 본인도 회원가입한 뒤 SQL Editor에서 아래 SQL을 실행합니다. 다른 회원의 가입 정보로 관리자 권한을 지정하지 않도록 이메일을 확인하세요.
+
+```sql
+update public.vt_members
+set is_admin = true, approved = true
+where user_id = (select id from auth.users where email = 'admin@example.com');
+```
+
+관리자는 이 앱에서 회원가입한 본인 계정에 위 SQL로 권한을 지정합니다. Supabase 대시보드에 별도의 관리자 로그인 계정을 만들거나 Auth 사용자의 `role`·`is_super_admin`을 변경하지 않습니다. 로그인한 상태라면 앱의 "승인 상태 확인"을 누르거나 다시 로그인하면 회원 관리 메뉴가 표시됩니다.
+
+`vt_members`는 본인만 읽을 수 있고, 승인·관리자 여부·OS 계정 연결은 회원이 직접 고칠 수 없습니다. 회원 관리는 관리자 여부를 다시 검사하는 SQL 함수만 사용합니다. `vt_documents`·`vt_events`에는 인증한 사용자 ID와 일치하는 행만 허용하는 [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)가 적용되며, 관리자도 다른 회원의 학습 행을 읽는 우회 정책은 없습니다. 서버는 Supabase의 `/auth/v1/user`로 사용자를 확인하고 HttpOnly 쿠키로 로그인·갱신 토큰을 관리합니다.
+
+RLS·승인·잠금의 SQL 검증은 마이그레이션을 적용한 **폐기 가능한 테스트 DB**에서만 실행합니다. 합성 회원의 삽입과 갱신은 마지막에 롤백합니다.
+
+```bash
+psql -v ON_ERROR_STOP=1 "$TEST_DATABASE_URL" -f supabase/tests/rls.sql
+```
+
+### 이메일 인증 후 localhost:3000 연결 오류가 날 때
+
+`localhost:3000`은 Supabase의 기본 Site URL입니다. 그 포트에서 앱을 실행하지 않으면 메일 인증 후 연결을 거부했다는 화면이 나옵니다. 위 URL Configuration의 Site URL·Redirect URLs를 실제 앱 주소로 바꾸세요. 앱의 환경변수만 바꾸어서는 Supabase 대시보드 설정이 바뀌지 않습니다.
+
+이미 인증 링크를 눌렀다면 기존에 앱을 열었던 주소로 돌아가 로그인해 보세요. Supabase Authentication → Users에서 해당 계정의 이메일 인증 완료 여부도 확인할 수 있습니다. 기존 이메일의 링크에는 예전 복귀 주소가 남을 수 있으므로 새 설정은 이후 보내는 인증 메일부터 확인하세요. 메일 인증 후 주소의 `#access_token=...`·`refresh_token=...`은 로그인 비밀값입니다. 전체 URL을 공유하지 말고, 공유했다면 해당 세션을 종료한 뒤 다시 로그인하세요.
+
+## 포트와 주소 지정
+
+우선순위는 **CLI 인자 > 셸 환경변수 > `.env` > 서버 전용 `.env.admin` > 설정 파일(`server.port`/`server.host`) > 기본값** 입니다. 환경변수는 저장소 루트의 `.env` 에 적어 둘 수도 있습니다 (`cp .env.example .env`, 아래 "AI 문장과 제공자" 참고).
 
 ```bash
 npm run dev -- --port 3050 --api-port 3060          # 웹 3050, API 3060 (프록시도 3060 을 따라감)
@@ -53,12 +145,18 @@ npm run dev:web -- --port 3050                      # 웹만 (vite 옵션 그대
 | 환경변수 | 뜻 | 기본값 |
 |---|---|---|
 | `VIBE_TEACHER_PORT` | API(Hono) 포트. 웹 개발 서버의 `/api` 프록시 대상도 이 값을 따름 | 8787 |
-| `VIBE_TEACHER_HOST` | API 바인딩 주소 (loopback 이 아니면 `VIBE_TEACHER_TOKEN` 필수) | 127.0.0.1 |
+| `VIBE_TEACHER_HOST` | API 바인딩 주소 (외부 접근은 토큰 또는 로그인 필수, Supabase local은 loopback만 허용) | 127.0.0.1 |
 | `VIBE_TEACHER_WEB_PORT` | 웹(Vite) 개발 서버 포트 | 5173 |
 | `VIBE_TEACHER_WEB_HOST` | 웹 개발 서버 바인딩 주소 | 127.0.0.1 |
 | `VIBE_TEACHER_API_URL` | 웹 개발 서버가 프록시할 API 주소를 통째로 지정 (원격 API 등) | `http://127.0.0.1:$VIBE_TEACHER_PORT` |
 | `VIBE_TEACHER_HOME` | 설정 파일과 캐시 위치 | `~/.vibe-teacher` |
 | `VIBE_TEACHER_TOKEN` | 비-loopback 바인딩 시 요구되는 Bearer 토큰 | 없음 |
+| `VIBE_TEACHER_AUTH_MODE` | `supabase`로 설정하면 이메일 회원가입·로그인과 RLS 저장소 사용 | 미설정 시 기존 `config.auth.mode` |
+| `VIBE_TEACHER_DEPLOYMENT` | Supabase 설치 방식: `local`(노트북) 또는 `shared`(공용 서버) | `local` |
+| `VIBE_TEACHER_PUBLIC_URL` | 이메일 인증 후 돌아올 브라우저 앱 주소. Supabase Redirect URLs에도 등록. local은 loopback, shared는 HTTPS | 가입 요청의 Origin, 없으면 요청 URL의 origin |
+| `SUPABASE_URL` | 두 실행 방식에서 공유할 Supabase 프로젝트 HTTPS 주소 | 없음 |
+| `SUPABASE_PUBLISHABLE_KEY` | 해당 프로젝트의 publishable 키 또는 기존 anon JWT | 없음 |
+| `VIBE_TEACHER_COOKIE_SECURE` | `1`이면 HTTPS 전용 쿠키. Supabase shared에서는 항상 적용 | 미설정 |
 | `OPENROUTER_API_KEY` | API 생성·Claude CLI 실패 재시도·외부 문서 검색·mem0 기억 정리와 임베딩에 사용하는 키 | 없음 |
 | `VIBE_TEACHER_LLM_PROVIDER` | AI 제공자 강제 (`auto` · `claude-cli` · `openrouter` · `none`), 화면에서 고른 값보다 우선 | 설정값 (`auto`) |
 | `VIBE_TEACHER_MEMORY_BACKEND` | 장기 기억 검색 (`mem0` · `local` · `supermemory`). `local`은 API 없이 키워드 검색 | `mem0` |
@@ -114,7 +212,7 @@ npm test
 - `scan.mode`: `current`(현재 계정만) · `list`(`homes` 에 적은 홈 디렉터리) · `all`(`homeRoots` 아래 모든 홈 + `/etc/passwd` 의 uid ≥ 1000)
 - `llm.autoText`: 사람이 읽는 문장(레포 위키, 내 지식 설명, 세션 위키 설명)을 AI 가 자동으로 쓸지. 끄면 자동 생성을 멈추고 버튼으로 생성할 수 있습니다. AI가 없는 경우 설명을 만들어 표시하지 않습니다.
 - `wiki`: 프로젝트 위키 설명 계획의 개발용 초기값입니다 (검증된 적정값이 아님). 첫 화면 분량(근사 토큰), 선행 개념 경로 깊이와 개수 상한, 세션당 제안할 이해 확인 문제 수, 문제 제안 여부.
-- 인덱스 캐시는 `~/.vibe-teacher/cache/index/`, AI 분석 결과는 `~/.vibe-teacher/cache/enrich/`, 위키와 내 이해 정보는 `~/.vibe-teacher/wiki/` 에만 기록됩니다. 스캔 대상 홈에는 아무것도 쓰지 않습니다.
+- 인덱스 캐시는 `~/.vibe-teacher/cache/index/`에 기록합니다. 비회원/홈 토큰 모드의 AI 분석 결과는 `cache/enrich/`, 위키와 내 이해 정보는 `wiki/`에 기록합니다. Supabase 회원 모드는 개인·위키·분석 데이터를 사용자 토큰으로 Supabase에 저장합니다. 스캔 대상 홈에는 아무것도 쓰지 않습니다.
 
 ## AI로 만드는 위키와 개념 카드
 
@@ -266,6 +364,8 @@ AI 미설정·권한 부족·취소·오류 상태에서는 새 설명을 생성
 
 ### 저장과 기존 결과
 
+아래 파일 경로는 기존 비회원/홈 토큰 모드 기준입니다. Supabase 회원 모드는 같은 상대 키를 `vt_documents`와 추가 전용 `vt_events`에 사용자 ID별로 저장하며, 로컬 파일로 대체 저장하지 않습니다.
+
 - 세션 위키: `~/.vibe-teacher/wiki/projects/<프로젝트>/snapshots/`, 수준별 AI 설명은 `ai/`
 - 레포 위키: 같은 프로젝트의 `repo/`, 수준별 문장은 `repo/text/`
 - 개인 이해 정보: `~/.vibe-teacher/wiki/learners/<ID>/events.jsonl`
@@ -315,6 +415,8 @@ sudo setfacl -R -d -m u:user99:rX /home/user01/.claude /home/user01/.codex /home
 
 ## 로그인 (사용자별 접근 제한)
 
+누구나 회원가입하는 공용 서비스와 노트북 설치는 위 "회원가입을 사용하는 두 가지 실행 방법"의 Supabase 모드를 사용하세요. 다음은 서버 OS 사용자용 기존 홈 토큰 모드입니다. `VIBE_TEACHER_AUTH_MODE=supabase`가 지정되면 이 설정과 기존 관리자 Bearer 토큰보다 Supabase 인증이 우선합니다.
+
 서비스 계정이 전체를 읽되, 각 사용자는 **자기 계정 기록만** 보게 하려면 홈 디렉터리 토큰 로그인을 켭니다. 원리: 사용자의 홈 안에 `~/.vibe-teacher/login-token` 파일을 만들면 그 파일을 읽을 수 있는 사람은 그 계정(과 서비스 계정)뿐이므로, 그 문자열을 아는 것이 본인 증명이 됩니다. 비밀번호도, 개인 키 업로드도 필요 없습니다.
 
 ```json
@@ -341,7 +443,7 @@ sudo setfacl -R -d -m u:user99:rX /home/user01/.claude /home/user01/.codex /home
 ssh -L 8787:127.0.0.1:8787 <server>
 ```
 
-부득이하게 외부 주소로 열어야 하면 토큰이 필수입니다 (없으면 부팅을 거부합니다).
+로그인 모드를 사용하지 않고 외부 주소로 열어야 하면 토큰이 필수입니다 (없으면 부팅을 거부합니다).
 
 ```bash
 VIBE_TEACHER_HOST=0.0.0.0 VIBE_TEACHER_TOKEN='긴-무작위-문자열' npm start
@@ -356,7 +458,9 @@ shared/   도메인 타입, API DTO, LLM 출력 스키마 (zod)
 server/   Hono API — adapters(도구별 파서) · index(계정/소스/세션 인덱스) · analyzers(원본 작업 수집) · llm(AI 생성·제공자 라우팅)
           wiki(세션 위키 원장·검사·설명 계획) · repo(레포 위키: 읽기 전용 스캔·AI 추가 코드 확인·조립) · learner(내 이해 정보·내 지식 위키)
           assessment(문항·채점) · help(도움 패널 질문) · memory(로컬 mem0·기억 검색·색인) · storage(위키 저장소)
+          cloud(Supabase 사용자 토큰·RLS 저장소·사용자별 서비스), auth(홈 토큰·Supabase 이메일 인증)
 web/      Vite + React UI (한국어), test(화면 렌더링 검사)
+supabase/ migrations(회원·승인·RLS·원장·기기 간 쓰기 잠금 SQL)
 ```
 
 개념은 AI가 세션 맥락에서 생성하며 고정 사전 파일을 사용하지 않습니다.

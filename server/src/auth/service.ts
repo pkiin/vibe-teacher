@@ -8,11 +8,13 @@ import type { SessionIndex } from '../index/session-index';
 import { readPasswdHomes } from '../index/accounts';
 import { COOKIE_NAME, CookieSigner, loadOrCreateSecret } from './cookie';
 import { readLoginToken, tokenHash } from './token-file';
+import type { SupabaseAuth } from './supabase';
 
 export interface AuthUser {
   username: string;
   isAdmin: boolean;
   via: 'cookie' | 'bearer' | 'open';
+  cloud?: { userId: string; email: string; accessToken: string; approved: boolean; accountIds: string[]; localOwner: boolean };
 }
 
 export type LoginResult = { ok: true; user: AuthUser } | { ok: false; status: 401 | 403 | 429; reason: string };
@@ -28,6 +30,7 @@ export interface AuthServiceOptions {
   /** 비-loopback 바인딩 여부 (없음 모드에서 토큰 필요 여부 계산용) */
   isLoopback: boolean;
   cookieSecure?: boolean;
+  cloud?: SupabaseAuth;
 }
 
 const MAX_FAILS = 5;
@@ -42,11 +45,14 @@ export class AuthService {
 
   constructor(private readonly opts: AuthServiceOptions) {}
 
+  get cloud(): SupabaseAuth | undefined { return this.opts.cloud; }
+
   async init(): Promise<void> {
     if (!this.signer) this.signer = new CookieSigner(await loadOrCreateSecret(path.join(this.opts.paths.home, 'auth-secret')));
   }
 
   mode(): AuthMode {
+    if (this.cloud) return 'supabase';
     return this.opts.store.get().auth.mode;
   }
 
@@ -64,12 +70,17 @@ export class AuthService {
   }
 
   canEnrich(user: AuthUser): { ok: boolean; reason?: string } {
+    if (user.cloud) return user.cloud.approved ? { ok: true } : { ok: false, reason: 'AI 사용은 관리자 승인 후 가능합니다' };
     if (user.isAdmin || this.opts.store.get().auth.enrichFor === 'everyone') return { ok: true };
     return { ok: false, reason: 'AI 분석은 관리자만 실행할 수 있습니다' };
   }
 
   /** 사용자가 볼 수 있는 계정 id 집합 ('all' 은 전체) */
   allowedAccountIds(user: AuthUser): Set<string> | 'all' {
+    if (user.cloud) {
+      if (this.cloud?.config.deployment === 'local') return new Set(user.cloud.localOwner ? this.opts.index.getAccounts().filter((a) => a.username === this.serviceUser).map((a) => a.id) : []);
+      return new Set(user.cloud.accountIds);
+    }
     if (user.isAdmin) return 'all';
     return new Set(this.opts.index.getAccounts().filter((a) => a.username === user.username).map((a) => a.id));
   }
@@ -108,6 +119,7 @@ export class AuthService {
 
   /** 요청에서 사용자를 알아낸다. 없으면 null. */
   async authenticate(c: Context): Promise<AuthUser | null> {
+    if (this.cloud) return this.cloud.authenticate(c);
     const bearer = this.bearerUser(c);
     if (bearer) return bearer;
     if (this.mode() === 'none') {
