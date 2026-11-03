@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { RepoBlock, RepoFlow, RepoListItem, RepoSection, RepoSource, RepoWiki } from '@vibe-teacher/shared';
+import type { RepoBlock, RepoFeature, RepoFlow, RepoListItem, RepoSection, RepoSource, RepoWiki } from '@vibe-teacher/shared';
 import { truncate } from '../lib/text';
 import { shortId } from '../lib/hash';
 import { maskSecrets } from '../llm/digest';
@@ -19,6 +19,8 @@ export const REPO_AI_SYSTEM_PROMPT = `당신은 실제 저장소와 세션 기�
 - mechanism 연결 그림이 있으면 system 페이지의 동작 설명에 반드시 포함하세요. flowNodes에는 그림의 모든 노드 id와 코드 근거 sources를 인용해 각 파일이 실제로 무엇을 입력받아 처리·표시·저장하는지 description으로 짧고 구체적으로 설명하세요. 파일명이나 '처리를 담당합니다' 같은 빈 설명을 반복하지 마세요. 확인하지 못한 역할은 그 한계를 쓰세요. id·파일명·화살표·열은 바꾸지 않습니다.
 - flowGroups로 코드의 큰 영역을 구분하고 flowNodes의 groupId로 연결하세요. 프론트엔드와 백엔드가 실제로 분리되어 있으면 각각 별도 영역으로, 양쪽에서 함께 쓰는 코드는 공통 영역으로 묶으세요. 한쪽만 있거나 다른 구조라면 자료에 맞는 영역을 고르고, 이름만 보고 없는 계층을 만들지 마세요. 각 영역에는 label·description과 근거 sources를 적으세요.
 - API 경로가 있으면 system 페이지의 관련 절에 api 원문 블록을 반드시 포함하세요. routeDescriptions에 각 경로의 method·path·file을 자료 그대로 적고 description으로 실제 처리 내용을 1~2문장 설명하세요. 입력·조회·저장·응답과 접근 검사는 코드에서 확인한 것만 설명하고 해당 파일의 코드 근거를 sources에 인용하세요. 경로 이름만으로 동작을 추측하지 말고, 발췌가 부족하거나 외부 처리 함수가 보이지 않으면 확인한 부분과 확인할 수 없는 부분을 구분하세요. 이 설명만 경로와 파일 사이의 동작 설명 열에 들어갑니다.
+- features에는 사용자가 실제로 쓰는 주요 기능을 최대 16개 고르세요. 기능마다 영문 소문자·숫자·하이픈 id, name(짧은 이름), summary(무엇을 하는지 1~2문장), files(그 기능을 구현하는 파일의 F:경로, 제공된 파일만), sessions(그 기능을 만들거나 고친 세션 S…), sources(설명의 근거)를 씁니다. 기존 주요 기능 id 목록이 주어지면 같은 기능에는 같은 id를 다시 씁니다. 파일 이름만 보고 기능을 지어내지 말고 코드·README·세션 근거가 있는 기능만 고르세요. 화면에서는 기능마다 별도 페이지가 생기고, 사용자가 원하면 그 기능을 더 자세히 분석합니다.
+- 주요 기능 목록은 features에만 씁니다. sections에 기능을 하나씩 나열하는 절이나 항목을 따로 만들지 마세요(두 목록이 달라집니다). user 페이지에서 주요 기능을 소개할 절의 sourceBlocks에 features를 넣으면 그 자리에 기능별 페이지로 가는 목록이 표시됩니다. 넣지 않으면 user 페이지 첫 절 다음에 표시됩니다.
 - 변경 요약(changes)은 제공된 이전 사실과 지금 자료를 비교해 실제 바뀐 점만 씁니다.
 - 자연스럽고 구체적인 한국어 존댓말로 씁니다. 쉬운 정도는 맨 아래 읽는 사람 지침을 따릅니다. JSON 스키마로만 답합니다.`;
 
@@ -34,10 +36,17 @@ export const RepoAiOutputSchema = z.object({
   })).default([]).describe('API 표의 모든 경로에 대한 코드 근거 기반 동작 설명. 경로가 없으면 빈 배열'),
   flowGroups: z.array(z.object({ id: z.string(), label: z.string(), description: z.string(), sources: z.array(z.string()) })).default([]).describe('코드 근거로 구분한 프론트엔드·백엔드·공통 등의 큰 영역'),
   flowNodes: z.array(z.object({ id: z.string(), description: z.string(), groupId: z.string(), sources: z.array(z.string()) })).default([]).describe('연결 그림의 모든 파일에 대한 실제 동작 설명과 소속 영역'),
+  features: z.array(z.object({
+    id: z.string(), name: z.string(), summary: z.string(),
+    files: z.array(z.string()), sessions: z.array(z.string()), sources: z.array(z.string()),
+  })).default([]).describe('사용자가 쓰는 주요 기능 (최대 16개). 기능별 페이지와 자세한 분석의 출발점'),
   changes: z.array(z.string()).describe('이전 판이 있으면 변경 내용, 첫 판이면 빈 배열'),
 });
 export type RepoAiOutput = z.infer<typeof RepoAiOutputSchema>;
 const srcLabel = (s: RepoSource, handles: Map<string, string>) => s.kind === 'file' ? `F:${s.path}${s.startLine ? `#L${s.startLine}-L${s.endLine ?? s.startLine}` : ''}` : handles.get(s.key) ?? '';
+
+export const FEATURE_ID = /^[a-z0-9-]{1,64}$/;
+const MAX_FEATURES = 16;
 
 const graphNodes = (wiki: RepoWiki) => [...wiki.user, ...wiki.system].flatMap((s) => s.blocks.flatMap((b) => b.kind === 'flow' ? b.graph.nodes : []));
 
@@ -171,6 +180,20 @@ export function applyRepoAi({ draft, output, handles, fileSet, result, additiona
     const groups = [...flowGroups.values()].filter((group) => nodes.some((node) => node.groupId === group.id));
     return { ...block, graph: { ...block.graph, nodes, ...(groups.length ? { groups } : {}) } };
   };
+  // 주요 기능은 참조를 하나라도 확인하지 못하면 일부만 지워 살리지 않고 그 기능을 거른다
+  const features: RepoFeature[] = [];
+  for (const f of output.features) {
+    if (features.length >= MAX_FEATURES) { dropped++; continue; }
+    const files = f.files.map(toSource), sessions = f.sessions.map(toSource), sources = f.sources.map(toSource);
+    const ok = FEATURE_ID.test(f.id) && !features.some((x) => x.id === f.id) && f.name.trim() && [...files, ...sessions, ...sources].every((x) => !!x)
+      && files.every((x) => x?.kind === 'file') && sessions.every((x) => x?.kind === 'session') && files.length + sessions.length > 0;
+    if (!ok) { dropped++; continue; }
+    features.push({ id: f.id, name: clean(f.name, 80), summary: clean(f.summary, 400),
+      files: [...new Map(files.map((x) => [(x as Extract<RepoSource, { kind: 'file' }>).path, x as Extract<RepoSource, { kind: 'file' }>])).values()].slice(0, 30),
+      sessions: [...new Map(sessions.map((x) => [(x as Extract<RepoSource, { kind: 'session' }>).key, x as Extract<RepoSource, { kind: 'session' }>])).values()].slice(0, 20),
+      sources: sources as RepoSource[] });
+  }
+  const featureSources = [...new Map(features.flatMap((f) => [...f.files, ...f.sessions, ...f.sources]).map((r) => [JSON.stringify(r), r])).values()];
   const user: RepoSection[] = [], system: RepoSection[] = [];
   const seen = new Set<string>();
   // 같은 원문 블록(연결 그림·표·코드)은 한 페이지에서 처음 고른 절에만 싣는다
@@ -189,6 +212,14 @@ export function applyRepoAi({ draft, output, handles, fileSet, result, additiona
       if (items.length) blocks.push({ kind: 'list', items });
     } else if (s.paragraphs.length || s.items.length) dropped++;
     for (const key of s.sourceBlocks) {
+      if (key === 'features') {
+        if (s.page === 'user' && features.length && !attached.user.has(key)) {
+          attached.user.add(key);
+          blocks.push({ kind: 'features', ids: features.map((f) => f.id) });
+          sources.push(...featureSources);
+        }
+        continue;
+      }
       const original = raw.get(key);
       const added = original && !attached[s.page].has(key) ? (key === 'api' ? apiBlocks ?? [] : original.blocks.map(annotateBlock)) : [];
       if (original && added.length) {
@@ -202,7 +233,11 @@ export function applyRepoAi({ draft, output, handles, fileSet, result, additiona
     (s.page === 'user' ? user : system).push({ id, title: clean(s.title, 140), blocks, sources: [...new Map(sources.map((r) => [JSON.stringify(r), r])).values()], origin: 'llm' });
   }
   if (!user.length && !system.length) throw new LlmError('parse', '근거를 확인할 수 있는 레포 위키 설명을 받지 못했습니다. 다시 생성해 주세요.');
-  return { ...draft, user, system, changes: output.changes.slice(0, 12).map((c) => clean(c, 500)),
+  if (features.length && !attached.user.has('features')) {
+    const id = seen.has('features') ? 'features-list' : 'features';
+    user.splice(Math.min(1, user.length), 0, { id, title: '주요 기능', blocks: [{ kind: 'features', ids: features.map((f) => f.id) }], sources: featureSources, origin: 'source' });
+  }
+  return { ...draft, user, system, features, changes: output.changes.slice(0, 12).map((c) => clean(c, 500)),
     warnings: [...draft.warnings, ...(dropped ? [`출처를 확인할 수 없거나 중복된 AI 설명 ${dropped}개를 제외했습니다.`] : [])],
     generator: { kind: 'llm', version: draft.generator.version, provider: result.provider, model: result.model, durationMs: result.durationMs, costUsd: result.costUsd } };
 }

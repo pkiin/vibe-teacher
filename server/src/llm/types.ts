@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { LlmProviderId } from '@vibe-teacher/shared';
+import type { AiTrace } from './log';
 
 export interface LlmRequest<T> {
   /** research는 외부 문서 검색이 필요해 OpenRouter에서 실행한다. */
@@ -11,6 +12,8 @@ export interface LlmRequest<T> {
   maxTokens: number;
   timeoutMs: number;
   signal?: AbortSignal;
+  /** AI 호출 기록에 붙일 작업 정보 (withAiRun 의 run.trace) */
+  trace?: AiTrace;
 }
 
 export interface LlmResult<T> {

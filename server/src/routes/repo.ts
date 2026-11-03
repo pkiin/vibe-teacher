@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { learnerIdFor } from '../learner/service';
+import { FeatureAnalysisService } from '../repo/feature';
 import { RepoWikiService } from '../repo/service';
 import { repoFileView } from '../repo/source';
 import { WikiStorage } from '../storage/store';
@@ -11,7 +12,9 @@ const TextSchema = z.object({ force: z.boolean().default(false) });
 /** /api/projects/:id/repo-wiki — 저장소 단위 위키 (사용자 중심 / 기능·동작 중심). 문장은 읽는 사람 수준별 */
 export function repoRoutes(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
-  const service = new RepoWikiService({ storage: deps.storage ?? new WikiStorage(deps.paths.home, (id) => deps.index.getProjectIds(id)), store: deps.store, index: deps.index, analysis: deps.analysis, wiki: deps.wiki, enrich: deps.enrich });
+  const storage = deps.storage ?? new WikiStorage(deps.paths.home, (id) => deps.index.getProjectIds(id));
+  const service = new RepoWikiService({ storage, store: deps.store, index: deps.index, analysis: deps.analysis, wiki: deps.wiki, enrich: deps.enrich });
+  const features = new FeatureAnalysisService({ storage, store: deps.store, index: deps.index, enrich: deps.enrich, repo: service });
 
   const project = async (c: Context<AppEnv>) => {
     await deps.index.ensureFresh();
@@ -55,5 +58,28 @@ export function repoRoutes(deps: AppDeps): Hono<AppEnv> {
   };
   app.get('/:id/repo-wiki/jobs/:jobId', async (c) => c.json(await jobFor(c)));
   app.delete('/:id/repo-wiki/jobs/:jobId', async (c) => c.json(service.jobs.cancel((await jobFor(c)).id)));
+
+  // 주요 기능별 페이지. GET 은 AI 를 부르지 않고, 자세한 분석은 POST 로만 시작한다
+  app.get('/:id/repo-wiki/features', async (c) => c.json(await features.list(await project(c), await level(c))));
+  app.get('/:id/repo-wiki/features/:featureId', async (c) => {
+    const res = await features.get(await project(c), c.req.param('featureId'), await level(c), allowed(c));
+    if (!res) throw notFound('주요 기능');
+    return c.json(res);
+  });
+  app.get('/:id/repo-wiki/features/:featureId/preview', async (c) => c.json(await features.preview(await project(c), c.req.param('featureId'), await level(c), allowed(c))));
+  app.post('/:id/repo-wiki/features/:featureId/analyze', requireJson, async (c) => {
+    const p = await project(c);
+    const featureId = c.req.param('featureId');
+    const res = await features.analyze(p, featureId, await level(c), allowed(c));
+    return c.json(res, 202);
+  });
+  const featureJob = async (c: Context<AppEnv>) => {
+    const p = await project(c);
+    const job = features.jobs.get(c.req.param('jobId') ?? '');
+    if (!job || !job.sessionKey.startsWith(`feature:${p.id}:`)) throw notFound('작업');
+    return job;
+  };
+  app.get('/:id/repo-wiki/feature-jobs/:jobId', async (c) => c.json(await featureJob(c)));
+  app.delete('/:id/repo-wiki/feature-jobs/:jobId', async (c) => c.json(features.jobs.cancel((await featureJob(c)).id)));
   return app;
 }

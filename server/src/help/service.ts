@@ -2,6 +2,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_READER_LEVEL, type BuiltSummary, type ConceptHit, type HelpJobStatus, type HelpMessage, type HelpRequest, type NormalizedSession, type ReaderLevel, type WikiSnapshot } from '@vibe-teacher/shared';
 import { JobQueue } from '../llm/jobs';
+import { withAiRun } from '../llm/log';
 import { withReader } from '../llm/reader';
 import type { ResolvedLlm } from '../llm/select';
 import { LlmError } from '../llm/types';
@@ -146,9 +147,10 @@ export class HelpService {
       const cfg = this.opts.store.get().llm;
       // 진행 중 기록을 먼저 남긴 뒤 작업을 시작한다 (완료 기록이 진행 중 기록보다 먼저 쓰이지 않게)
       await this.append(learnerId, projectId, base);
-      const job = this.jobs.enqueue(`${session.key}:${base.id}`, async (signal) => {
+      const trace = { feature: 'help_answer' as const, projectId, sessionKey: session.key, readerLevel: level };
+      const job = this.jobs.enqueue(`${session.key}:${base.id}`, (signal) => withAiRun(this.opts.storage, trace, signal, async (run) => {
         try {
-          const res = await provider.complete({ system: withReader(HELP_SYSTEM_PROMPT, level), user, schema: HelpOutputSchema, schemaName: 'help_answer', maxTokens: 8000, timeoutMs: cfg.timeoutMs, signal });
+          const res = await provider.complete({ system: withReader(HELP_SYSTEM_PROMPT, level), user, schema: HelpOutputSchema, schemaName: 'help_answer', maxTokens: 8000, timeoutMs: cfg.timeoutMs, signal, trace: run.trace });
           const { answer, notices } = acceptHelpOutput(res.data, claimIds, conceptIds);
           const done: HelpMessage = {
             ...base,
@@ -164,6 +166,7 @@ export class HelpService {
             ...(res.costUsd !== undefined ? { costUsd: res.costUsd } : {}),
           };
           await this.append(learnerId, projectId, done);
+          run.result(this.file(learnerId, projectId), done);
           this.opts.memory.scheduleSync(learnerId, { projectId, allowedProjectIds: [projectId] });
           return done;
         } catch (err) {
@@ -173,7 +176,7 @@ export class HelpService {
           this.opts.memory.scheduleSync(learnerId, { projectId, allowedProjectIds: [projectId] });
           throw err;
         }
-      });
+      }));
       this.owners.set(job.id, { learnerId, projectId });
       this.jobByMessage.set(base.id, job.id);
       return { ...base, jobId: job.id };

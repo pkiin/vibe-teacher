@@ -19,9 +19,16 @@ function fixture() {
   vi.stubEnv('VIBE_TEACHER_USER_OPENROUTER_KEYS', JSON.stringify({ [ALICE]: 'synthetic-alice-key', [BOB]: 'synthetic-bob-key' }));
   vi.stubEnv('VIBE_TEACHER_LLM_PROVIDER', 'auto');
   const requests: string[] = [];
+  const logged: { authorization: string; row: Record<string, unknown> }[] = [];
   vi.stubGlobal('fetch', (async (input, init) => {
     if (String(input).endsWith('/models')) return Response.json({ data: [] });
-    requests.push(new Headers(init?.headers).get('authorization') ?? '');
+    const authorization = new Headers(init?.headers).get('authorization') ?? '';
+    // AI 호출 기록은 사용자 토큰으로 Supabase에 추가된다
+    if (String(input).startsWith('https://example.supabase.co/rest/v1/vt_ai_calls')) {
+      logged.push({ authorization, row: JSON.parse(String(init?.body)) });
+      return new Response(null, { status: 201 });
+    }
+    requests.push(authorization);
     return Response.json({ model: 'synthetic/model', choices: [{ message: { content: '{"answer":"ok"}' }, finish_reason: 'stop' }] });
   }) as typeof fetch);
   const paths = resolvePaths('/synthetic/vibe-teacher');
@@ -30,7 +37,7 @@ function fixture() {
   const base = { paths, store, auth, index: { getProjectIds: (id: string) => [id] } } as unknown as AppDeps;
   const runtime = new CloudRuntime(base);
   const user = (id: string, isAdmin = false): AuthUser => ({ username: `sb_${id}`, isAdmin, via: 'cookie', cloud: { userId: id, email: 'synthetic@example.test', accessToken: 'synthetic-jwt', approved: true, accountIds: [], localOwner: false } });
-  return { runtime, user, requests };
+  return { runtime, user, requests, logged };
 }
 
 describe('공용 서버의 사용자별 AI 실행', () => {
@@ -46,6 +53,8 @@ describe('공용 서버의 사용자별 AI 실행', () => {
       await provider!.complete({ system: '합성 시스템', user: '합성 질문', schema: z.object({ answer: z.string() }), schemaName: 'synthetic', maxTokens: 100, timeoutMs: 5000 });
     }));
     expect(f.requests.sort()).toEqual(['Bearer synthetic-alice-key', 'Bearer synthetic-bob-key']);
+    expect(f.logged.map((l) => [l.authorization, l.row.user_id]).sort()).toEqual([['Bearer synthetic-jwt', ALICE], ['Bearer synthetic-jwt', BOB]]);
+    expect(JSON.stringify(f.logged)).not.toMatch(/synthetic-(alice|bob|admin|install)-key/);
   });
 
   it('회원 키를 회수하면 기존 제공자 캐시를 무효화하고 관리자 키로 대체하지 않는다', async () => {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { DEFAULT_READER_LEVEL, type KnowledgeEntry, type LlmProviderId, type ReaderLevel } from '@vibe-teacher/shared';
 import type { ConfigStore } from '../config/store';
 import { JobQueue } from '../llm/jobs';
+import { withAiRun } from '../llm/log';
 import { maskSecrets } from '../llm/digest';
 import { withReader } from '../llm/reader';
 import type { LlmProvider } from '../llm/types';
@@ -159,10 +160,11 @@ export class KnowledgeTextService {
     if (active) return active;
     const todo = missing.slice(0, MAX_PER_JOB);
     const cfg = this.opts.store.get().llm;
-    return this.jobs.enqueue(key, async (signal) => {
+    return this.jobs.enqueue(key, (signal) => withAiRun(this.opts.storage, { feature: 'knowledge_text', readerLevel: level }, signal, async (run) => {
       let written = 0;
       let rejected = 0;
       let lastError: unknown = null;
+      const stored: Record<string, StoredText> = {};
       for (let i = 0; i < todo.length; i += BATCH) {
         if (signal.aborted) throw new LlmError('cancelled', '취소했습니다');
         const batch = todo.slice(i, i + BATCH);
@@ -175,6 +177,7 @@ export class KnowledgeTextService {
             maxTokens: 8_000,
             timeoutMs: Math.max(cfg.timeoutMs, 180_000),
             signal,
+            trace: run.trace,
           });
           const add: Record<string, StoredText> = {};
           const at = new Date().toISOString();
@@ -195,6 +198,8 @@ export class KnowledgeTextService {
             }
           });
           await this.store(learnerId, add);
+          Object.assign(stored, add);
+          run.result(this.file(learnerId), stored);
         } catch (e) {
           if (signal.aborted || (e instanceof LlmError && e.kind === 'cancelled')) throw e;
           lastError = e;
@@ -203,6 +208,6 @@ export class KnowledgeTextService {
       }
       if (lastError && written === 0) throw lastError;
       return { written, rejected, remaining: Math.max(0, missing.length - written - rejected) };
-    });
+    }));
   }
 }

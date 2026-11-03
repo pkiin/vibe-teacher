@@ -1,16 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RepoFileView, RepoSource } from '@vibe-teacher/shared';
 import { api } from '../api/client';
 import { ko } from '../i18n/ko';
+import { TokenLine, codeLanguage, highlightLines } from './CodeBlock';
 import { ErrorBox, Loading, Notice } from './Notice';
 import { Modal } from './Modal';
 
 type FileSource = Extract<RepoSource, { kind: 'file' }>;
-function tokens(text: string): ReactNode[] {
-  return text.split(/(\/\/.*$|#[^"']*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:import|from|export|const|let|return|async|await|function|class|if|else|throw|new|def|true|false|null)\b)/g).map((part, index) => (
-    /^(?:\/\/|#)/.test(part) ? <span key={index} className="syntax-comment">{part}</span> : /^["']/.test(part) ? <span key={index} className="syntax-string">{part}</span> : /^(?:import|from|export|const|let|return|async|await|function|class|if|else|throw|new|def|true|false|null)$/.test(part) ? <span key={index} className="syntax-keyword">{part}</span> : part
-  ));
-}
 function SourceDocument({ projectId, source }: { projectId: string; source: FileSource }) {
   const [data, setData] = useState<RepoFileView | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -27,11 +23,11 @@ function SourceDocument({ projectId, source }: { projectId: string; source: File
   useEffect(() => {
     if (data && !stale) code.current?.querySelector('[data-highlight="true"]')?.scrollIntoView({ block: 'center' });
   }, [data, stale]);
-  const highlightSearch = (text: string): ReactNode => {
-    if (!query) return tokens(text);
-    const index = text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
-    if (index < 0) return tokens(text);
-    return <>{tokens(text.slice(0, index))}<mark>{text.slice(index, index + query.length)}</mark>{tokens(text.slice(index + query.length))}</>;
+  // 여러 줄 문자열·주석도 같은 색이 되도록 보이는 범위 전체를 한 번에 나눈다
+  const highlighted = useMemo(() => (data ? highlightLines(data.lines.join('\n'), codeLanguage(source.path)) : []), [data, source.path]);
+  const markOf = (text: string) => {
+    const index = query ? text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase()) : -1;
+    return index < 0 ? undefined : { start: index, end: index + query.length };
   };
   return <div className="source-document">
     <p className="small muted">{ko.source.readOnly}</p>
@@ -47,7 +43,7 @@ function SourceDocument({ projectId, source }: { projectId: string; source: File
         <pre>{data.lines.map((text, index) => {
           const number = data.startLine + index;
           const highlight = !stale && !!source.startLine && number >= source.startLine && number <= (source.endLine ?? source.startLine);
-          return <span key={number} className={`source-line ${highlight ? 'highlighted' : ''}`} data-highlight={highlight} id={`source-line-${number}`}><span className="source-line-number" aria-hidden="true">{number}</span><code>{highlightSearch(text) || ' '}</code></span>;
+          return <span key={number} className={`source-line ${highlight ? 'highlighted' : ''}`} data-highlight={highlight} id={`source-line-${number}`}><span className="source-line-number" aria-hidden="true">{number}</span><code>{text ? <TokenLine tokens={highlighted[index] ?? [{ kind: 'plain', text }]} mark={markOf(text)} /> : ' '}</code></span>;
         })}</pre>
       </div>
       {(data.startLine > 1 || data.endLine < data.lineCount) && <div className="source-pagination"><button type="button" className="btn btn-small" disabled={data.startLine === 1} onClick={() => setLine(Math.max(1, data.startLine - 500))}>{ko.source.previous}</button><button type="button" className="btn btn-small" disabled={data.endLine >= data.lineCount} onClick={() => setLine(data.endLine + 1)}>{ko.source.next}</button></div>}

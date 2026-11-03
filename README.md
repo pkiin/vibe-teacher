@@ -7,6 +7,7 @@
 - **알아야 할 개념**을 골라 설명하고 (AI가 작업 맥락에서 직접 선정·작성)
 - **이번 세션에서 확인할 것**을 근거와 함께 정리하고, 옆의 **도움 패널**에서 설명·질문·퀴즈로 이어 보고
 - 프로젝트마다 **레포 위키**(이 레포가 무엇이고 어떻게 동작하는지)를, 사용자마다 **내 지식 위키**(어떤 개념을 어디서 만났고 무엇으로 확인했는지)를 계속 갱신하고 (실험 기능, 아래 참고)
+- 레포 위키의 **주요 기능**마다 별도 페이지를 만들어 관련 파일·사용자가 쓰는 흐름·AI를 부른다면 모델과 시스템/사용자 프롬프트(저장소 원문)를 보여 주고, **이 기능 자세히 분석받기**를 누르면 AI가 질문을 스스로 만들어 가며 코드를 더 읽고
 - **보안 및 취약점 점검**에서 근거가 있는 주의사항과 추가 확인 방법을 따로 살펴보고
 - 오른쪽 위 **설정(톱니바퀴)**에서 글씨·화면 밀도·테마·설명 난이도를 고르고
 - **시작하기**에서 아이디어 탐색·방향 정리·기능 구체화·기존 저장소 중 준비 단계를 골라 다음 할 일과 AI에게 보낼 첫 요청을 받고
@@ -123,7 +124,7 @@ npm run dev  # http://127.0.0.1:3317
 
 처음 로그인한 계정이 이 설치의 소유자가 됩니다. `<VIBE_TEACHER_HOME>/local-owner`에 Supabase 사용자 ID만 보관합니다. 소유자는 해당 기기의 소스·모델을 설정할 수 있지만 회원 승인 권한은 얻지 않습니다. 이후 다른 계정으로 로그인해도 이 노트북의 기록은 볼 수 없습니다. 계정을 잘못 연결했다면 앱을 종료하고 해당 파일을 삭제한 뒤 본인의 계정으로 다시 로그인하세요. 로컬 설치는 loopback 바인딩만 허용합니다.
 
-두 방식 모두 온보딩 답변·설명 수준·학습 활동·질문 원장·세션 위키·레포 위키·AI 분석 결과를 Supabase의 사용자별 저장소에 기록합니다. 장애가 나면 저장 오류를 표시하며 로컬에만 저장하고 성공한 것처럼 처리하지 않습니다. 다른 기기의 동시 쓰기는 사용자별 잠금으로 조정합니다. 잠금 충돌이 표시되면 잠시 뒤 다시 저장하세요. 비정상 종료한 잠금은 5분 뒤 만료됩니다.
+두 방식 모두 온보딩 답변·설명 수준·학습 활동·질문 원장·세션 위키·레포 위키·AI 분석 결과를 Supabase의 사용자별 저장소에 기록합니다. 장애가 나면 저장 오류를 표시하며 로컬에만 저장하고 성공한 것처럼 처리하지 않습니다. 다른 기기의 동시 쓰기는 사용자별 잠금으로 조정합니다. 잠금 충돌이 표시되면 잠시 뒤 다시 저장하세요. 비정상 종료한 잠금은 5분 뒤 만료됩니다. 모든 AI 요청·응답·결과물·토큰·모델·요금은 별도의 [AI 호출 기록](#ai-호출-기록-supabase-회원-모드)에 남깁니다 (기록 실패는 AI 작업을 막지 않습니다).
 
 **원본 채팅 파일과 저장소 자체는 자동으로 업로드·복제하지 않습니다.** 프로젝트·세션 목록과 코드 보기는 현재 실행 기기에서 읽을 수 있는 파일을 기준으로 합니다. 같은 Git 원격 주소여도 다른 기기의 복제 폴더를 자동으로 같은 프로젝트로 묶지 않습니다. 개인 학습 상태와 설정은 같은 사용자 ID로 이어집니다. 기존 비회원/홈 토큰 모드의 로컬 학습 파일은 그대로 보존하며 회원 데이터로 자동 이전하지 않습니다.
 
@@ -131,7 +132,7 @@ AI 사용 승인은 공용 서버의 AI 호출 권한이며 API 키를 배포하
 
 ### Supabase 최초 설정 (관리자 1회)
 
-1. Supabase 프로젝트의 SQL Editor에서 [`supabase/migrations/202611030001_accounts_and_storage.sql`](supabase/migrations/202611030001_accounts_and_storage.sql)을 한 번 실행합니다. 또는 관리자 `.env.admin`에 해당 프로젝트의 `VIBE_TEACHER_SUPABASE_DATABASE_URL`(Session pooler, 5432)을 넣고 `npm run accounts:setup`을 실행합니다. 준비 명령은 이미 존재하는 회원 표를 덮어쓰지 않습니다. 기존 Auth 사용자는 회원 표에 추가되고, 이후 가입자는 자동 등록됩니다.
+1. Supabase 프로젝트의 SQL Editor에서 [`supabase/migrations/202611030001_accounts_and_storage.sql`](supabase/migrations/202611030001_accounts_and_storage.sql)과 [`supabase/migrations/202611030002_ai_call_log.sql`](supabase/migrations/202611030002_ai_call_log.sql)을 순서대로 한 번씩 실행합니다. 또는 관리자 `.env.admin`에 해당 프로젝트의 `VIBE_TEACHER_SUPABASE_DATABASE_URL`(Session pooler, 5432)을 넣고 `npm run accounts:setup`을 실행합니다. 준비 명령은 두 파일을 순서대로 적용하며, 이미 존재하는 표는 덮어쓰지 않고 없는 것만 만듭니다. 이미 회원 표를 만든 설치도 같은 명령(또는 두 번째 SQL 실행)으로 AI 호출 기록 표만 추가합니다. 기존 Auth 사용자는 회원 표에 추가되고, 이후 가입자는 자동 등록됩니다.
 2. Authentication에서 이메일/비밀번호 로그인을 활성화합니다. **Authentication → URL Configuration**의 Site URL을 현재 앱 주소(개발 기본 `http://127.0.0.1:3317/`, 배포 후에는 공용 서버의 HTTPS 주소)로 설정하고, Redirect URLs에는 각 설치에서 사용하는 주소를 추가합니다. 예: `http://127.0.0.1:3317/`, `http://localhost:3317/`, 빌드 실행용 `http://127.0.0.1:3318/`, 공용 서버의 `https://앱주소/`. 커스텀 포트는 실제 웹 포트를 등록하세요. 가입 요청은 브라우저의 웹 주소를 인증 후 복귀 주소로 전달합니다. 주소를 고정하려면 `.env`에 `VIBE_TEACHER_PUBLIC_URL`을 설정하고 같은 주소를 Redirect URLs에 등록합니다. 이메일 인증 링크로 인증을 마친 뒤 각 설치에서 이메일/비밀번호로 로그인합니다.
 3. 프로젝트의 publishable 키(기존 `anon` JWT도 지원)를 설치에 배포합니다. `service_role`, `sb_secret_`, PostgreSQL 암호는 사용자 설치에 넣지 않습니다.
 4. 관리자 본인도 회원가입한 뒤 SQL Editor에서 아래 SQL을 실행합니다. 다른 회원의 가입 정보로 관리자 권한을 지정하지 않도록 이메일을 확인하세요.
@@ -146,10 +147,50 @@ where user_id = (select id from auth.users where email = 'admin@example.com');
 
 `vt_members`는 본인만 읽을 수 있고, 승인·관리자 여부·OS 계정 연결은 회원이 직접 고칠 수 없습니다. 회원 관리는 관리자 여부를 다시 검사하는 SQL 함수만 사용합니다. `vt_documents`·`vt_events`에는 인증한 사용자 ID와 일치하는 행만 허용하는 [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)가 적용되며, 관리자도 다른 회원의 학습 행을 읽는 우회 정책은 없습니다. 서버는 Supabase의 `/auth/v1/user`로 사용자를 확인하고 HttpOnly 쿠키로 로그인·갱신 토큰을 관리합니다.
 
-RLS·승인·잠금의 SQL 검증은 마이그레이션을 적용한 **폐기 가능한 테스트 DB**에서만 실행합니다. 합성 회원의 삽입과 갱신은 마지막에 롤백합니다.
+RLS·승인·잠금·AI 호출 기록 권한의 SQL 검증은 두 마이그레이션을 적용한 **폐기 가능한 테스트 DB**에서만 실행합니다. 합성 회원의 삽입과 갱신은 마지막에 롤백합니다.
 
 ```bash
 psql -v ON_ERROR_STOP=1 "$TEST_DATABASE_URL" -f supabase/tests/rls.sql
+```
+
+### AI 호출 기록 (Supabase 회원 모드)
+
+회원 모드에서 AI를 사용하는 모든 기능(세션 분석, 세션 위키와 개념 문서 검색, 레포 위키와 추가 코드 확인·연결 그림 보완, 주요 기능 자세한 분석, 내 지식 설명, 도움 패널 답변, 연습 문항)은 실제 API 요청마다 한 행을 `vt_ai_calls`에 추가합니다. 출력 형식을 바꿔 다시 보낸 요청, Claude CLI 실패 뒤 OpenRouter로 다시 보낸 요청, 실패·취소한 요청도 각각 남깁니다.
+
+| 표 | 내용 |
+|---|---|
+| `vt_ai_calls` | `request`(실제로 보낸 본문 전체: 시스템·사용자 프롬프트, 모델, `max_tokens`, 출력 스키마, 웹 검색 설정 / Claude CLI는 실행 인자와 표준 입력), `response`(받은 응답 원문), `output`(스키마 검사를 통과한 결과), `requested_model`·`model`(요청한 모델과 실제 응답 모델), `input_tokens`·`output_tokens`·`total_tokens`·`cached_tokens`·`reasoning_tokens`, `usage`(사용량 원문), `cost_usd`, `generation_id`(OpenRouter 생성 ID), `status`·`error`·`http_status`, `duration_ms` |
+| `vt_ai_runs` | 사용자 작업 하나(예: 레포 위키 생성 1회)의 최종 결과물 `result`(검사·필터를 거쳐 저장한 결과), 저장 위치 `artifact_key`(`vt_documents`·`vt_events`의 키), `status`·`error`, 시작·종료 시각 |
+| `vt_ai_run_usage` (보기) | 작업별 호출 수·토큰 합계·요금 합계·사용한 모델 |
+
+두 표는 `run_id`로 연결하며 `feature`(`session_enrich`, `session_wiki`, `repo_wiki`, `repo_feature`, `knowledge_text`, `help_answer`, `practice_question`), `project_id`, `session_key`, `reader_level`로 기능과 대상을 구분합니다. 요금은 OpenRouter가 응답에 담아 준 `usage.cost`, Claude CLI의 `total_cost_usd`(USD)입니다.
+
+- API 키·인증 헤더·실행 파일 경로·환경변수는 저장하지 않습니다. 저장 전에 비밀값을 다시 마스킹합니다. 대신 프롬프트에 들어간 세션 요약·코드 발췌가 그대로 남으므로 Supabase 대시보드 접근 권한을 관리자에게만 주세요.
+- 앱은 회원 본인 토큰으로 **행 추가만** 합니다. 회원은 자기 기록도 Data API로 조회·수정·삭제할 수 없습니다 (연습 문항 정답이 결과물에 들어 있기 때문). 관리자는 Supabase 대시보드의 SQL Editor·Table Editor에서 조회합니다.
+- 행은 각 회원의 토큰으로 앱이 기록하는 사용 내역입니다. 청구 기준은 OpenRouter 대시보드이며, `generation_id`로 대조할 수 있습니다.
+- 기록 저장에 실패해도(마이그레이션 미적용·장애) AI 작업과 결과 저장은 계속하고 서버 로그에 `[ai-log]` 경고만 남깁니다. 경고가 보이면 두 번째 마이그레이션을 적용했는지 확인하세요.
+- 비회원/홈 토큰 모드와 로컬 mem0 기억 정리·임베딩, 모델 목록 조회는 기록하지 않습니다.
+- 기록은 자동으로 지우지 않습니다. 오래된 행은 관리자가 SQL로 정리합니다.
+
+```sql
+-- 최근 AI 작업 20개와 토큰·요금 합계
+select run_id, feature, status, calls, input_tokens, output_tokens, cost_usd, models, finished_at
+from public.vt_ai_run_usage order by finished_at desc limit 20;
+
+-- 이번 달 회원별 호출 수·토큰·요금
+select m.email, count(*) as calls, sum(c.total_tokens) as tokens, sum(c.cost_usd) as cost_usd
+from public.vt_ai_calls c join public.vt_members m using (user_id)
+where c.created_at >= date_trunc('month', now())
+group by m.email order by cost_usd desc nulls last;
+
+-- 작업 하나의 실제 요청·응답·결과물 ('<run_id>'를 위 결과의 값으로 바꿉니다)
+select attempt, provider, schema_name, model, status, request, response, output, cost_usd
+from public.vt_ai_calls where run_id = '<run_id>' order by started_at;
+select artifact_key, result from public.vt_ai_runs where id = '<run_id>';
+
+-- 90일보다 오래된 기록 정리
+delete from public.vt_ai_calls where created_at < now() - interval '90 days';
+delete from public.vt_ai_runs where created_at < now() - interval '90 days';
 ```
 
 ### 이메일 인증 결과 확인
@@ -314,7 +355,7 @@ npm test
 
 프로젝트의 **레포 위키 만들기**를 누르면 README, 의존성, 실행 스크립트, 주요 코드 발췌와 세션 요약을 AI에 전달합니다. AI가 사용자 중심 페이지와 동작 중심 페이지의 절 구성·제목·설명·주의사항을 작성합니다.
 
-스크립트·API 경로 표와 코드 연결 그림은 저장소에서 수집한 원문 자료입니다. AI가 이를 인용할 수 있지만 값을 바꾸거나 연결을 만들어낼 수는 없습니다. 같은 그림·표·코드는 한 페이지에 한 번만 표시하며, 이미 만들어진 위키에서도 다시 생성하지 않고 중복이 사라집니다. 근거를 펼쳐 파일 원문과 줄 번호를 확인할 수 있습니다. 스캔은 읽기 전용이며 코드를 실행하지 않습니다.
+스크립트·API 경로 표와 코드 연결 그림은 저장소에서 수집한 원문 자료입니다. AI가 이를 인용할 수 있지만 값을 바꾸거나 연결을 만들어낼 수는 없습니다. 같은 그림·표·코드는 한 페이지에 한 번만 표시하며, 이미 만들어진 위키에서도 다시 생성하지 않고 중복이 사라집니다. 근거를 펼쳐 파일 원문과 줄 번호를 확인할 수 있습니다. 코드는 언어(JS·TS·Python·JSON·셸)에 맞춰 문자열·주석·키워드 등에 색을 입혀 보여 줍니다. 스캔은 읽기 전용이며 코드를 실행하지 않습니다.
 
 API 표는 **방식 → 경로 → 동작 설명 → 파일** 순서로 표시합니다. AI가 경로별 코드 발췌를 읽고 무엇을 조회·저장·응답하는지, 확인된 접근 검사는 무엇인지 설명합니다. 발췌만으로 알 수 없는 동작은 확인 범위를 함께 적습니다. 기존 위키는 **업데이트**하면 새 설명 열이 반영됩니다.
 
@@ -325,6 +366,23 @@ API 표는 **방식 → 경로 → 동작 설명 → 파일** 순서로 표시�
 위키를 작성할 때 AI가 먼저 확인할 질문과 파일 위치를 고르고, 서버가 필요한 코드 일부를 읽어 추가 답변을 받습니다. Claude CLI에서는 이 확인 단계만 **Haiku·low effort**로 실행하며, CLI 실패나 API 제공자 선택 시에는 OpenRouter의 설정 모델(기본 `openai/gpt-5-mini`)을 사용합니다. 추가 확인은 최대 6곳·코드 합계 24,000자이며, 비밀값을 가리고 출처가 확인된 답만 위키 작성에 활용합니다. **AI에 보내는 내용 보기**에서 기본 입력과 추가 확인 범위를 볼 수 있습니다.
 
 새 세션이나 파일 변경이 생기면 **업데이트**로 반영합니다. 문장은 읽는 사람 수준별로 저장하고, 같은 입력으로 이미 생성한 결과는 재사용합니다. 생성에 실패하면 사유와 재시도 동작을 표시하며 고정 설명으로 대체하지 않습니다.
+
+### 주요 기능 페이지
+
+레포 위키를 쓸 때 AI가 사용자가 실제로 쓰는 **주요 기능**(최대 16개)을 고르고, 기능마다 관련 파일과 그 기능을 만들거나 고친 세션을 연결합니다. 제공하지 않은 파일·세션을 인용한 기능은 목록에서 뺍니다. 다시 생성할 때는 이전 기능 id를 알려 같은 기능이 같은 페이지로 이어지게 합니다. 이 목록은 문장 형식이 바뀐 이번 업데이트부터 만들어지므로, 기존 위키는 **다시 쓰기** 또는 **업데이트**를 누르면 생깁니다 (자동 작성이 켜져 있으면 위키를 열 때 다시 씁니다).
+
+- 주요 기능 목록은 하나입니다. **주요 기능** 탭과 **어떤 프로젝트인가요?** 페이지의 주요 기능 블록이 같은 목록을 보여 주며, 기능 카드를 누르면 `/projects/<프로젝트>/features/<기능>` 페이지로 이동합니다. AI는 주요 기능을 사용자 페이지의 별도 절로 다시 나열하지 않고, 목록을 넣을 위치만 고릅니다 (고르지 않으면 첫 절 다음). 세션 화면에도 그 세션과 관련된 기능 페이지 링크가 표시됩니다.
+- 탭은 위키를 받을 때 이미 들어 있는 목록으로 바로 그리고, 자세한 분석 여부만 나중에 받아 표시합니다.
+- 처음에는 레포 위키가 고른 관련 파일과 세션만 보여 줍니다. **이 기능 자세히 분석받기**를 누르면 아래 순서로 분석합니다 (GET으로 화면을 여는 것만으로는 AI를 부르지 않습니다).
+  1. 서버가 기능 파일, 그 파일이 불러오는 파일, 그 파일을 불러오는 파일의 선언·연결과 AI 호출 단서 줄(`openai`, `chat.completions`, `model:` 등)을 모읍니다.
+  2. AI가 이 자료를 보고 **확인할 질문과 파일 위치를 직접 만듭니다**. 서버가 그 부분의 코드만 읽어 줍니다.
+  3. AI가 읽은 코드로 답하고, 아직 모르는 것(호출하는 곳, 모델 설정, 프롬프트를 조립하는 함수 등)을 **다음 질문으로 다시 만듭니다**. 최대 3단계, 단계마다 6곳, 코드 발췌는 합계 48,000자이며 비밀값은 가립니다. 새로 읽을 코드가 없으면 일찍 멈춥니다.
+  4. AI가 페이지를 씁니다: 한눈에 보기, **사용자는 이렇게 씁니다**(단계별 흐름), 관련 파일과 역할, **AI 호출**, AI가 확인한 질문과 답(단계별), 확인하지 못한 것.
+- **AI 호출**에는 제공자·SDK, 모델, 응답 처리와 함께 **실제로 AI에 가는 시스템 프롬프트·사용자 프롬프트 문장만** 보여 줍니다. AI는 코드 위치만 가리키고, 서버가 코드를 구문 분석해 요청의 `system`·`user`·`prompt` 값이나 `{ role: 'system', content: … }` 메시지를 찾습니다. 그 값이 가리키는 상수, 불러온 파일, 감싸는 함수(예: `withReader(PROMPT, level)`는 실제 인자를 넣어 펼침)를 따라가 원문을 그대로 이어 붙입니다. 색이 다른 `{…}`는 실행할 때 채워지는 값이고, 문장이 적힌 곳은 링크로 열 수 있습니다. 가리킨 범위에 요청이 여러 개면 줄·호출 이름(`schemaName` 등)과 함께 모두 보여 줍니다. 전체 코드는 접힌 **코드 보기**에서 확인합니다. JS·TS·Python을 지원하며, 프롬프트를 특정하지 못하면 코드를 펼쳐 보여 줍니다. 이 정리는 페이지를 열 때 계산하므로 이미 분석한 기능도 다시 분석할 필요가 없습니다.
+- 모델 값은 가리킨 줄에 실제로 적혀 있을 때만 싣고, 확인하지 못하면 "코드에서 확인하지 못함"으로 표시합니다. 근거를 확인하지 못한 단계·파일·답은 거르고 경고로 남깁니다.
+- 질문 단계는 로컬 `auto`·`claude-cli` 설정에서 Claude CLI **Haiku·low effort**, 페이지 작성은 Claude CLI의 기본 모델로 실행합니다. CLI 실패나 `openrouter` 설정, 공용 서버에서는 OpenRouter의 설정 모델(기본 `openai/gpt-5-mini`)을 사용합니다. 작은 저장소 기준 AI 호출 5번, 1~2분 정도 걸립니다.
+- **AI에 처음 보내는 내용 보기**에서 첫 질문 계획 요청의 시스템·사용자 프롬프트를 볼 수 있습니다. 이후 단계의 질문은 AI가 답을 보고 만들며, 회원 모드에서는 모든 요청·응답이 [AI 호출 기록](#ai-호출-기록-supabase-회원-모드)에 `feature=repo_feature`로 남습니다.
+- 분석한 뒤 읽은 파일이 바뀌면 "분석한 뒤 바뀐 것이 있습니다"를 표시합니다. **다시 분석하기**로 갱신하세요. 페이지는 읽는 사람 수준별로 따로 저장합니다.
 
 ### 내 지식과 이해 확인
 
@@ -468,11 +526,12 @@ AI 미설정·권한 부족·취소·오류 상태에서는 새 설명을 생성
 아래 파일 경로는 기존 비회원/홈 토큰 모드 기준입니다. Supabase 회원 모드는 같은 상대 키를 `vt_documents`와 추가 전용 `vt_events`에 사용자 ID별로 저장하며, 로컬 파일로 대체 저장하지 않습니다.
 
 - 세션 위키: `~/.vibe-teacher/wiki/projects/<프로젝트>/snapshots/`, 수준별 AI 설명은 `ai/`
-- 레포 위키: 같은 프로젝트의 `repo/`, 수준별 문장은 `repo/text/`
+- 레포 위키: 같은 프로젝트의 `repo/`, 수준별 문장과 주요 기능 목록은 `repo/text/`, 기능별 페이지는 `repo/features/<기능>.<수준>.json`
 - 개인 이해 정보: `~/.vibe-teacher/wiki/learners/<ID>/events.jsonl`
 - 개인 설명: 같은 사용자 폴더의 `knowledge-text.json`
 - 개인 개념 기록: 같은 사용자 폴더의 `concepts.json`, 질문 원장은 `projects/<프로젝트>/help.jsonl`
 - mem0 검색 벡터·짧은 기록·검색 단서: `VIBE_TEACHER_MEMORY_DATABASE_URL`의 PostgreSQL, 원기록 매핑은 같은 사용자 폴더의 `memory/mem0-pg-<접속·모델 지문>.json`
+- AI 요청·응답·결과물·토큰·요금: Supabase 회원 모드에서만 `vt_ai_calls`·`vt_ai_runs` ([AI 호출 기록](#ai-호출-기록-supabase-회원-모드))
 
 이전 규칙 기반 위키·설명 캐시는 현재 결과로 사용하지 않습니다. 기존 기록 파일은 보존하며, 화면에서 위키를 다시 생성하면 새 AI 흐름을 사용합니다.
 
@@ -557,11 +616,11 @@ UI 에서 처음 한 번 토큰을 입력하면 브라우저에 저장됩니다.
 ```
 shared/   도메인 타입, API DTO, LLM 출력 스키마 (zod)
 server/   Hono API — adapters(도구별 파서) · index(계정/소스/세션 인덱스) · analyzers(원본 작업 수집) · llm(AI 생성·제공자 라우팅)
-          wiki(세션 위키 원장·검사·설명 계획) · repo(레포 위키: 읽기 전용 스캔·AI 추가 코드 확인·조립) · learner(내 이해 정보·내 지식 위키)
+          wiki(세션 위키 원장·검사·설명 계획) · repo(레포 위키: 읽기 전용 스캔·AI 추가 코드 확인·조립·주요 기능 페이지) · learner(내 이해 정보·내 지식 위키)
           assessment(문항·채점) · help(도움 패널 질문) · memory(로컬 mem0·기억 검색·색인) · storage(위키 저장소)
           cloud(Supabase 사용자 토큰·RLS 저장소·사용자별 서비스), auth(홈 토큰·Supabase 이메일 인증)
 web/      Vite + React UI (한국어), test(화면 렌더링 검사)
-supabase/ migrations(회원·승인·RLS·원장·기기 간 쓰기 잠금 SQL)
+supabase/ migrations(회원·승인·RLS·원장·기기 간 쓰기 잠금·AI 호출 기록 SQL), tests(RLS 검증 SQL)
 ```
 
 개념은 AI가 세션 맥락에서 생성하며 고정 사전 파일을 사용하지 않습니다.

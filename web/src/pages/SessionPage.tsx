@@ -4,6 +4,7 @@ import type { Account, BuiltSummary, NormalizedSession, Project, UserMessagesRes
 import { BuiltSummaryView } from '../components/BuiltSummary';
 import { Breadcrumb } from '../components/Layout';
 import { MessageList } from '../components/MessageList';
+import { SessionFeatureLinks } from '../components/RepoFeatureView';
 import { ErrorBox, Loading, fmtDate, fmtDuration } from '../components/Notice';
 import { SessionUnderstand } from '../components/SessionUnderstand';
 import { Tabs } from '../components/Tabs';
@@ -85,6 +86,7 @@ export function SessionPage() {
           <div className="small">
             <Link to={`/projects/${s.projectId}?tab=wiki`}>{ko.repo.sessionLink} →</Link>
           </div>
+          <SessionFeatureLinks projectId={s.projectId} sessionKey={s.key} />
           {s.parseWarnings.length > 0 && (
             <details className="evidence">
               <summary>

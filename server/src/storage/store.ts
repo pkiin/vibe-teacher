@@ -2,6 +2,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, pathExists, readJsonSafe, writeJsonAtomic } from '../lib/fsx';
 import { readJsonl } from '../lib/jsonl';
+import type { AiLog } from '../llm/log';
 
 /**
  * 위키·개인 상태의 durable 저장소. VIBE_TEACHER_HOME/wiki 아래에만 쓴다 (스캔 대상 홈에는 쓰지 않음).
@@ -18,6 +19,8 @@ export interface StorageBackend {
   appendJsonl(file: string, value: unknown): Promise<void>;
   readJsonl<T>(file: string): Promise<{ items: T[]; warnings: string[] }>;
   lock<T>(key: string, fn: () => Promise<T>): Promise<T>;
+  /** AI 요청·응답·결과 기록. Supabase 회원 모드에서만 있다. */
+  readonly aiLog?: AiLog;
 }
 
 /** 경로 조각으로 쓸 ID 검사. ../ 같은 값으로 저장소 밖에 쓰지 못하게 한다. */
@@ -68,6 +71,15 @@ export class WikiStorage {
 
   lock<T>(key: string, fn: () => Promise<T>): Promise<T> {
     return this.mutex.run(key, () => this.backend ? this.backend.lock(key, fn) : fn());
+  }
+
+  get aiLog(): AiLog | undefined {
+    return this.backend?.aiLog;
+  }
+
+  /** 저장소 루트 기준 키. Supabase 문서·원장의 key 와 같다. */
+  keyOf(file: string): string {
+    return path.relative(this.root, file).split(path.sep).join('/');
   }
 
   /** 예전 프로젝트 폴더는 옮기거나 덮어쓰지 않고 함께 읽는다. 새 쓰기는 대표 ID로 한다. */

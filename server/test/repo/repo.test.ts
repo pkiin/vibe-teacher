@@ -95,7 +95,7 @@ describe('AI repo wiki input', () => {
     const scan = await scanRepo(root);
     const draft = buildRepoWiki({ project: { id: 'p', name: 'demo', rootPath: root }, scan, sessions: [] });
     const output = applyRepoAi({ draft, handles: new Map(), fileSet: new Set(scan.files.map((f) => f.path)), result: { provider: 'openrouter', durationMs: 1 },
-      output: { changes: [], routeDescriptions: [], flowGroups: [], flowNodes: [], sections: [
+      output: { changes: [], routeDescriptions: [], flowGroups: [], flowNodes: [], features: [], sections: [
         { id: 'overview', page: 'user', title: '이 프로젝트', paragraphs: ['AI가 자료를 읽고 설명합니다.'], items: [], sources: ['F:README.md', 'F:invented.ts'], sourceBlocks: [] },
         { id: 'mechanism', page: 'system', title: '파일 연결', paragraphs: [], items: [], sources: [], sourceBlocks: ['mechanism'] },
       ] } });
@@ -104,6 +104,25 @@ describe('AI repo wiki input', () => {
     expect(output.system[0]?.blocks).toEqual(draft.system.find((s) => s.id === 'mechanism')?.blocks);
     expect(JSON.stringify(output)).not.toContain('invented.ts');
     expect(output.warnings).toHaveLength(1);
+  });
+  it('keeps one main-feature list: the user page shows the checked features as links where the AI places them, or after the first section', async () => {
+    const scan = await scanRepo(root);
+    const draft = buildRepoWiki({ project: { id: 'p', name: 'demo', rootPath: root }, scan, sessions: [] });
+    const apply = (sourceBlocks: string[]) => applyRepoAi({ draft, handles: new Map(), fileSet: new Set(scan.files.map((f) => f.path)), result: { provider: 'openrouter', durationMs: 1 },
+      output: { changes: [], routeDescriptions: [], flowGroups: [], flowNodes: [], sections: [
+        { id: 'overview', page: 'user', title: '이 프로젝트', paragraphs: ['개요입니다.'], items: [], sources: ['F:README.md'], sourceBlocks: [] },
+        { id: 'use', page: 'user', title: '할 수 있는 일', paragraphs: ['사용자 목록을 봅니다.'], items: [], sources: ['F:README.md'], sourceBlocks },
+      ], features: [
+        { id: 'users', name: '사용자 목록', summary: '사용자 목록을 돌려줍니다.', files: ['F:src/server.ts'], sessions: [], sources: ['F:src/server.ts'] },
+        { id: 'ghost', name: '없는 기능', summary: 'x', files: ['F:src/ghost.ts'], sessions: [], sources: [] },
+      ] } });
+    const placed = apply(['features']);
+    expect(placed.features?.map((f) => f.id)).toEqual(['users']);
+    expect(placed.user.map((s) => s.id)).toEqual(['overview', 'use']);
+    expect(placed.user[1]!.blocks.at(-1)).toEqual({ kind: 'features', ids: ['users'] });
+    const fallback = apply([]);
+    expect(fallback.user.map((s) => s.id)).toEqual(['overview', 'features', 'use']);
+    expect(fallback.user[1]).toMatchObject({ title: '주요 기능', origin: 'source', blocks: [{ kind: 'features', ids: ['users'] }], sources: [{ kind: 'file', path: 'src/server.ts' }] });
   });
   it('adds grounded descriptions between path and file without changing route identities or raw blocks', async () => {
     const originalScan = await scanRepo(root);
@@ -114,7 +133,7 @@ describe('AI repo wiki input', () => {
     const draft = buildRepoWiki({ project: { id: 'p', name: 'demo', rootPath: root }, scan, sessions: [] });
     const before = JSON.stringify(draft);
     const output = applyRepoAi({ draft, handles: new Map(), fileSet: new Set(scan.files.map((f) => f.path)), result: { provider: 'openrouter', durationMs: 1 },
-      output: { changes: [], flowGroups: [], flowNodes: [], sections: [{ id: 'requests', page: 'system', title: '서버의 요청 창구와 접근 검사', paragraphs: [], items: [], sources: [], sourceBlocks: ['api', 'mechanism'] }],
+      output: { changes: [], flowGroups: [], flowNodes: [], features: [], sections: [{ id: 'requests', page: 'system', title: '서버의 요청 창구와 접근 검사', paragraphs: [], items: [], sources: [], sourceBlocks: ['api', 'mechanism'] }],
         routeDescriptions: [
           { method: 'POST', path: '/login', file: 'src/server.ts', description: `처리 결과를 응답합니다. ${SECRET}`, sources: ['F:src/server.ts'] },
           { method: 'GET', path: '/users', file: 'src/server.ts', description: '사용자 목록을 응답합니다.', sources: ['F:src/server.ts#L1-L3'] },

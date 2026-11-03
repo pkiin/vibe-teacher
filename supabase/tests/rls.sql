@@ -29,6 +29,28 @@ do $$ begin
   perform public.vt_unlock('learner', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
   if public.vt_lock('learner', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') then raise exception 'FAIL: 타 토큰 잠금 해제'; end if;
   perform public.vt_unlock('learner', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  -- AI 호출 기록은 본인 행 추가만 허용한다. 정답이 든 기록을 회원이 다시 읽지 못한다.
+  insert into public.vt_ai_calls(id, user_id, run_id, feature, provider, task, schema_name, status, request, output, input_tokens, output_tokens, cost_usd, started_at, duration_ms)
+    values ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', '11111111-1111-4111-8111-111111111111', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'practice_question', 'openrouter', 'text', 'concept_practice', 'ok', '{"body":{}}', '{"correctOptionId":"o"}', 10, 5, 0.0001, now(), 12);
+  insert into public.vt_ai_runs(id, user_id, feature, status, result, started_at, finished_at)
+    values ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', '11111111-1111-4111-8111-111111111111', 'practice_question', 'done', '{"correctOptionIds":["o"]}', now(), now());
+  begin
+    insert into public.vt_ai_calls(id, user_id, provider, task, schema_name, status, request, started_at, duration_ms)
+      values ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', '22222222-2222-4222-8222-222222222222', 'openrouter', 'text', 'forged', 'ok', '{}', now(), 0);
+    raise exception 'FAIL: 타인 AI 기록 삽입';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform count(*) from public.vt_ai_calls;
+    raise exception 'FAIL: AI 호출 기록 조회';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform count(*) from public.vt_ai_run_usage;
+    raise exception 'FAIL: AI 사용량 보기 조회';
+  exception when insufficient_privilege then null; end;
+  begin
+    update public.vt_ai_runs set status = 'error';
+    raise exception 'FAIL: AI 실행 기록 수정';
+  exception when insufficient_privilege then null; end;
 end $$;
 select set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true);
 do $$ begin
@@ -48,4 +70,4 @@ do $$ begin
   if not (select approved from public.vt_members) then raise exception 'FAIL: 승인 반영'; end if;
 end $$;
 rollback;
-select 'PASS: 회원·승인·RLS·쓰기 잠금';
+select 'PASS: 회원·승인·RLS·쓰기 잠금·AI 호출 기록';

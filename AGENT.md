@@ -29,6 +29,7 @@ README 는 한국어로, 사용자가 **그대로 복사해 실행할 수 있는
 | AI 제공자·모델·전송 범위, AI 가 쓰는 문장과 규칙 대체 조건 | "AI 제공자와 외부 문서 검색" 표와 설명 |
 | 로그인·권한·바인딩 규칙 | "로그인", "원격 접근", "다중 계정 운영" 절 |
 | `scripts/grant-read-acl.sh` | "다중 계정 운영" 명령 블록 |
+| Supabase 마이그레이션·표 추가 (`supabase/migrations/`) | "Supabase 최초 설정" 단계, 해당 기능 절(예: "AI 호출 기록"), "구조" 절 |
 | npm 스크립트 추가·변경 | "빠른 시작", 검사와 테스트 블록 |
 | 디렉터리 구조 변경 | "구조" 절 |
 | 사용자 눈에 보이는 새 기능 | 첫 문단 요약 불릿 또는 새 절 |
@@ -48,9 +49,9 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
   src/adapters/    도구별 기록 파서. 도구마다 index(어댑터) · paths(기본 경로) · records(원본 레코드 타입) · parse(정규화)
   src/index/       계정 탐색, 소스, 세션 인덱스, 인덱스 디스크 캐시
   src/analyzers/   user-messages(내 메시지) · built/(파일·명령·패키지·커밋 원문 수집)
-  src/llm/         AI: digest(전송용 요약 + 비밀값 마스킹) · gate(AI 문장을 쓸 수 있는지와 못 쓰는 사유) · reader(읽는 사람 수준별 문체 지침, withReader) · claude-cli · openai-compat(OpenRouter 전용, fetch) · concepts(개념 ID·링크 검사) · models(모델 목록) · select(제공자 선택) · credentials(로컬 개인 키·공용 서버 UUID별 키 선택) · jobs · cache
+  src/llm/         AI: digest(전송용 요약 + 비밀값 마스킹) · gate(AI 문장을 쓸 수 있는지와 못 쓰는 사유) · reader(읽는 사람 수준별 문체 지침, withReader) · claude-cli · openai-compat(OpenRouter 전용, fetch) · concepts(개념 ID·링크 검사) · models(모델 목록) · select(제공자 선택) · credentials(로컬 개인 키·공용 서버 UUID별 키 선택) · log(AI 호출·작업 기록 형식, withAiRun) · jobs · cache
   src/auth/        홈 디렉터리 토큰 로그인·Supabase 이메일 회원가입/로그인·HttpOnly 세션 갱신, 쿠키, 미들웨어
-  src/cloud/       공개 Supabase 설정·사용자 토큰 Data API, RLS 문서/추가 전용 원장 저장소, 사용자별 서비스·작업 큐
+  src/cloud/       공개 Supabase 설정·사용자 토큰 Data API, RLS 문서/추가 전용 원장 저장소, 사용자별 서비스·작업 큐, ai-log(vt_ai_calls·vt_ai_runs 추가 전용 AI 호출 기록)
   src/config/      설정 스키마(zod)·저장소·환경변수/CLI 인자
   src/routes/      API 라우트. 공통 의존성과 HttpError 는 routes/deps.ts
   src/lib/         fsx(안전한 파일 IO) · jsonl · shell(셸 명령 파서) · text · hash
@@ -59,8 +60,8 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
                    · knowledge(AI 개념이 나온 곳·명시적 이해 증거) · knowledge-service(내 세션 모으기·캐시)
                    · knowledge-text(설명 문장 AI 작성: 사실 → 프롬프트, 넘겨짚는 문장 거르기, 지문별 저장, 작업)
                    · prefs(사용자 설정: 읽는 사람 수준, prefs.json)
-  src/repo/        레포 위키: scan(저장소 읽기 전용 스캔) · source(근거 파일 안전 읽기) · code(TS 구문 분석·내부 파일 연결) · wiki(사실 초안 조립, 판 비교) · inspect(AI 질문·필요한 코드만 추가 확인) · ai(AI 가 문장 쓰기, 표·코드 유지, 근거 표시 검사)
-                   · service(저장·갱신 필요 판단, AI 작업과 실패 상태)
+  src/repo/        레포 위키: scan(저장소 읽기 전용 스캔) · source(근거 파일 안전 읽기) · code(TS 구문 분석·내부 파일 연결) · wiki(사실 초안 조립, 판 비교) · inspect(AI 질문·필요한 코드만 추가 확인) · ai(AI 가 문장·주요 기능 목록 쓰기, 표·코드 유지, 근거 표시 검사)
+                   · service(저장·갱신 필요 판단, AI 작업과 실패 상태) · feature(주요 기능별 페이지: AI가 질문을 만들며 여러 단계로 코드 확인, 프롬프트 원문·모델 근거 검사) · prompt-text(AI가 가리킨 코드에서 실제 프롬프트만 구문 분석으로 꺼내기)
   src/assessment/  bank(문항 형식 검사) · service(AI 출제·서버 채점)
   src/help/        도움 패널 질문: answer(대상별 근거 고르기·프롬프트·답 검사) · service(개인 기록·작업)
   src/memory/      개인 장기 기억: search(원장 사건의 검색 표현·한국어 키워드 검색) · service(권한 범위별 조회·POST 후 자동 색인) · mem0(PostgreSQL pgvector·OpenRouter 추출/임베딩) · database(Supabase 우선 설정·비공개 스키마·연결 검사) · supermemory(선택적 클라우드 어댑터)
@@ -75,9 +76,11 @@ web/               Vite + React 19 + react-router UI (한국어)
   src/components/RepoSourceViewer.tsx   근거 파일 원문·줄 강조·검색, RepoFlowView.tsx 는 검증된 파일 연결을 SVG로 표시
   src/components/SecurityReview.tsx    AI가 선정한 보안·데이터 주의사항과 출처 표시
   src/components/HelpPanel.tsx          도움 패널 (설명/질문/퀴즈), src/context/FocusContext.tsx 가 지금 보는 대상을 공유
+  src/components/CodeBlock.tsx          의존성 없는 코드 색칠(토큰 분석, React 텍스트로만 그림). 파일 보기·레포 위키 코드·기능 페이지가 함께 쓴다
+  src/pages/FeaturePage.tsx             주요 기능 페이지 (/projects/:id/features/:featureId). 본문은 components/RepoFeatureView.tsx, 기능 카드는 RepoWikiView 의 FeatureCards
 scripts/           dev.mjs(웹+API 동시 실행), memory-db.mjs(로컬 PostgreSQL 준비), check-memory-db.ts(Supabase·PostgreSQL 접속 검사), setup-accounts.ts(관리자 회원 스키마 준비), postgres-init.sql(pgvector 확장), grant-read-acl.sh(다중 계정 읽기 ACL)
 compose.yaml       프로젝트 전용 PostgreSQL + pgvector, loopback 바인딩과 이름 있는 볼륨
-supabase/migrations/ 회원·관리자 승인·본인 데이터 RLS·기기 간 쓰기 잠금 SQL (관리자가 1회 적용)
+supabase/migrations/ 회원·관리자 승인·본인 데이터 RLS·기기 간 쓰기 잠금 SQL, AI 호출 기록 표 (관리자가 순서대로 1회 적용, scripts/setup-accounts.ts 의 MIGRATIONS 목록)
 ```
 
 ## 4. 명령어
@@ -88,7 +91,7 @@ Node.js 20 이상이 필요합니다 (루트 `package.json` 의 `engines`). 개�
 npm install
 npm run memory:db                   # 로컬 PostgreSQL + pgvector 준비 (.env에 접속 설정 생성)
 npm run memory:check                # 설정된 Supabase·PostgreSQL 접속과 합성 쓰기·검색 검사 (AI 호출 없음)
-npm run accounts:setup              # 관리자: 같은 프로젝트의 Supabase 회원·승인·RLS 스키마 최초 준비
+npm run accounts:setup              # 관리자: 같은 프로젝트의 Supabase 회원·승인·RLS·AI 호출 기록 스키마 준비 (없는 표만)
 npm run dev                         # API :3318 + 웹 :3317 (웹의 /api 는 API 로 프록시)
 npm run dev:server                  # API 만
 npm run dev:web                     # 웹만
@@ -113,7 +116,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **AI 생성·외부 문서 검색 API는 OpenRouter만 사용한다.** 기본 모델은 `openai/gpt-5-mini`. 로컬의 auto 설정은 Claude CLI를 우선하고 CLI 실패·외부 문서 검색은 OpenRouter로 처리한다. 공용 서버 shared는 사용자별 키 추적을 위해 OpenRouter로 실행한다. 취소는 다른 제공자로 재시도하지 않는다. OpenAI·Anthropic 직접 호출이나 해당 API 키 사용을 추가하지 않는다. 문서 검색에는 공개 개념 이름만 보내고 프로젝트 원문·사설 경로는 넣지 않는다. 참고 링크는 실제 API 검색 출처와 대조한다. 개인 기억 정리·임베딩도 OpenRouter를 사용한다. 명시적으로 선택한 Supermemory 클라우드 어댑터만 아래 장기 기억 규칙에 따라 별도 API를 사용한다.
 - **기본 바인딩은 `127.0.0.1`.** loopback 이 아닌 주소는 `VIBE_TEACHER_TOKEN`, `auth.mode=home-token` 또는 Supabase shared 로그인 없이는 부팅을 거부합니다 (`server/src/index.ts`). Supabase local은 loopback만 허용하고 처음 인증한 UUID를 앱 저장소 `local-owner`에 묶습니다.
 - **Supabase 회원 데이터는 사용자 JWT + RLS.** `VIBE_TEACHER_AUTH_MODE=supabase`가 기존 인증보다 우선합니다. `/auth/v1/user`로 검증한 UUID만 학습자·저장소 주체로 사용하고 사용자 metadata·이메일·OS 사용자명·요청의 userId로 권한을 만들지 않습니다. 공개 키만 일반 설치에 배포하며 관리자 AI 키는 `.env.admin`에 둡니다. 서비스 키나 DB 암호를 사용자의 브라우저·로컬 설치로 내려주지 않습니다. 회원의 승인·관리자·OS 계정 연결은 `vt_members`와 검증하는 SQL RPC에서만 변경합니다. Supabase 관리자도 연결된 OS 계정과 본인 학습 행만 조회하며 회원 관리 목록만 별도 허용합니다.
-- **회원 모드 저장과 작업을 분리한다.** `CloudRuntime`에서 사용자별 `WikiStorage`·AI 분석 캐시·작업 큐를 만듭니다. 새 위키·질문·학습·설정 서비스는 `deps.storage`를 재사용해야 하며 파일 저장소를 새로 만들어 우회하지 않습니다. CloudStorage는 실패 시 로컬로 대체 저장하지 않습니다. 원본 로그·소스 파일은 현재 기기에서 읽고 업로드하지 않습니다. 회원 모드는 Supabase 공유 원장의 키워드 검색을 사용하며 mem0 직접 DB 설정을 적용하지 않습니다. 기존 비회원/홈 토큰 데이터는 자동으로 업로드하거나 합치지 않습니다.
+- **회원 모드 저장과 작업을 분리한다.** `CloudRuntime`에서 사용자별 `WikiStorage`·AI 분석 캐시·작업 큐를 만듭니다. 새 위키·질문·학습·설정 서비스는 `deps.storage`를 재사용해야 하며 파일 저장소를 새로 만들어 우회하지 않습니다. CloudStorage는 실패 시 로컬로 대체 저장하지 않습니다. 원본 로그·소스 파일은 현재 기기에서 읽고 업로드하지 않습니다. 단, AI에 실제로 보낸 요청 본문(마스킹한 요약·발췌)은 아래 AI 호출 기록에 남깁니다. 회원 모드는 Supabase 공유 원장의 키워드 검색을 사용하며 mem0 직접 DB 설정을 적용하지 않습니다. 기존 비회원/홈 토큰 데이터는 자동으로 업로드하거나 합치지 않습니다.
+- **회원 모드의 AI 호출은 빠짐없이 기록한다.** `OpenAiCompatProvider`·`ClaudeCliProvider`는 성공·실패·취소와 관계없이 실제 요청 하나마다 `AiLog.call`(`server/src/llm/log.ts`)을 호출한다: 보낸 본문 전체(CLI는 인자·표준 입력), 응답 원문, 스키마를 통과한 결과, 요청·응답 모델, 토큰, 요금, 생성 ID. API 키·인증 헤더·실행 파일 경로·환경변수는 넣지 않는다. 사용자 작업은 `withAiRun(storage, { feature, … }, signal, fn)`으로 감싸고, 안의 모든 `complete()`에 `trace: run.trace`를 넘기며, 저장한 최종 결과물은 `run.result(file, value)`로 남긴다. 기록은 `WikiStorage.aiLog`(CloudStorage의 `CloudAiLog`)를 통해 사용자 토큰으로 `vt_ai_calls`·`vt_ai_runs`에 추가만 하며 `user_id`는 인증 주체에서만 받는다. 저장 전 `toJsonb`로 비밀값을 다시 가리고 NUL 문자를 바꾼다. 회원에게 조회·수정 권한을 주지 않는다(연습 문항 정답 보호, 관리자는 대시보드에서 조회). 기록 실패는 경고만 남기고 AI 작업 실패로 바꾸지 않는다.
 - **계정 범위 밖은 404.** 다른 계정의 리소스는 403 이 아니라 404 로 존재 자체를 숨깁니다. 계정에 딸린 라우트에는 `assertAccount` 를 호출합니다 (`server/src/routes/deps.ts`).
 - **권한 없는 홈은 오류가 아니라 상태.** 읽을 수 없는 계정은 `readable: 'denied'` 로 표시하고 나머지는 계속 동작해야 합니다.
 - **자식 프로세스 환경.** `claude` CLI 를 띄울 때 `CLAUDE_CONFIG_DIR` 를 제외한 `CLAUDE*` 환경변수를 지웁니다 (Claude Code 안에서 실행해도 중첩 실행이 막히지 않도록).
@@ -124,6 +128,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **CLI 로그인을 고르면 API 키를 넘기지 않는다.** `claude` 자식 프로세스 환경에서 `ANTHROPIC_API_KEY`·`ANTHROPIC_AUTH_TOKEN` 을 지운다 (`childEnv`).
 - **읽는 사람 수준은 문체만.** 사용자가 고른 수준(`shared/src/reader.ts` 의 `ReaderLevel`, 기본 `non-dev` = 완전 비개발자)은 AI 문장의 단어·설명 깊이에만 쓴다. 이해 증거가 아니므로 learner 원장에 넣지 않고(`learners/<id>/prefs.json`), 개념 상태·위험 알림·사실·근거를 바꾸지 않는다. 사람이 읽는 문장을 쓰는 **모든** AI 호출은 시스템 프롬프트를 `server/src/llm/reader.ts` 의 `withReader(prompt, level)` 로 감싸고, 결과는 수준별로 따로 저장한다(캐시 키·파일 이름·지문에 수준 포함). 시스템 프롬프트 본문에 특정 독자("초보", "비개발자")를 박아 넣지 않는다. 화면은 사용자가 수준을 고르기 전(`reader.chosen=false`)에는 AI 자동 작성을 시작하지 않고 먼저 묻는다.
 - **레포 위키 구성과 문장은 AI가.** AI 응답은 `server/src/repo/ai.ts` 의 `applyRepoAi` 를 거친다: 명령·스크립트·API·폴더 표의 원문 값과 코드 블록은 저장소에서 읽은 그대로 보존한다. API 표의 동작 설명, 연결 그림의 파일 역할·영역 정보는 검증된 AI 설명으로 채운다. AI가 절 구성과 설명을 결정하되 원문 값과 파일 연결은 변조하지 않는다. 근거는 미리 준 표시(`F:경로` 중 실제 파일, `S1…`)만 받고 나머지는 버리며 경고로 남긴다. 입력·출력 모두 `maskSecrets`. 보내기 전 미리 보기(`/repo-wiki/ai/preview`)를 유지한다.
+- **주요 기능 페이지는 질문을 AI가 만들고 코드는 서버가 읽는다.** `server/src/repo/feature.ts`: 기능 목록은 레포 위키 AI 출력(`features`)을 `applyRepoAi`에서 검사한 것만 쓴다(참조를 하나라도 확인하지 못하면 그 기능을 거른다, id는 `FEATURE_ID`라 파일 이름에 안전). 주요 기능 목록은 이것 하나다. 사용자 페이지에는 `{ kind: 'features' }` 블록으로 같은 목록을 넣고(AI가 `sourceBlocks`에 `features`로 위치를 고르거나, 없으면 첫 절 다음), AI가 절로 기능을 따로 나열하게 하지 않는다. 분석은 POST로만 시작하며 질문 계획 → (읽기 → 답·후속 질문) × `REPO_FEATURE_LIMITS.rounds` → 페이지 작성 순서다. 파일은 `readRepoText`로만 읽고 글자 수 상한을 지킨다. 근거는 실제로 보낸 발췌 안의 범위만 받는다(`resolveFeatureRef`). 시스템·사용자 프롬프트는 AI가 가리킨 줄을 저장소에서 그대로 옮기고 AI가 다시 쓴 프롬프트를 싣지 않는다. 화면에 보이는 프롬프트 문장은 `repo/prompt-text.ts`의 `extractPrompts`가 구문 분석으로 꺼낸다: 요청 객체의 역할 키(`system`·`user`·`prompt` 등, AI 요청 키가 둘 이상인 객체)와 `{ role, content }` 메시지만 보고, 호출 인자로 넘기는 요청을 우선한다. 값은 같은 파일 변수·상수, 상대 경로로 불러온 파일(`readRepoText`, 읽기 상한), 저장소 함수의 반환값(매개변수에 실제 인자를 넣음)까지 따라간다. 고정 문장이 없는 값은 식 그대로 slot으로 둔다. 역할 키가 없으면 범위 안 문장이 하나일 때만 쓰고 오류·로그 문구는 뺀다. 이 결과는 저장하지 않고 페이지를 읽을 때 `withPromptText`로 계산한다(파일 지문이 분석 때와 같을 때만 파일 전체로 따라간다). 모델 값은 가리킨 줄에 그 문자열이 있을 때만 싣는다(`acceptFeaturePage`). AI 호출 단서 줄(`AI_MARKER`)은 어디를 볼지 알려 주는 입력일 뿐 화면 설명으로 쓰지 않는다. 질문 단계는 `task=repo-inspect`, 페이지 작성은 일반 작업이다.
 - **내 지식 설명 문장은 상태를 넘겨짚지 않는다.** AI 문장은 `server/src/learner/knowledge-text.ts` 의 `acceptKnowledgeText` 를 거친다: "모르십니다"류 단정, 확인되지 않았는데 "이해하고 계십니다"류는 버리고 생성 실패를 표시한다(같은 사실로 다시 부르지 않도록 거른 것도 저장). 상태 자체는 AI 가 바꾸지 못한다.
 - **저장소 스캔은 읽기만.** `server/src/repo/scan.ts` 는 쓰기·명령 실행(git 포함)을 하지 않고, 심볼릭 링크를 따라가지 않으며, `.env`·키 파일을 열지 않는다(`.env.example` 은 변수 이름만). 새로 읽을 파일 종류를 늘리면 비밀값이 섞이지 않는지 테스트(`server/test/repo`)를 붙인다.
 - **내 지식 위키: 언급은 증거가 아니다.** 사용자 메시지의 언급은 설명 문장의 맥락으로만 쓰고 상태는 learner 원장으로만 정한다. 붙여 넣은 글(`<pasted_content>`)은 언급으로 보지 않는다 (`ownWords`).
@@ -186,6 +191,9 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 세션 요약(`SessionSummary`) 형태나 인덱싱 결과가 바뀌면 `server/src/index/cache.ts` 의 `CACHE_VERSION` 을 올립니다.
 - 프로젝트는 같은 계정 안에서 `realpath` 기준으로 묶는다. 인덱스 디스크 캐시에는 기록된 원래 경로를 남기고 매 스캔마다 실제 경로를 다시 확인한다. 예전 ID는 `SessionIndex.getProjectIds()`로 조회하며, `createWikiServices`와 프로젝트 저장소에 이 resolver를 넘겨 위키·AI·질문·레포 이력을 함께 읽는다. 예전 파일은 보존하고 새 쓰기는 대표 ID로 한다. 이름·Git 원격 주소만으로 다른 폴더나 계정을 합치지 않는다.
 
+### 회원 모드 저장소 읽기
+- Supabase 회원 모드에서는 `storage.readJson`마다 Supabase 왕복(수백 ms)이다. 예전 프로젝트 ID·수준별 파일처럼 서로 독립인 읽기는 `Promise.all`로 동시에 하고, 화면 목록에 필요 없는 큰 파일(`repo/materials.json` 등)은 읽지 않는다. 화면이 이미 받은 응답에 있는 데이터는 다시 요청하지 않는다.
+
 ### 위키 생성 변경
 - AI의 claim·finding·item은 제공된 근거와 올바른 개념 참조가 있어야 한다. 없는 참조를 일부 지워 카드를 살리지 않고 해당 후보를 거른다.
 - AI 위험 판단은 근거 상태·영향·생명주기를 구분하고 관찰 범위를 보존한다. 모든 프로젝트에 같은 점검 목록을 붙이지 않는다.
@@ -195,7 +203,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 문항은 `assessment/service.ts`에서 AI로 생성한다. 객관식은 정답 1개·선택지 3개 이상, OX는 `o`,`x`. 생성 문항은 `candidate`로 보존한다.
 - 선행관계는 AI 결과에서 받아 구조·참조·순환을 검사한다. 고정 선행관계 파일은 사용하지 않는다.
 - 위키 AI 프롬프트나 출력 스키마(`WikiAiOutputSchema`)를 바꾸면 `shared/src/wiki.ts` 의 `WIKI_AI_PROMPT_VERSION` 을 올린다 (저장된 AI 레이어 무효화).
-- 내 지식 설명 문장 프롬프트·사실 형식을 바꾸면 `server/src/learner/knowledge-text.ts` 의 `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 올린다. 레포 위키는 시스템 프롬프트와 입력 전체가 지문(`inputHash`)에 들어간다. 공통 문체나 문장 형식이 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올려 기존 문장 레이어를 갱신 대상으로 돌린다.
+- 내 지식 설명 문장 프롬프트·사실 형식을 바꾸면 `server/src/learner/knowledge-text.ts` 의 `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 올린다.
+- 주요 기능 페이지의 프롬프트·출력 스키마·저장 형식(`RepoFeaturePage`)을 바꾸면 `server/src/repo/feature.ts` 의 `FEATURE_PAGE_VERSION` 을 올린다. 레포 위키 출력의 `features` 형식을 바꾸면 `repo/service.ts` 의 `REPO_TEXT_VERSION` 을 올린다. 레포 위키는 시스템 프롬프트와 입력 전체가 지문(`inputHash`)에 들어간다. 공통 문체나 문장 형식이 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올려 기존 문장 레이어를 갱신 대상으로 돌린다.
 - 읽는 사람 문체 지침(`server/src/llm/reader.ts`)을 바꾸면 `ENRICH_PROMPT_VERSION`, `WIKI_AI_PROMPT_VERSION`, `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 함께 올린다 (이 셋은 지문에 시스템 프롬프트 본문이 들어가지 않는다). 수준을 추가하면 `READER_LEVELS`, `reader.ts` 의 지침, `web/src/i18n/ko.ts` 의 `reader.levels`, README "읽는 사람 수준" 표를 함께 고친다.
 - 위키용 개념 필드를 바꾸면 `server/src/wiki/catalog.ts` 의 `CATALOG_VERSION`, 상태 전이 규칙을 바꾸면 `POLICY_VERSION`, 원장 형식을 바꾸면 `shared/src/wiki.ts` 의 `WIKI_SCHEMA_VERSION` 을 올린다.
 
@@ -215,10 +224,20 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 줄 인용은 제공된 발췌 전체 또는 그 안에 포함된 더 좁은 범위를 허용하고 원래 지문을 보존한다. 읽지 않은 줄, 역순·0·안전한 정수 범위를 벗어난 줄은 거절한다. 여러 발췌 사이의 읽지 않은 구간을 합쳐 인용할 수는 없다.
 - 원본 그래프의 모든 노드에 검증된 동작 설명과 유효한 영역이 있어야 레포 위키를 완료로 저장한다. 누락 시 `repo_wiki_flow` 작업으로 한 번 보완하고 다시 검사한다. 여전히 누락되면 생성 실패로 저장하며 설명 없는 성공 캐시를 만들지 않는다. 보완은 `repo-inspect` 프로필을 쓰고 기존 입력과 같은 코드 발췌만 전달한다.
 - `repo/inspect.ts`는 AI가 최대 6곳의 확인 위치·질문을 고른 뒤 `readRepoText`로 합계 24,000자 이내의 마스킹된 발췌를 읽고 짧은 답을 받는다. 저장소 밖·숨김 설정·키·심볼릭 링크는 읽지 않으며 알려진 지문과 다른 파일도 추가 확인에서 제외한다. 추가 답의 출처는 실제 제공한 줄 범위와 대조한다. GET 미리 보기는 AI를 호출하지 않고 기본 입력과 추가 확인 상한을 알린다.
-- `LlmRequest.task=repo-inspect`만 Claude CLI의 `haiku`·`--effort low`로 실행한다. CLI 도구는 계속 비활성화하고 서버가 파일을 읽는다. CLI 실패는 기존 OpenRouter 경로를 쓰며 취소는 전파한다. 보조 확인 실패는 경고를 남기고 원래 코드 근거로 작성할 수 있다.
+- `LlmRequest.task=repo-inspect`만 Claude CLI의 `haiku`·`--effort low`로 실행한다 (레포 위키 추가 확인·연결 그림 보완, 주요 기능 분석의 질문 단계). CLI 도구는 계속 비활성화하고 서버가 파일을 읽는다. CLI 실패는 기존 OpenRouter 경로를 쓰며 취소는 전파한다. 보조 확인 실패는 경고를 남기고 원래 코드 근거로 작성할 수 있다.
 - 실제 파일 내용의 지문이 위키 근거와 달라지면 현재 파일임을 알리고 예전 줄 강조를 끈다. 글꼴을 적용해도 줄 번호가 변하지 않도록 비밀값 마스킹은 줄바꿈을 보존한다.
 
+### AI 호출 추가
+- 새 기능에서 `provider.complete()`를 부르면 작업 함수를 `withAiRun(this.opts.storage, { feature, projectId, sessionKey, readerLevel }, signal, async (run) => …)`로 감싸고 모든 요청에 `trace: run.trace`를 넘긴다. 결과를 저장한 직후 `run.result(file, value)`를 부른다(저장하지 않는 결과는 `run.result(undefined, value)`).
+- 새 기능 종류는 `AiFeature`에 추가하고 README "AI 호출 기록"의 `feature` 목록을 고친다. 서비스는 `deps.storage`를 받아야 회원 모드에서 기록된다.
+- 검사: 가짜 `AiLog`를 가진 저장소(`StorageBackend.aiLog`)로 실행 기록·결과물을 확인한다 (`server/test/llm/ai-log.test.ts`, `server/test/cloud-ai-log.test.ts` 참고).
+
+### Supabase 표 추가
+- 새 마이그레이션 파일을 `supabase/migrations/`에 추가하고 `scripts/setup-accounts.ts`의 `MIGRATIONS`에 표 목록과 함께 등록한다. 기존 마이그레이션 파일은 고치지 않는다.
+- RLS를 켜고 `anon`·`authenticated` 권한을 회수한 뒤 필요한 것만 허용한다. `supabase/tests/rls.sql`에 허용·거절 검사를 추가한다.
+
 ### AI 제공자 추가
+- 요청 하나마다 `AiLog.call`로 기록한다(성공·실패·취소, 키 제외). `select.ts`의 `providers()`에서 `deps.log`를 넘긴다.
 - `shared/src/api.ts` 의 `LlmProviderId`, `server/src/config/schema.ts` 와 `server/src/routes/settings.ts` 의 provider enum, `server/src/llm/select.ts` 의 `providers()`·`IDS`·라우팅(Claude CLI 우선, 실패·검색은 OpenRouter)·`modelFor` 를 함께 고친다.
 - 화면 문구는 `web/src/i18n/ko.ts` 의 `sources.llmChoice`·`llmNoKey`, 키는 `.env.example` 에 주석과 함께 추가한다.
 - 응답은 항상 zod 스키마로 다시 검사한다 (`LlmProvider.complete`). 네트워크는 테스트에서 fetch 를 주입해 막는다.
