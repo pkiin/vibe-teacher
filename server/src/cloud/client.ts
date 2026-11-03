@@ -58,9 +58,16 @@ export class CloudClient {
       throw new CloudError(503, 'cloud_unavailable', 'Supabase에 연결하지 못했습니다. 연결을 확인한 뒤 다시 시도하세요');
     }
     if (!response.ok) {
-      // 외부 오류 본문에는 주소·토큰·SQL 정보가 들어갈 수 있어 그대로 노출하지 않는다.
+      // 알려진 오류 코드만 해석하고 외부 메시지·주소·토큰·SQL 상세는 노출하지 않는다.
+      const details: unknown = route.startsWith('/auth/') ? await response.json().catch(() => null) : null;
+      const code = details && typeof details === 'object' && 'code' in details && typeof details.code === 'string' ? details.code : undefined;
+      if (response.status >= 500 && route.startsWith('/auth/')) throw new CloudError(503, 'cloud_unavailable', 'Supabase 인증 서버에 연결하지 못했습니다. 잠시 후 다시 시도하세요');
+      if (code === 'over_email_send_rate_limit') throw new CloudError(429, 'email_send_rate_limited', '인증 메일 발송 한도에 도달했거나 재요청 간격이 너무 짧습니다. 잠시 후 다시 시도하고, 계속되면 관리자에게 메일 발송 설정 확인을 요청하세요');
+      if (code === 'email_address_not_authorized') throw new CloudError(400, 'email_delivery_not_configured', '현재 메일 발송 설정으로는 이 주소에 인증 메일을 보낼 수 없습니다. 관리자에게 메일 발송 설정 확인을 요청하세요');
+      if (code === 'email_not_confirmed') throw new CloudError(400, 'email_not_confirmed', '이메일 인증을 먼저 완료해 주세요. 메일이 오지 않았다면 인증 메일 재발송을 요청할 수 있습니다');
       if (response.status === 429) throw new CloudError(429, 'rate_limited', '요청이 많습니다. 잠시 후 다시 시도하세요');
       if (response.status === 401 || response.status === 403) throw new CloudError(response.status, 'cloud_unauthorized', '로그인 정보 또는 접근 권한을 확인하세요');
+      if (route.startsWith('/auth/v1/resend')) throw new CloudError(400, 'confirmation_resend_failed', '인증 메일을 요청하지 못했습니다. 이메일 주소를 확인하고, 이미 인증을 마쳤다면 로그인해 주세요');
       if (route.startsWith('/auth/')) throw new CloudError(400, 'auth_failed', '이메일과 비밀번호를 확인하세요. 가입 후에는 이메일 인증이 필요할 수 있습니다');
       throw new CloudError(503, 'cloud_storage_error', 'Supabase 저장소를 사용할 수 없습니다. 관리자에게 마이그레이션과 권한 설정 확인을 요청하세요');
     }

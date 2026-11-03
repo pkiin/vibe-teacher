@@ -30,6 +30,7 @@ describe('처음 시작하는 화면', () => {
     expect(html).toContain('type="password"');
     expect(html).toContain('회원가입');
     expect(html).toContain('같은 계정으로 로그인');
+    expect(html).toContain('인증 메일이 안 왔어요');
     expect(html).not.toContain('setfacl');
     expect(html).not.toContain('login-token');
   });

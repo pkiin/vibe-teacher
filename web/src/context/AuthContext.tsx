@@ -38,9 +38,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // 이메일 인증 후 로그인은 비밀번호로 한다. 리다이렉트에 담긴 토큰을 URL 기록에 남기지 않는다.
-    const fragment = new URLSearchParams(window.location.hash.slice(1));
-    if (fragment.has('access_token') || fragment.has('refresh_token')) window.history.replaceState(null, '', window.location.pathname + window.location.search);
     void refresh().catch(() => {});
     return onUnauthorized(() => {
       // 세션이 만료되면 로그인 화면으로

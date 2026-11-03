@@ -33,6 +33,8 @@ function fakeCloud() {
   const locks = new Map<string, string>();
   const calls: { url: URL; headers: Headers; body: Record<string, unknown> }[] = [];
   let failWrites = false;
+  let emailConfirmed = true;
+  let failAuth = false;
   const request = (async (input, init) => {
     const url = new URL(String(input));
     const headers = new Headers(init?.headers);
@@ -42,12 +44,16 @@ function fakeCloud() {
     const token = headers.get('authorization')?.replace('Bearer ', '');
     const owner = token === 'alice-token' ? ALICE : token === 'bob-token' ? BOB : undefined;
     if (url.pathname === '/auth/v1/signup') return reply({ user: { id: ALICE } });
+    if (url.pathname === '/auth/v1/resend') return reply({});
     if (url.pathname === '/auth/v1/token') {
       if (body.password === 'bad') return reply({}, 400);
       return reply({ access_token: 'alice-token', refresh_token: 'refresh-a', expires_in: 3600 });
     }
     if (!owner) return reply({}, 401);
-    if (url.pathname === '/auth/v1/user') return reply({ id: owner, email: members.get(owner)!.email, user_metadata: { is_admin: true, approved: true, username: 'service' } });
+    if (url.pathname === '/auth/v1/user') {
+      if (failAuth) return reply({ message: 'private-provider-detail' }, 503);
+      return reply({ id: owner, email: members.get(owner)!.email, email_confirmed_at: emailConfirmed ? '2026-11-03T00:00:00Z' : null, user_metadata: { is_admin: true, approved: true, username: 'service', email_verified: true } });
+    }
     if (url.pathname === '/auth/v1/logout') return new Response(null, { status: 204 });
     if (url.pathname === '/rest/v1/vt_members') return reply([members.get(owner)]);
     if (url.pathname === '/rest/v1/rpc/vt_lock') {
@@ -80,7 +86,7 @@ function fakeCloud() {
     const value = documents.get(`${owner}:${key}`);
     return reply(value === undefined ? [] : [{ value }]);
   }) as typeof fetch;
-  return { request, calls, members, documents, events, set failWrites(value: boolean) { failWrites = value; } };
+  return { request, calls, members, documents, events, set failWrites(value: boolean) { failWrites = value; }, set emailConfirmed(value: boolean) { emailConfirmed = value; }, set failAuth(value: boolean) { failAuth = value; } };
 }
 
 async function fixture(remote = fakeCloud(), deployment: 'local' | 'shared' = 'shared') {
@@ -188,6 +194,71 @@ describe('Supabase 로그인과 사용자 저장소', () => {
     const local = await fixture(fakeCloud(), 'local');
     expect((await local.app.request('/api/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://other.example.test' }, body })).status).toBe(422);
     expect(local.remote.calls).toHaveLength(0);
+  });
+
+  it('미로그인 상태에서 인증 메일 재발송을 요청하고 계정 존재·전달 여부는 공개하지 않는다', async () => {
+    const f = await fixture(fakeCloud(), 'local');
+    const results = [];
+    for (const email of ['alice@example.test', 'unknown@example.test']) {
+      const response = await f.app.request('/api/auth/resend-confirmation', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'http://localhost:3317' }, body: JSON.stringify({ email, redirectTo: 'https://untrusted.example.test/' }) });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('set-cookie')).toBeNull();
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      results.push(await response.json());
+    }
+    expect(results).toEqual([{ requested: true, retryAfterSeconds: 60 }, { requested: true, retryAfterSeconds: 60 }]);
+    expect(f.remote.calls.map((call) => call.url.pathname)).toEqual(['/auth/v1/resend', '/auth/v1/resend']);
+    expect(f.remote.calls[0]?.body).toEqual({ type: 'signup', email: 'alice@example.test' });
+    expect(f.remote.calls[0]?.url.searchParams.get('redirect_to')).toBe('http://localhost:3317/');
+    await expect(fs.access(path.join(f.home, 'local-owner'))).rejects.toThrow();
+  });
+
+  it('재발송 요청의 이메일·본문 형식을 메일 발송 전에 검사한다', async () => {
+    const f = await fixture();
+    for (const body of [{}, { email: 'invalid' }, { email: '' }, { email: 'x'.repeat(255) + '@example.test' }]) {
+      const response = await f.app.request('/api/auth/resend-confirmation', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      expect(response.status).toBe(422);
+    }
+    expect((await f.app.request('/api/auth/resend-confirmation', { method: 'POST', body: 'email=user@example.test' })).status).toBe(415);
+    expect(f.remote.calls).toHaveLength(0);
+  });
+
+  it('인증 메일의 토큰을 Supabase에서 검증하고 로그인·로컬 소유자 연결 없이 완료 여부만 반환한다', async () => {
+    const f = await fixture(fakeCloud(), 'local');
+    const response = await f.app.request('/api/auth/email-confirmation', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accessToken: 'alice-token' }) });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ confirmed: true });
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(f.remote.calls.map((call) => call.url.pathname)).toEqual(['/auth/v1/user']);
+    expect(f.remote.calls[0]?.headers.get('authorization')).toBe('Bearer alice-token');
+    await expect(fs.access(path.join(f.home, 'local-owner'))).rejects.toThrow();
+    expect(await (await f.app.request('/api/auth/me')).json()).toMatchObject({ authenticated: false });
+  });
+
+  it('만료·변조 토큰과 사용자 metadata의 인증 주장을 완료로 표시하지 않는다', async () => {
+    const f = await fixture();
+    const confirm = (accessToken: string) => f.app.request('/api/auth/email-confirmation', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accessToken }) });
+    const invalid = await confirm('expired-private-token');
+    expect(invalid.status).toBe(401);
+    expect(await invalid.text()).not.toContain('expired-private-token');
+    f.remote.emailConfirmed = false;
+    const unconfirmed = await confirm('alice-token');
+    expect(unconfirmed.status).toBe(422);
+    expect(await unconfirmed.json()).toMatchObject({ error: { code: 'email_not_confirmed' } });
+    expect(unconfirmed.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('인증 확인 요청의 입력과 Supabase 장애를 구분하며 외부 오류 상세를 노출하지 않는다', async () => {
+    const f = await fixture();
+    const confirm = (body: unknown) => f.app.request('/api/auth/email-confirmation', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    for (const body of [{}, { accessToken: '' }, { accessToken: 'x'.repeat(16_385) }]) expect((await confirm(body)).status).toBe(422);
+    expect((await f.app.request('/api/auth/email-confirmation', { method: 'POST', body: 'accessToken=test' })).status).toBe(415);
+    expect(f.remote.calls).toHaveLength(0);
+    f.remote.failAuth = true;
+    const unavailable = await confirm({ accessToken: 'alice-token' });
+    expect(unavailable.status).toBe(503);
+    expect(await unavailable.text()).not.toContain('private-provider-detail');
   });
 
   it('클라우드 장애를 로컬 저장 성공으로 숨기지 않는다', async () => {

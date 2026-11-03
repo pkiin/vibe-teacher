@@ -4,6 +4,8 @@ import { Loading } from './components/Notice';
 import { LoginPage } from './pages/LoginPage';
 import { DisplayProvider } from './context/DisplayContext';
 import { AppRoutes } from './routes';
+import { EmailConfirmationFlow } from './pages/EmailConfirmationPage';
+import type { EmailConfirmationResult } from './auth/email-confirmation';
 
 function Gate() {
   const { me, loading, error } = useAuth();
@@ -17,10 +19,10 @@ function Gate() {
   );
 }
 
-export function App() {
+export function App({ emailConfirmation }: { emailConfirmation?: Promise<EmailConfirmationResult> | null }) {
   return (
     <DisplayProvider>
-      <AuthProvider><Gate /></AuthProvider>
+      {emailConfirmation ? <EmailConfirmationFlow result={emailConfirmation} /> : <AuthProvider><Gate /></AuthProvider>}
     </DisplayProvider>
   );
 }
