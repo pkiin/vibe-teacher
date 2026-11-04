@@ -32,7 +32,7 @@ export interface ContentPart {
 }
 
 export type ResponseItemPayload =
-  | { type: 'message'; role: 'user' | 'assistant' | 'developer' | 'system'; content?: ContentPart[] | string; id?: string }
+  | { type: 'message'; role: 'user' | 'assistant' | 'developer' | 'system'; content?: ContentPart[] | string; id?: string; phase?: 'commentary' | 'final_answer' }
   | { type: 'function_call'; name: string; arguments?: string; call_id?: string; id?: string }
   | { type: 'function_call_output'; call_id?: string; output?: string | { content?: string; success?: boolean; exit_code?: number } }
   | { type: 'custom_tool_call'; name: string; input?: string; call_id?: string }
@@ -44,6 +44,6 @@ export type ResponseItemPayload =
 
 export type EventMsgPayload =
   | { type: 'user_message'; message?: string; images?: string[]; local_images?: string[] }
-  | { type: 'agent_message'; message?: string }
+  | { type: 'agent_message'; message?: string; phase?: 'commentary' | 'final_answer' }
   | { type: 'exec_command_end'; call_id?: string; exit_code?: number; stdout?: string; stderr?: string }
   | { type: 'task_started' | 'task_complete' | 'token_count' | 'agent_reasoning' | 'turn_aborted' | string; [k: string]: unknown };

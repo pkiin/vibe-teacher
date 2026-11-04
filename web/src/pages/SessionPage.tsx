@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { Link, useMatch, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { Account, BuiltSummary, NormalizedSession, Project, UserMessagesResult } from '@vibe-teacher/shared';
 import { BuiltSummaryView } from '../components/BuiltSummary';
 import { Breadcrumb } from '../components/Layout';
@@ -10,6 +10,7 @@ import { SessionUnderstand } from '../components/SessionUnderstand';
 import { Tabs } from '../components/Tabs';
 import { useApi } from '../hooks/useApi';
 import { ko } from '../i18n/ko';
+import { sessionAnalysisPath } from '../lib/session-analysis';
 
 type TabId = 'messages' | 'understand' | 'built';
 /** 예전 탭 주소(?tab=concepts 등)는 통합 화면의 해당 절로 연다 */
@@ -20,11 +21,13 @@ export function SessionPage() {
   const { sessionKey = '' } = useParams();
   const key = decodeURIComponent(sessionKey);
   const enc = encodeURIComponent(key);
-  const [params, setParams] = useSearchParams();
-  const rawTab = params.get('tab') ?? 'understand';
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const analysisRoute = useMatch('/sessions/:sessionKey/analysis');
+  const rawTab = analysisRoute ? 'understand' : params.get('tab') ?? 'understand';
   const legacy = LEGACY_SECTIONS[rawTab];
   const tab: TabId = rawTab === 'messages' || rawTab === 'built' ? rawTab : 'understand';
-  const setTab = (t: string) => setParams({ tab: t }, { replace: true });
+  const setTab = (t: string) => navigate(t === 'understand' ? sessionAnalysisPath(key) : `/sessions/${enc}?tab=${t}`, { replace: true });
 
   const session = useApi<NormalizedSession>(`/api/sessions/${enc}`);
   const project = useApi<Project>(session.data ? `/api/projects/${session.data.projectId}` : null, [session.data?.projectId]);
@@ -58,7 +61,8 @@ export function SessionPage() {
           { label: ko.accounts.title, to: '/' },
           { label: account.data?.username ?? '…', to: s ? `/accounts/${s.accountId}` : undefined },
           { label: project.data?.name ?? '…', to: s ? `/projects/${s.projectId}` : undefined },
-          { label: s?.title ?? '…' },
+          { label: s?.title ?? '…', ...(tab === 'understand' ? { to: `/sessions/${enc}?tab=messages` } : {}) },
+          ...(tab === 'understand' ? [{ label: ko.understand.tab }] : []),
         ]}
       />
       {session.loading && <Loading />}
@@ -85,6 +89,7 @@ export function SessionPage() {
           <div className="mono small muted">{s.filePath}</div>
           <div className="small">
             <Link to={`/projects/${s.projectId}?tab=wiki`}>{ko.repo.sessionLink} →</Link>
+            {' · '}<Link to={`/knowledge?projectId=${encodeURIComponent(s.projectId)}`}>{ko.analysis.knowledgeLink} →</Link>
           </div>
           <SessionFeatureLinks projectId={s.projectId} sessionKey={s.key} />
           {s.parseWarnings.length > 0 && (

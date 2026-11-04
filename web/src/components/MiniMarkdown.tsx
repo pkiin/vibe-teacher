@@ -1,65 +1,140 @@
 import type { ReactNode } from 'react';
+import { CodeBlock } from './CodeBlock';
 
-function renderInline(text: string): ReactNode[] {
+function safeHref(target: string): string | null {
+  if (/^https?:\/\//i.test(target)) {
+    try { return new URL(target).href; } catch { return null; }
+  }
+  if (/^#/.test(target) || /^\/(?:projects|sessions|knowledge|accounts|sources)(?:[/?#]|$)/.test(target)) return target;
+  return null;
+}
+
+function renderInline(text: string, depth = 0): ReactNode[] {
+  if (depth > 12) return [text];
   const out: ReactNode[] = [];
-  const re = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+  const re = /(`+)([\s\S]*?)\1|\*\*([^*]+)\*\*|\[([^\]\n]+)\]\((<[^>\n]+>|[^)\n]+)\)/g;
   let last = 0;
   let m: RegExpExecArray | null;
-  let k = 0;
+  let key = 0;
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index));
-    const tok = m[0];
-    if (tok.startsWith('`')) out.push(<code key={k++}>{tok.slice(1, -1)}</code>);
-    else out.push(<strong key={k++}>{tok.slice(2, -2)}</strong>);
-    last = m.index + tok.length;
+    if (m[1]) out.push(<code key={key++}>{m[2]}</code>);
+    else if (m[3]) out.push(<strong key={key++}>{renderInline(m[3], depth + 1)}</strong>);
+    else {
+      const target = (m[5] ?? '').replace(/^<|>$/g, '').trim();
+      const href = safeHref(target);
+      const label = renderInline(m[4] ?? '', depth + 1);
+      // 로컬 파일 경로 등은 주소를 함께 보존하고, 실행 가능한 링크로 만들지 않는다.
+      out.push(href ? <a key={key++} href={href} {...(/^https?:/i.test(href) ? { target: '_blank', rel: 'noreferrer noopener' } : {})}>{label}</a>
+        : <span key={key++}>{label} <code>{target}</code></span>);
+    }
+    last = m.index + m[0].length;
   }
   if (last < text.length) out.push(text.slice(last));
   return out;
 }
 
-/** 최소 마크다운 렌더러: 제목, 글머리표, 번호 목록, 문단, 인라인 코드/굵게 (HTML 은 해석하지 않음) */
-export function MiniMarkdown({ text }: { text: string }) {
-  const blocks: ReactNode[] = [];
-  const lines = text.split('\n');
-  let list: { ordered: boolean; items: string[] } | null = null;
-  let para: string[] = [];
-  let k = 0;
-  const flushPara = () => {
-    if (para.length) blocks.push(<p key={k++}>{renderInline(para.join(' '))}</p>);
-    para = [];
-  };
-  const flushList = () => {
-    if (!list) return;
-    const items = list.items.map((it, i) => <li key={i}>{renderInline(it)}</li>);
-    blocks.push(list.ordered ? <ol key={k++}>{items}</ol> : <ul key={k++}>{items}</ul>);
-    list = null;
-  };
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    const h = /^(#{1,6})\s+(.*)$/.exec(line);
-    const ul = /^\s*[-*•]\s+(.*)$/.exec(line);
-    const ol = /^\s*\d+[.)]\s+(.*)$/.exec(line);
-    if (!line.trim()) {
-      flushPara();
-      flushList();
-    } else if (h) {
-      flushPara();
-      flushList();
-      blocks.push(<h4 key={k++}>{renderInline(h[2] ?? '')}</h4>);
-    } else if (ul || ol) {
-      flushPara();
-      const ordered = !!ol;
-      if (!list || list.ordered !== ordered) {
-        flushList();
-        list = { ordered, items: [] };
-      }
-      list.items.push((ul?.[1] ?? ol?.[1]) ?? '');
-    } else {
-      flushList();
-      para.push(line.trim());
-    }
+/** 코드 안의 |와 이스케이프한 \|는 표의 열을 나누지 않는다. */
+function tableCells(line: string): string[] {
+  let value = line.trim();
+  if (value.startsWith('|')) value = value.slice(1);
+  if (value.endsWith('|') && !value.endsWith('\\|')) value = value.slice(0, -1);
+  const cells: string[] = [];
+  let cell = '', code = 0;
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char === '\\' && value[i + 1] === '|') { cell += '|'; i++; }
+    else if (char === '`') {
+      let count = 1;
+      while (value[i + count] === '`') count++;
+      if (!code) code = count;
+      else if (code === count) code = 0;
+      cell += '`'.repeat(count);
+      i += count - 1;
+    } else if (char === '|' && !code) { cells.push(cell.trim()); cell = ''; }
+    else cell += char;
   }
-  flushPara();
-  flushList();
-  return <div className="markdown">{blocks}</div>;
+  cells.push(cell.trim());
+  return cells;
+}
+
+const listLine = (line: string) => /^(\s*)([-*•]|\d+[.)])\s+(.*)$/.exec(line);
+const fenceLine = (line: string) => /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+const headingLine = (line: string) => /^(#{1,6})\s+(.*)$/.exec(line);
+const ruleLine = (line: string) => /^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line);
+
+function renderBlocks(lines: string[], depth = 0): ReactNode[] {
+  if (depth > 24) return [<pre key="text">{lines.join('\n')}</pre>];
+  const blocks: ReactNode[] = [];
+  const tableAt = (index: number) => {
+    const head = lines[index], divider = lines[index + 1];
+    if (!head?.includes('|') || !divider) return false;
+    const cells = tableCells(divider);
+    return cells.length === tableCells(head).length && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+  };
+  const startsBlock = (index: number) => {
+    const line = lines[index] ?? '';
+    return !line.trim() || fenceLine(line) || headingLine(line) || listLine(line) || /^\s*>/.test(line) || ruleLine(line) || tableAt(index);
+  };
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i] ?? '';
+    if (!line.trim()) { i++; continue; }
+    const key = blocks.length;
+    const fence = fenceLine(line);
+    if (fence) {
+      const marker = fence[1]!;
+      const close = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`);
+      const content: string[] = [];
+      i++;
+      while (i < lines.length && !close.test(lines[i] ?? '')) content.push(lines[i++] ?? '');
+      if (i < lines.length) i++;
+      blocks.push(<CodeBlock key={key} code={content.join('\n')} lang={fence[2]?.trim().split(/\s+/)[0]} />);
+      continue;
+    }
+    const heading = headingLine(line);
+    if (heading) { blocks.push(<h4 key={key}>{renderInline(heading[2] ?? '')}</h4>); i++; continue; }
+    if (ruleLine(line)) { blocks.push(<hr key={key} />); i++; continue; }
+    if (tableAt(i)) {
+      const head = tableCells(line), rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && lines[i]?.trim() && lines[i]?.includes('|')) {
+        const row = tableCells(lines[i]!);
+        if (row.length !== head.length) break;
+        rows.push(row);
+        i++;
+      }
+      blocks.push(<div key={key} className="repo-table-wrap"><table className="table repo-table"><thead><tr>{head.map((cell, index) => <th key={index}>{renderInline(cell)}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, col) => <td key={col}>{renderInline(cell)}</td>)}</tr>)}</tbody></table></div>);
+      continue;
+    }
+    if (/^\s*>/.test(line)) {
+      const quote: string[] = [];
+      while (i < lines.length && /^\s*>/.test(lines[i] ?? '')) quote.push((lines[i++] ?? '').replace(/^\s*> ?/, ''));
+      blocks.push(<blockquote key={key}>{renderBlocks(quote, depth + 1)}</blockquote>);
+      continue;
+    }
+    const first = listLine(line);
+    if (first) {
+      const indent = first[1]!.length, ordered = /^\d/.test(first[2]!);
+      const items: string[][] = [];
+      while (i < lines.length) {
+        const entry = lines[i] ?? '', match = listLine(entry);
+        if (match && match[1]!.length === indent && /^\d/.test(match[2]!) === ordered) { items.push([match[3] ?? '']); i++; }
+        else if (entry.trim() && /^\s*/.exec(entry)![0].length > indent && items.length) { items.at(-1)!.push(entry.slice(Math.min(indent + 2, /^\s*/.exec(entry)![0].length))); i++; }
+        else break;
+      }
+      const children = items.map((item, index) => <li key={index}>{renderBlocks(item, depth + 1)}</li>);
+      blocks.push(ordered ? <ol key={key} start={parseInt(first[2]!, 10)}>{children}</ol> : <ul key={key}>{children}</ul>);
+      continue;
+    }
+    const paragraph = [line];
+    i++;
+    while (i < lines.length && !startsBlock(i)) paragraph.push(lines[i++] ?? '');
+    blocks.push(<p key={key}>{renderInline(paragraph.join('\n'))}</p>);
+  }
+  return blocks;
+}
+
+/** 답변 원문의 제목·목록·코드·표·링크를 표시한다. HTML과 외부 이미지는 실행하거나 불러오지 않는다. */
+export function MiniMarkdown({ text }: { text: string }) {
+  return <div className="markdown">{renderBlocks(text.replace(/\r\n?/g, '\n').split('\n'))}</div>;
 }

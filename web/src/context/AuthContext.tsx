@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AuthMeResponse, SignupResponse } from '@vibe-teacher/shared';
-import { api, apiPost, getToken, onUnauthorized, setToken } from '../api/client';
+import { api, apiPost, clearApiCache, getToken, onUnauthorized, setToken } from '../api/client';
 
 interface AuthState {
   me: AuthMeResponse | null;
@@ -20,6 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    clearApiCache();
     try {
       let result = await api<AuthMeResponse>('/api/auth/me');
       if (result.mode === 'supabase' && getToken()) {

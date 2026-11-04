@@ -3,7 +3,7 @@ import type { EnrichmentRecord, LearnerProfile, WikiResponse } from '@vibe-teach
 import type { LearnerActions } from '../hooks/useLearner';
 import { ko } from '../i18n/ko';
 import { MiniMarkdown } from './MiniMarkdown';
-import { ErrorBox, Notice, fmtDate } from './Notice';
+import { Notice, fmtDate } from './Notice';
 import { WikiAlertCard } from './WikiAlertCard';
 import { WikiItemCard } from './WikiItemCard';
 
@@ -49,22 +49,13 @@ export function SessionSummaryCard({ enrichment }: { enrichment: EnrichmentRecor
   );
 }
 
-/** 위키 머리: 만들기/다시 만들기, snapshot 정보, 오래됨·부분 결과 안내 */
-export function WikiHeader({ wiki, building, error, onBuild }: { wiki: WikiResponse | null; building: boolean; error: Error | null; onBuild: () => void }) {
-  const button = (
-    <button className="btn btn-primary btn-small" disabled={building} onClick={onBuild}>
-      {building ? ko.wiki.building : wiki ? ko.wiki.rebuild : ko.wiki.build}
-    </button>
-  );
+/** 분석 문서의 작성 상태와 확인 범위. 실행 버튼은 상단 분석 패널에 둔다. */
+export function WikiHeader({ wiki }: { wiki: WikiResponse | null }) {
   if (!wiki) {
     return (
       <div className="card wiki-head">
         <p className="small">{ko.wiki.intro}</p>
-        <Notice kind="info">
-          <span>{ko.wiki.notBuilt}</span>
-          {button}
-        </Notice>
-        {error && <ErrorBox error={error} />}
+        <p className="small muted">{ko.wiki.notBuilt}</p>
       </div>
     );
   }
@@ -72,14 +63,12 @@ export function WikiHeader({ wiki, building, error, onBuild }: { wiki: WikiRespo
     <div className="card wiki-head">
       <div className="concept-head">
         <span className="muted small grow">{ko.wiki.meta(wiki.snapshot.revision, fmtDate(wiki.snapshot.builtAt))}</span>
-        {button}
       </div>
       <p className="small">{ko.wiki.intro}</p>
       {wiki.stale && <Notice kind="warn">{ko.wiki.stale}</Notice>}
       {wiki.snapshot.generator.kind === 'pending' && <Notice kind="info">{ko.wiki.aiPending}</Notice>}
       {wiki.snapshot.generator.kind !== 'pending' && wiki.snapshot.status === 'partial' && <Notice kind="warn">{ko.wiki.statusPartial}</Notice>}
       {wiki.snapshot.status === 'failed' && <Notice kind="error">{ko.wiki.statusFailed}</Notice>}
-      {error && <ErrorBox error={error} />}
     </div>
   );
 }

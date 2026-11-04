@@ -9,6 +9,7 @@ import { eventMemory, searchMemories } from './search';
 import { SupermemoryBackend, type MemoryBackend } from './supermemory';
 import { Mem0Backend } from './mem0';
 import { MemoryDatabaseError, memoryDatabaseSettings, memoryDatabaseError } from './database';
+import { mapConcurrent } from '../lib/concurrent';
 
 export interface MemoryScope { projectId?: string; allowedProjectIds: string[] }
 interface RemoteIndex { documents: Record<string, { id: string; fingerprint: string }>; notice?: string }
@@ -86,9 +87,12 @@ export class MemoryService {
       .map((e) => eventMemory(e, names)).filter((r): r is MemoryRecord => !!r);
     const messages = new Map<string, { message: HelpMessage; projectId: string }>();
     // 이전 프로젝트 별칭보다 대표 폴더의 최신 답변을 우선한다 (HelpService와 같은 순서).
-    for (const projectId of [...projects].reverse()) {
+    const ledgers = await mapConcurrent([...projects].reverse(), 6, async (projectId) => {
       const file = path.join(this.storage.learnerProjectDir(learnerId, projectId), 'help.jsonl');
-      for (const message of (await this.storage.readJsonl<HelpMessage>(file)).items) messages.set(message.id, { message, projectId });
+      return { projectId, ledger: await this.storage.readJsonl<HelpMessage>(file) };
+    });
+    for (const { projectId, ledger } of ledgers) {
+      for (const message of ledger.items) messages.set(message.id, { message, projectId });
     }
     for (const { message: m, projectId } of messages.values()) {
       const conceptIds = [...new Set([...(m.focus.kind === 'concept' && m.focus.id ? [m.focus.id] : []), ...(m.answer?.conceptIds ?? [])])];

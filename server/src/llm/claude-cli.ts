@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
+import { beginActivity } from '../lib/progress';
 import { maskOutput } from './digest';
 import { errorInfo, newCallId, type AiCallRecord, type AiLog } from './log';
 import { LlmError, extractJson, type LlmAvailability, type LlmProvider, type LlmRequest, type LlmResult } from './types';
@@ -184,6 +185,7 @@ export class ClaudeCliProvider implements LlmProvider {
       attempt: 1, outputMode: 'cli', ...(model ? { requestedModel: model } : {}), startedAt: new Date(started).toISOString(), durationMs: 0, status: 'ok',
       request: { command: 'claude', args, stdin: req.user },
     };
+    const end = beginActivity('ai');
     try {
       const result = await this.run(bin, args, model, req, started, record);
       record.output = result.data;
@@ -194,6 +196,7 @@ export class ClaudeCliProvider implements LlmProvider {
       throw err;
     } finally {
       record.durationMs = Date.now() - started;
+      end();
       await this.opts.log?.call(record);
     }
   }

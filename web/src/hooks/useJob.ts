@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { BaseJobStatus, EnrichmentRecord } from '@vibe-teacher/shared';
-import { api } from '../api/client';
+import { api, clearApiCache } from '../api/client';
 
 /** 작업 상태 경로를 1.5초 간격으로 폴링한다 (예: /api/jobs/:id). path 가 null 이면 멈춘다 */
 export function useJob<R = EnrichmentRecord>(path: string | null): { job: BaseJobStatus<R> | null; error: Error | null } {
@@ -14,12 +14,16 @@ export function useJob<R = EnrichmentRecord>(path: string | null): { job: BaseJo
       return;
     }
     let stopped = false;
+    setJob(null);
+    setError(null);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
         const j = await api<BaseJobStatus<R>>(path);
         if (stopped) return;
         setJob(j);
+        setError(null);
+        if (j.state !== 'queued' && j.state !== 'running') clearApiCache();
         if (j.state === 'queued' || j.state === 'running') timer = setTimeout(poll, 1500);
       } catch (e) {
         if (!stopped) setError(e as Error);

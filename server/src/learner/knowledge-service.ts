@@ -7,6 +7,7 @@ import type { WikiService } from '../wiki/service';
 import { buildKnowledgeEntries, extractOccurrences, type SessionOccurrences } from './knowledge';
 import type { LearnerService } from './service';
 import { reduceProfile, unknownConcept } from './reducer';
+import { mapConcurrent } from '../lib/concurrent';
 
 const MAX_SESSIONS = 40;
 const MAX_CACHE = 400;
@@ -39,13 +40,12 @@ export class KnowledgeService {
   }
 
   private async occurrences(summary: SessionSummary): Promise<SessionOccurrences | null> {
-    const snapshot = await this.opts.wiki.current(summary.projectId, summary.key);
-    const key = `${summary.key}|${summary.fileSize}|${summary.fileMtime}|${snapshot?.revision ?? ''}|${snapshot?.builtAt ?? ''}`;
-    const hit = this.cache.get(key);
-    if (hit) return hit;
-    const session = await this.opts.index.loadSession(summary.key);
+    const [snapshot, session] = await Promise.all([this.opts.wiki.current(summary.projectId, summary.key), this.opts.index.loadSession(summary.key)]);
     if (!session) return null;
     const cached = await this.opts.enrich?.getCached(session, 'any');
+    const key = `${summary.key}|${summary.fileSize}|${summary.fileMtime}|${snapshot?.revision ?? ''}|${snapshot?.builtAt ?? ''}|${snapshot?.generationId ?? ''}|${cached?.createdAt ?? ''}`;
+    const hit = this.cache.get(key);
+    if (hit) return hit;
     const hits = cached ? this.opts.enrich!.mergeConcepts([], cached) : [];
     const catalog = this.opts.wiki.catalog(snapshot);
     for (const hit of hits) if (!catalog.concepts.has(hit.id)) catalog.concepts.set(hit.id, conceptFromHit(hit));
@@ -59,7 +59,7 @@ export class KnowledgeService {
     });
     occ.catalog = [...catalog.concepts.values()];
     // 세션 요약만 새로 생성되어도 개념이 달라질 수 있어 AI 분석 캐시의 시각을 포함한다.
-    if (!this.opts.enrich) this.cache.set(key, occ);
+    this.cache.set(key, occ);
     while (this.cache.size > MAX_CACHE) {
       const oldest = this.cache.keys().next().value;
       if (oldest === undefined) break;
@@ -75,15 +75,14 @@ export class KnowledgeService {
   async wiki(input: { username: string; learnerId: string; projectId?: string; session?: SessionSummary; accountIds?: ReadonlySet<string> }): Promise<Omit<KnowledgeWikiResponse, 'text'>> {
     const all = input.session ? [input.session] : this.sessionsOf(input.username, input.projectId, input.accountIds);
     const picked = all.slice(0, MAX_SESSIONS);
-    const sessions: SessionOccurrences[] = [];
-    for (const s of picked) {
-      const occ = await this.occurrences(s);
-      if (occ) sessions.push(occ);
-    }
-    const profile = await this.opts.learner.profile(input.learnerId);
+    const [occurrences, profile, remembered] = await Promise.all([
+      mapConcurrent(picked, 6, (s) => this.occurrences(s)),
+      this.opts.learner.profile(input.learnerId),
+      this.opts.learner.concepts(input.learnerId),
+    ]);
+    const sessions = occurrences.filter((s): s is SessionOccurrences => !!s);
     const catalog = new Map<string, WikiConcept>();
     for (const s of sessions) for (const c of s.catalog ?? []) if (!catalog.has(c.id)) catalog.set(c.id, c);
-    const remembered = await this.opts.learner.concepts(input.learnerId);
     const allowed = new Map(all.map((s) => [s.key, s]));
     const extras = new Map<string, SessionOccurrences>();
     for (const { concept, sources } of Object.values(remembered)) {

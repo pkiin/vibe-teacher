@@ -33,6 +33,7 @@ export class EnrichService {
   /** OpenRouter·OpenAI 모델 선택 목록 */
   readonly models: ModelCatalog;
   private resolved: { at: number; value: ResolvedLlm } | null = null;
+  private resolving: Promise<ResolvedLlm> | null = null;
 
   constructor(private readonly opts: EnrichServiceOptions) {
     this.models = new ModelCatalog({ fetch: opts.fetch, env: opts.env });
@@ -48,6 +49,7 @@ export class EnrichService {
 
   invalidate(): void {
     this.resolved = null;
+    this.resolving = null;
   }
 
   /** 위키 AI 보강처럼 같은 제공자 설정을 쓰는 다른 기능용 */
@@ -72,16 +74,21 @@ export class EnrichService {
       return { provider: null, status: { resolvedProvider: 'none', available: false, reason: '이 계정에 연결된 OpenRouter API 키가 없습니다. 관리자에게 키 등록을 요청하세요' } };
     }
     if (this.resolved && Date.now() - this.resolved.at < 60_000) return this.resolved.value;
-    const value = await resolveLlm(this.opts.store.get().llm, this.opts.paths.llmCwd, this.deps);
-    this.resolved = { at: Date.now(), value };
-    return value;
+    if (!this.resolving) {
+      const pending = resolveLlm(this.opts.store.get().llm, this.opts.paths.llmCwd, this.deps).then((value) => {
+        if (this.resolving === pending) this.resolved = { at: Date.now(), value };
+        return value;
+      }).finally(() => { if (this.resolving === pending) this.resolving = null; });
+      this.resolving = pending;
+    }
+    return this.resolving;
   }
 
   async status(): Promise<LlmStatus> {
     return (await this.resolve()).status;
   }
 
-  private candidateKeys(session: NormalizedSession, providerId: LlmProviderId | 'none', levels: readonly ReaderLevel[]): string[] {
+  private candidateKeys(session: Pick<NormalizedSession, 'key' | 'fileSize' | 'fileMtime'>, providerId: LlmProviderId | 'none', levels: readonly ReaderLevel[]): string[] {
     const cfg = this.opts.store.get().llm;
     const all: LlmProviderId[] = ['claude-cli', 'openrouter'];
     const ids = providerId === 'none' ? all : [providerId, ...all.filter((x) => x !== providerId)];
@@ -92,14 +99,12 @@ export class EnrichService {
    * 어느 제공자로든 만들어 둔 결과가 있으면 돌려준다.
    * level 을 주면 그 읽는 사람 수준으로 쓴 것만, 'any' 면 어느 수준이든 (레포 위키 재료처럼 사실만 쓸 때).
    */
-  async getCached(session: NormalizedSession, level: ReaderLevel | 'any' = DEFAULT_READER_LEVEL): Promise<EnrichmentRecord | null> {
+  async getCached(session: Pick<NormalizedSession, 'key' | 'fileSize' | 'fileMtime'>, level: ReaderLevel | 'any' = DEFAULT_READER_LEVEL): Promise<EnrichmentRecord | null> {
     const { status } = await this.resolve();
     const levels = level === 'any' ? READER_LEVELS : [level];
-    for (const k of this.candidateKeys(session, status.resolvedProvider, levels)) {
-      const rec = this.opts.storage ? await this.opts.storage.readJson<EnrichmentRecord>(path.join(this.opts.storage.root, 'enrich', `${k}.json`)) : await readEnrichment(this.opts.paths.enrichCacheDir, k);
-      if (rec) return rec;
-    }
-    return null;
+    const records = await Promise.all(this.candidateKeys(session, status.resolvedProvider, levels).map((k) =>
+      this.opts.storage ? this.opts.storage.readJson<EnrichmentRecord>(path.join(this.opts.storage.root, 'enrich', `${k}.json`)) : readEnrichment(this.opts.paths.enrichCacheDir, k)));
+    return records.find((record) => !!record) ?? null;
   }
 
   /** 목록의 선정과 순서는 AI 응답을 그대로 따른다. 규칙 카드를 섞지 않는다. */

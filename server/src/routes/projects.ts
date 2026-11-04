@@ -1,5 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { mergeBuilt } from '../analyzers/built/index';
+import { learnerIdFor } from '../learner/service';
+import { sessionAnalysisDocuments } from '../wiki/documents';
 import { assertAccount, currentUser, notFound, type AppDeps, type AppEnv } from './deps';
 
 export function projectsRoutes(deps: AppDeps): Hono<AppEnv> {
@@ -27,6 +29,12 @@ export function projectsRoutes(deps: AppDeps): Hono<AppEnv> {
   app.get('/:id/sessions', async (c) => {
     const p = await getProject(c);
     return c.json(deps.index.getSessions(p.id));
+  });
+
+  app.get('/:id/session-analyses', async (c) => {
+    const p = await getProject(c);
+    const level = await deps.prefs.level(learnerIdFor(currentUser(c).username));
+    return c.json(await sessionAnalysisDocuments(deps.index.getSessions(p.id), deps.wiki, deps.enrich, level));
   });
 
   app.get('/:id/built', async (c) => {

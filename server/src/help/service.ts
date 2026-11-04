@@ -47,8 +47,9 @@ export class HelpService {
   private async all(learnerId: string, projectId: string): Promise<HelpMessage[]> {
     const latest = new Map<string, HelpMessage>();
     // 대표 폴더의 재시도·완료 기록이 예전 폴더의 같은 질문보다 우선한다.
-    for (const file of this.opts.storage.learnerProjectFiles(learnerId, projectId, 'help.jsonl').reverse()) {
-      for (const m of (await this.opts.storage.readJsonl<HelpMessage>(file)).items) latest.set(m.id, m);
+    const ledgers = await Promise.all(this.opts.storage.learnerProjectFiles(learnerId, projectId, 'help.jsonl').reverse().map((file) => this.opts.storage.readJsonl<HelpMessage>(file)));
+    for (const ledger of ledgers) {
+      for (const m of ledger.items) latest.set(m.id, m);
     }
     return [...latest.values()].sort((a, b) => a.askedAt.localeCompare(b.askedAt));
   }

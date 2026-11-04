@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AccountSummaryProject, AccountSummaryResponse } from '@vibe-teacher/shared';
 import { assertAccount, currentUser, notFound, type AppDeps, type AppEnv } from './deps';
+import { mapConcurrent } from '../lib/concurrent';
 
 export function accountsRoutes(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -38,15 +39,18 @@ export function accountsRoutes(deps: AppDeps): Hono<AppEnv> {
     for (const project of projects) {
       const row: AccountSummaryProject = { project, sessions: 0, humanMessages: 0, filesCreated: 0, filesModified: 0, packages: 0, commits: 0, topConcepts: [] };
       const local = new Map<string, { id: string; name: string; count: number }>();
-      for (const summary of deps.index.getSessions(project.id)) {
+      const summaries = await mapConcurrent(deps.index.getSessions(project.id), 6, async (summary) => {
+        const session = await deps.index.loadSession(summary.key);
+        if (!session) return { summary, built: null, concepts: [] };
+        const [{ built }, snapshot, cached] = await Promise.all([
+          deps.analysis.analyze(session), deps.wiki.current(session.projectId, session.key), deps.enrich.getCached(session, 'any'),
+        ]);
+        return { summary, built, concepts: snapshot?.concepts ?? (cached ? deps.enrich.mergeConcepts([], cached) : []) };
+      });
+      for (const { summary, built, concepts } of summaries) {
         row.sessions += 1;
         row.humanMessages += summary.counts.human;
-        const session = await deps.index.loadSession(summary.key);
-        if (!session) continue;
-        const { built } = await deps.analysis.analyze(session);
-        const snapshot = await deps.wiki.current(session.projectId, session.key);
-        const cached = await deps.enrich.getCached(session, 'any');
-        const concepts = snapshot?.concepts ?? (cached ? deps.enrich.mergeConcepts([], cached) : []);
+        if (!built) continue;
         row.filesCreated += built.filesCreated.length;
         row.filesModified += built.filesModified.length;
         row.packages += built.packagesInstalled.length;

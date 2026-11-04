@@ -3,6 +3,8 @@ import path from 'node:path';
 import { ensureDir, pathExists, readJsonSafe, writeJsonAtomic } from '../lib/fsx';
 import { readJsonl } from '../lib/jsonl';
 import type { AiLog } from '../llm/log';
+import { beginActivity } from '../lib/progress';
+import type { StorageActivityResponse } from '@vibe-teacher/shared';
 
 /**
  * 위키·개인 상태의 durable 저장소. VIBE_TEACHER_HOME/wiki 아래에만 쓴다 (스캔 대상 홈에는 쓰지 않음).
@@ -16,6 +18,8 @@ const SEGMENT = /^[A-Za-z0-9_-]{1,80}$/;
 export interface StorageBackend {
   readJson<T>(file: string): Promise<T | null>;
   writeJson(file: string, value: unknown): Promise<void>;
+  writeJsonBatch?(entries: { file: string; value: unknown }[]): Promise<void>;
+  activity?(): StorageActivityResponse;
   appendJsonl(file: string, value: unknown): Promise<void>;
   readJsonl<T>(file: string): Promise<{ items: T[]; warnings: string[] }>;
   lock<T>(key: string, fn: () => Promise<T>): Promise<T>;
@@ -92,11 +96,25 @@ export class WikiStorage {
   }
 
   readJson<T>(file: string): Promise<T | null> {
-    return this.backend ? this.backend.readJson<T>(file) : readJsonSafe<T>(file);
+    if (this.backend) return this.backend.readJson<T>(file);
+    const end = beginActivity('reading', 'local');
+    return readJsonSafe<T>(file).finally(end);
   }
 
   writeJson(file: string, value: unknown): Promise<void> {
-    return this.backend ? this.backend.writeJson(file, value) : writeJsonAtomic(file, value);
+    if (this.backend) return this.backend.writeJson(file, value);
+    const end = beginActivity('writing', 'local');
+    return writeJsonAtomic(file, value).finally(end);
+  }
+
+  /** Supabase에서는 문서들을 한 요청·트랜잭션으로 upsert한다. */
+  async writeJsonBatch(entries: { file: string; value: unknown }[]): Promise<void> {
+    if (this.backend?.writeJsonBatch) return this.backend.writeJsonBatch(entries);
+    await Promise.all(entries.map(({ file, value }) => this.writeJson(file, value)));
+  }
+
+  activity(): StorageActivityResponse {
+    return this.backend?.activity?.() ?? { mode: 'local', tables: [] };
   }
 
   async appendJsonl(file: string, value: unknown): Promise<void> {

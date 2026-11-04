@@ -9,3 +9,5 @@ export * from './repo';
 export * from './reader';
 export * from './memory';
 export * from './onboarding';
+export * from './progress';
+export * from './session-analysis';

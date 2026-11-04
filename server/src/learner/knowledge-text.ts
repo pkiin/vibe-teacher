@@ -136,8 +136,8 @@ export class KnowledgeTextService {
   }
 
   /** 저장된 AI 문장을 항목에 입힌다. 없는 것은 missing 으로 돌려준다 */
-  async apply(learnerId: string, entries: KnowledgeEntry[], level: ReaderLevel = DEFAULT_READER_LEVEL): Promise<{ entries: KnowledgeEntry[]; missing: KnowledgeEntry[]; generator?: { provider: LlmProviderId; model?: string } }> {
-    const texts = await this.texts(learnerId);
+  async apply(learnerId: string, entries: KnowledgeEntry[], level: ReaderLevel = DEFAULT_READER_LEVEL, savedTexts?: Record<string, StoredText>): Promise<{ entries: KnowledgeEntry[]; missing: KnowledgeEntry[]; generator?: { provider: LlmProviderId; model?: string } }> {
+    const texts = savedTexts ?? await this.texts(learnerId);
     const missing: KnowledgeEntry[] = [];
     let generator: { provider: LlmProviderId; model?: string } | undefined;
     const out = entries.map((e) => {

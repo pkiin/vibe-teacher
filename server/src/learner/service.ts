@@ -52,7 +52,7 @@ export class LearnerService {
     } catch {
       legacy = [];
     }
-    for (const p of legacy) all.push(...(await this.storage.readJsonl<LearnerEvent>(path.join(files.dir, 'projects', p, 'events.jsonl'))).items);
+    for (const events of await Promise.all(legacy.map((p) => this.storage.readJsonl<LearnerEvent>(path.join(files.dir, 'projects', p, 'events.jsonl'))))) all.push(...events.items);
     const seen = new Set<string>();
     return all.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true))).sort((a, b) => a.at.localeCompare(b.at));
   }

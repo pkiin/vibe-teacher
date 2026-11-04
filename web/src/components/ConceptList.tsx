@@ -1,6 +1,7 @@
 import type { ConceptHit } from '@vibe-teacher/shared';
 import { ko } from '../i18n/ko';
 import { FocusChip } from './FocusChip';
+import { conceptAnchor } from '../lib/session-analysis';
 
 /** coveredIds: 위키 항목에서 이미 다룬 개념 (표시만 하고 숨기지 않음) */
 export function ConceptList({ concepts, onJump, coveredIds }: { concepts: ConceptHit[]; onJump?: (i: number) => void; coveredIds?: ReadonlySet<string> }) {
@@ -8,7 +9,7 @@ export function ConceptList({ concepts, onJump, coveredIds }: { concepts: Concep
   return (
     <div className="concepts">
       {concepts.map((c) => (
-        <article key={c.id} className="concept">
+        <article key={c.id} className="concept" id={conceptAnchor(c.id)}>
           <div className="concept-head">
             <h3>
               <FocusChip focus={{ kind: 'concept', id: c.id }} label={c.name} className="concept-name" />

@@ -64,10 +64,11 @@ export function wikiRoutes(deps: AppDeps): Hono<AppEnv> {
 
   app.get('/:key/wiki/ai/preview', async (c) => {
     const summary = await sessionSummaryFor(c, deps, c.req.param('key'));
-    const snapshot = await currentSnapshot(summary);
     const session = await deps.index.loadSession(summary.key);
     if (!session) throw notFound('세션');
-    return c.json(await deps.wikiAi.preview(session, await deps.analysis.analyze(session), snapshot, await level(c)));
+    const [current, analysis] = await Promise.all([deps.wiki.current(summary.projectId, summary.key), deps.analysis.analyze(session)]);
+    const snapshot = current && !deps.wiki.isStale(current, summary) ? current : deps.wiki.draft(session, analysis);
+    return c.json(await deps.wikiAi.preview(session, analysis, snapshot, await level(c)));
   });
 
   app.post('/:key/wiki/ai', requireJson, async (c) => {

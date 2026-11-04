@@ -50,39 +50,46 @@ export class WikiService {
     return path.join(this.storage.projectDir(projectId), 'sessions', `${shortId(`session:${sessionKey}`, 16)}.json`);
   }
 
-  async build(session: NormalizedSession, analysis: { built: BuiltSummary; concepts: ConceptHit[] }): Promise<WikiSnapshot> {
+  /** 생성 전 미리 보기에도 같은 입력을 사용한다. 저장·AI 호출은 하지 않는다. */
+  draft(session: NormalizedSession, analysis: { built: BuiltSummary; concepts: ConceptHit[] }): WikiSnapshot {
     const catalog = this.catalog();
     const conceptIds = new Set(catalog.concepts.keys());
     const raw = buildWikiSnapshot({ session, built: analysis.built, concepts: analysis.concepts, catalogVersion: catalog.version, conceptIds });
     const { snapshot } = enforceSnapshot(raw, conceptIds, session);
+    return snapshot;
+  }
+
+  async build(session: NormalizedSession, analysis: { built: BuiltSummary; concepts: ConceptHit[] }): Promise<WikiSnapshot> {
+    const snapshot = this.draft(session, analysis);
     await this.save(session, snapshot);
     return snapshot;
   }
 
   async save(session: Pick<NormalizedSession, 'projectId' | 'key'>, snapshot: WikiSnapshot): Promise<void> {
     await this.storage.lock(`project:${session.projectId}`, async () => {
-      await this.storage.writeJson(this.snapshotFile(session.projectId, snapshot.revision), snapshot);
       const indexFile = this.indexFile(session.projectId, session.key);
       const entry = { revision: snapshot.revision, builtAt: snapshot.builtAt, status: snapshot.status, rulesVersion: RULES_VERSION };
       const history = [...(await this.history(session.projectId, session.key)).filter((h) => h.revision !== snapshot.revision), entry];
-      await this.storage.writeJson(indexFile, { sessionKey: session.key, current: snapshot.revision, history } satisfies SessionWikiIndex);
+      await this.storage.writeJsonBatch([
+        { file: this.snapshotFile(session.projectId, snapshot.revision), value: snapshot },
+        { file: indexFile, value: { sessionKey: session.key, current: snapshot.revision, history } satisfies SessionWikiIndex },
+      ]);
     });
   }
 
   async current(projectId: string, sessionKey: string): Promise<WikiSnapshot | null> {
     for (const entry of (await this.history(projectId, sessionKey)).reverse()) {
-      for (const file of this.storage.projectFiles(projectId, 'snapshots', `${entry.revision}.json`)) {
-        const snapshot = await this.storage.readJson<WikiSnapshot>(file);
-        if (snapshot?.sessionKey === sessionKey && snapshot.generator.rulesVersion === RULES_VERSION) return { ...snapshot, projectId };
-      }
+      const snapshots = await Promise.all(this.storage.projectFiles(projectId, 'snapshots', `${entry.revision}.json`).map((file) => this.storage.readJson<WikiSnapshot>(file)));
+      const snapshot = snapshots.find((s) => s?.sessionKey === sessionKey && s.generator.rulesVersion === RULES_VERSION);
+      if (snapshot) return { ...snapshot, projectId };
     }
     return null;
   }
 
   async history(projectId: string, sessionKey: string): Promise<SessionWikiIndex['history']> {
     const entries = new Map<string, SessionWikiIndex['history'][number]>();
-    for (const file of this.storage.projectFiles(projectId, 'sessions', `${shortId(`session:${sessionKey}`, 16)}.json`)) {
-      const index = await this.storage.readJson<SessionWikiIndex>(file);
+    const indexes = await Promise.all(this.storage.projectFiles(projectId, 'sessions', `${shortId(`session:${sessionKey}`, 16)}.json`).map((file) => this.storage.readJson<SessionWikiIndex>(file)));
+    for (const index of indexes) {
       if (index?.sessionKey === sessionKey) for (const entry of index.history) if (!entries.has(entry.revision)) entries.set(entry.revision, entry);
     }
     return [...entries.values()].sort((a, b) => a.builtAt.localeCompare(b.builtAt));

@@ -7,6 +7,7 @@ import { useApi } from '../hooks/useApi';
 import { ko } from '../i18n/ko';
 import { ReaderLevelSetup } from './ReaderLevelPicker';
 import { SettingsPopover } from './SettingsPopover';
+import { NetworkActivity } from './NetworkActivity';
 
 export function Layout({ children }: { children: ReactNode }) {
   const { me, logout } = useAuth();
@@ -69,6 +70,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <SettingsPopover />
         </nav>
       </header>
+      <NetworkActivity />
       {needToken && (
         <div className="token-gate">
           <p>{ko.login.bearerNotice}</p>

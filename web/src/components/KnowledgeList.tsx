@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import type { ExplanationDepth, KnowledgeEntry, KnowledgeTextStartResponse, KnowledgeWikiResponse, LearnerProfile, WikiConcept } from '@vibe-teacher/shared';
-import { api, apiPost } from '../api/client';
+import type { ExplanationDepth, KnowledgeEntry, KnowledgeSource, KnowledgeTextStartResponse, KnowledgeWikiResponse, LearnerProfile, WikiConcept } from '@vibe-teacher/shared';
+import { apiPost } from '../api/client';
+import { loadKnowledge, retainKnowledgeReasons, type DisplayKnowledge, type DisplayKnowledgeEntry } from '../api/knowledge';
 import { useFocus } from '../context/FocusContext';
-import { useApi } from '../hooks/useApi';
 import { useJob } from '../hooks/useJob';
+import { JobProgress } from './JobProgress';
 import { useReader } from '../hooks/useReader';
 import { useLearnerActions, type LearnerActions } from '../hooks/useLearner';
 import { ko } from '../i18n/ko';
@@ -12,14 +13,30 @@ import { ErrorBox, Loading, Notice } from './Notice';
 import { QuizCard } from './QuizCard';
 import { ConceptBody } from './WikiItemCard';
 import { LearningHistory } from './LearningHistory';
+import { conceptAnchor, sessionAnalysisPath } from '../lib/session-analysis';
 
 const STATE_PILL: Record<string, string> = { unknown: 'pill-gray', partial: 'pill-blue', demonstrated: 'pill-green', conflicting: 'pill-yellow' };
 const DEPTHS: ExplanationDepth[] = ['D0', 'D1', 'D2', 'D3'];
 
 type Open = 'quiz' | 'explain' | 'wrong' | null;
 
+/** 개념 → 분석 문서의 해당 개념 → 프로젝트 위키. 접힌 나머지 출처도 모두 열 수 있다. */
+export function KnowledgeSourceLinks({ conceptId, sources }: { conceptId: string; sources: KnowledgeSource[] }) {
+  const unique = [...new Map(sources.map((source) => [source.sessionKey, source])).values()];
+  if (!unique.length) return null;
+  const links = (list: KnowledgeSource[]) => <ul>{list.map((src) => <li key={src.sessionKey}>
+    <Link to={sessionAnalysisPath(src.sessionKey, conceptAnchor(conceptId))}>{src.sessionTitle}</Link>
+    {' · '}<Link className="muted" to={`/projects/${src.projectId}?tab=wiki`}>{src.projectName} {ko.analysis.projectLink}</Link>
+  </li>)}</ul>;
+  return <div className="small knowledge-sources">
+    <strong>{ko.analysis.related}</strong>
+    {links(unique.slice(0, 3))}
+    {unique.length > 3 && <details className="evidence"><summary>{ko.analysis.moreSources(unique.length - 3)}</summary>{links(unique.slice(3))}</details>}
+  </div>;
+}
+
 /** 지식 항목 하나: 이름 — 상태, 왜 그런지, 근거 세션, 그리고 바로 할 수 있는 확인 */
-export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = false }: { entry: KnowledgeEntry; concept?: WikiConcept; learner: LearnerActions; sessionKey?: string; writing?: boolean }) {
+export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = false }: { entry: DisplayKnowledgeEntry; concept?: WikiConcept; learner: LearnerActions; sessionKey?: string; writing?: boolean }) {
   const focus = useFocus();
   const [open, setOpen] = useState<Open>(null);
   const [depth, setDepth] = useState<ExplanationDepth>(entry.state.teaching?.depth ?? 'D1');
@@ -41,8 +58,6 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
       setBusy(false);
     }
   };
-  const sources = entry.sources;
-  const projects = new Set(sources.map((x) => x.projectId));
 
   return (
     <article className="knowledge-card">
@@ -55,29 +70,10 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
         <span className="pill pill-outline">{entry.category}</span>
       </div>
       <LearningHistory state={entry.scope?.state ?? s} scope={entry.scope?.kind} teaching={s.teaching} />
-      {writing && entry.reasonOrigin !== 'llm' ? (
-        <p className="knowledge-reason knowledge-reason-pending muted">{ko.knowledge.writing}</p>
-      ) : (
-        <p className="knowledge-reason">
-          {entry.reason}
-          {!entry.reason && <span className="muted">{entry.reasonOrigin === 'error' ? ko.knowledge.aiError : ko.knowledge.aiMissing}</span>}
-        </p>
-      )}
-      {sources.length > 0 && (
-        <div className="small knowledge-sources">
-          {ko.knowledge.sources}:{' '}
-          {sources.slice(0, 3).map((src, i) => (
-            <span key={src.sessionKey}>
-              {i > 0 && ', '}
-              <Link to={`/sessions/${encodeURIComponent(src.sessionKey)}?tab=understand`}>
-                {projects.size > 1 ? `${src.projectName} · ` : ''}
-                {src.sessionTitle} {ko.knowledge.sessionSuffix}
-              </Link>
-            </span>
-          ))}
-          {sources.length > 3 && <span className="muted"> {ko.knowledge.moreSources(sources.length - 3)}</span>}
-        </div>
-      )}
+      <p className="knowledge-reason">{entry.reason || entry.previousReason || entry.summary}</p>
+      {entry.previousReason && <p className="small muted">{ko.knowledge.previousReason}</p>}
+      {!entry.reason && <p className="small muted" role="status">{writing ? ko.knowledge.writing : entry.reasonOrigin === 'error' ? ko.knowledge.aiError : ko.knowledge.aiMissing}</p>}
+      <KnowledgeSourceLinks conceptId={entry.conceptId} sources={entry.sources} />
       {entry.mentions.length > 0 && (
         <details className="evidence">
           <summary>{ko.knowledge.mentions(entry.mentions.length)}</summary>
@@ -153,8 +149,12 @@ function groupOf(e: KnowledgeEntry): Group {
  * 사용자 지식 위키 목록. 세션·프로젝트로 좁힐 수 있다. 상태를 바꾸면 onProfile 로 알린다
  * (세션 화면은 이걸 받아 설명 계획을 다시 받는다).
  */
-export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, showMeta = true }: { sessionKey?: string; projectId?: string; onProfile?: (p: LearnerProfile) => void; refreshKey?: unknown; showMeta?: boolean }) {
-  const [data, setData] = useState<KnowledgeWikiResponse | null>(null);
+export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, showMeta = true, onProjects }: { sessionKey?: string; projectId?: string; onProfile?: (p: LearnerProfile) => void; refreshKey?: unknown; showMeta?: boolean; onProjects?: (projects: KnowledgeWikiResponse['projects']) => void }) {
+  const [data, setData] = useState<DisplayKnowledge | null>(null);
+  const dataRef = useRef<DisplayKnowledge | null>(null);
+  const dataScope = useRef('');
+  const request = useRef(0);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const concepts = useMemo(() => new Map(Object.entries(data?.concepts ?? {})), [data?.concepts]);
   const query = new URLSearchParams({ ...(sessionKey ? { sessionKey } : {}), ...(projectId ? { projectId } : {}) }).toString();
@@ -162,15 +162,29 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
   const reader = useReader();
 
   const load = useCallback(() => {
-    api<KnowledgeWikiResponse>(`/api/me/knowledge${query ? `?${query}` : ''}`)
-      .then((d) => {
-        setData(d);
+    const id = ++request.current;
+    const scope = `${query}|${reader.level}`;
+    if (dataScope.current !== scope) { dataRef.current = null; setData(null); dataScope.current = scope; }
+    setRefreshing(true);
+    const apply = (view: KnowledgeWikiResponse, saved: boolean) => {
+      if (request.current !== id) return;
+      if (saved && dataRef.current && (view.profile.activityRevision ?? view.profile.revision) < (dataRef.current.profile.activityRevision ?? dataRef.current.profile.revision)) return;
+      const display = retainKnowledgeReasons(dataRef.current, view);
+      dataRef.current = display;
+      setData(display);
+      onProjects?.(display.projects);
+    };
+    void loadKnowledge(query, (view) => apply(view, true), (view) => {
+        if (request.current !== id) return;
+        apply(view, false);
         setError(null);
       })
-      .catch((e: Error) => setError(e));
-  }, [query]);
+      .catch((e: Error) => { if (request.current === id) setError(e); })
+      .finally(() => { if (request.current === id) setRefreshing(false); });
+  }, [query, reader.level, onProjects]);
   useEffect(() => {
     load();
+    return () => { request.current++; };
   }, [load, refreshKey, reader.level]);
 
   const changed = useCallback(
@@ -185,10 +199,15 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
   // 설명 문장: 저장된 AI 문장이 없는 항목이 있으면 자동으로 쓰기 작업을 시작한다.
   // 한 번에 다 못 쓰면 이어서 시작하되, 아무것도 못 쓴 작업 뒤에는 멈춘다 (무한 반복 방지).
   const [jobId, setJobId] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const startPending = useRef(false);
   const [textError, setTextError] = useState<string | null>(null);
   const runs = useRef({ scope: '', count: 0, stalled: false });
   const { job, error: jobError } = useJob<{ written: number; remaining: number }>(jobId ? `/api/me/knowledge/text/jobs/${jobId}` : null);
   const startText = useCallback(async (force = false) => {
+    if (startPending.current) return;
+    startPending.current = true;
+    setStarting(true);
     setTextError(null);
     try {
       const res = await apiPost<KnowledgeTextStartResponse>('/api/me/knowledge/text', { force, ...(sessionKey ? { sessionKey } : {}), ...(projectId ? { projectId } : {}) });
@@ -196,15 +215,15 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
       else setJobId(res.jobId);
     } catch (e) {
       setTextError((e as Error).message);
-    }
+    } finally { startPending.current = false; setStarting(false); }
   }, [sessionKey, projectId, load]);
   useEffect(() => {
     const scope = `${query}|${reader.level}`;
     if (runs.current.scope !== scope) runs.current = { scope, count: 0, stalled: false };
-    if (!reader.chosen || !data?.text.canGenerate || jobId || textError || runs.current.stalled || runs.current.count >= 5) return;
+    if (!reader.chosen || refreshing || starting || !data?.text.canGenerate || jobId || textError || runs.current.stalled || runs.current.count >= 5) return;
     runs.current.count += 1;
     void startText();
-  }, [data, jobId, textError, query, startText, reader.chosen, reader.level]);
+  }, [data, jobId, textError, query, startText, reader.chosen, reader.level, refreshing, starting]);
   useEffect(() => {
     if (!job || job.state === 'queued' || job.state === 'running') return;
     if (job.state === 'error') setTextError(job.error?.message ?? '');
@@ -223,19 +242,21 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
     void startText(true);
   };
 
-  if (error) return <ErrorBox error={error} onRetry={load} />;
+  if (error && !data) return <ErrorBox error={error} onRetry={load} />;
   if (!data) return <Loading />;
-  const groups: Record<Group, KnowledgeEntry[]> = { check: [], confirmed: [], background: [] };
+  const groups: Record<Group, DisplayKnowledgeEntry[]> = { check: [], confirmed: [], background: [] };
   for (const e of data.entries) groups[groupOf(e)].push(e);
 
   return (
     <div className="knowledge">
+      {refreshing && <p className="small muted" role="status">{ko.knowledge.checkingSaved}</p>}
+      {error && <ErrorBox error={error} onRetry={load} />}
       {showMeta && (
         <p className="small muted">
           {ko.knowledge.note} {ko.knowledge.scanned(data.scannedSessions, data.totalSessions)}
         </p>
       )}
-      {jobId && data.text.missing > 0 && <Notice kind="info">{ko.knowledge.writingAll(data.text.missing)}</Notice>}
+      <JobProgress job={job} busy={starting || !!jobId} preparing={starting} label={ko.knowledge.writingAll(data.text.missing)} />
       {textError !== null && (
         <Notice kind="warn">
           <span>{ko.knowledge.textFailed(textError)}</span>
@@ -244,9 +265,9 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
           </button>
         </Notice>
       )}
-      {textError === null && !jobId && data.text.generator.kind === 'unavailable' && data.entries.some((e) => e.reasonOrigin === 'missing') && <Notice kind="warn">{ko.knowledge.ruleNotice(data.text.generator.reason)}</Notice>}
-      {!jobId && !textError && data.entries.some((e) => e.reasonOrigin === 'error') && <Notice kind="warn"><span>{ko.knowledge.aiError}</span><button className="btn btn-small" onClick={retryText}>{ko.knowledge.retryText}</button></Notice>}
-      {!jobId && data.text.missing > 0 && data.text.generator.kind === 'llm' && <button className="btn btn-small" onClick={() => void startText()}>{ko.knowledge.writeAi}</button>}
+      {!refreshing && textError === null && !jobId && data.text.generator.kind === 'unavailable' && data.entries.some((e) => e.reasonOrigin === 'missing') && <Notice kind="warn">{ko.knowledge.ruleNotice(data.text.generator.reason)}</Notice>}
+      {!refreshing && !jobId && !textError && data.entries.some((e) => e.reasonOrigin === 'error') && <Notice kind="warn"><span>{ko.knowledge.aiError}</span><button className="btn btn-small" onClick={retryText}>{ko.knowledge.retryText}</button></Notice>}
+      {!refreshing && !starting && !jobId && data.text.missing > 0 && data.text.generator.kind === 'llm' && <button className="btn btn-small" onClick={() => void startText()}>{ko.knowledge.writeAi}</button>}
       {!data.entries.length && <div className="muted">{ko.knowledge.empty}</div>}
       {(['check', 'confirmed', 'background'] as Group[]).map((g) =>
         groups[g].length ? (

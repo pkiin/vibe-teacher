@@ -21,6 +21,7 @@
     "memory:db": "node scripts/memory-db.mjs",
     "memory:check": "tsx scripts/check-memory-db.ts",
     "accounts:setup": "tsx scripts/setup-accounts.ts",
+    "cloud:inspect": "node --import tsx scripts/inspect-cloud.ts",
     "typecheck": "tsc -p shared --noEmit && tsc -p server --noEmit && tsc -p web --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

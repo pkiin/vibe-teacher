@@ -67,7 +67,7 @@ describe('주요 기능 페이지 화면', () => {
     const html = render(createElement(RepoFeatureView, { data: response(null) }));
     expect(html).toContain('레포 위키가 고른 관련 파일');
     expect(html).toContain('server/summarize.ts');
-    expect(html).toContain('href="/sessions/s1?tab=understand"');
+    expect(html).toContain('href="/sessions/s1/analysis"');
     expect(html).not.toContain('AI 호출');
     expect(featureMeta(response(null))).toBeNull();
   });

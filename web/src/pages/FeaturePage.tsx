@@ -12,6 +12,7 @@ import { SourceContext } from '../components/RepoWikiView';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { useJob } from '../hooks/useJob';
+import { JobProgress } from '../components/JobProgress';
 import { useReader } from '../hooks/useReader';
 import { ko } from '../i18n/ko';
 
@@ -150,14 +151,11 @@ function Feature({ projectId, featureId }: { projectId: string; featureId: strin
                   </button>
                 </div>
               )}
-              {jobId && (
-                <Notice kind="info">
-                  <span>{ko.feature.analyzing}</span>
-                  <button className="btn btn-small" onClick={cancel}>
+              <JobProgress job={job} busy={working} preparing={busy} label={ko.feature.analyzing}>
+                  {jobId && <button className="btn btn-small" onClick={cancel}>
                     {ko.feature.cancel}
-                  </button>
-                </Notice>
-              )}
+                  </button>}
+              </JobProgress>
               {error && <ErrorBox error={error} />}
               {data.feature && <FeaturePreview key={reader.level} base={base} />}
               <div className="small">

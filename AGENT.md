@@ -55,10 +55,12 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
   src/config/      설정 스키마(zod)·저장소·환경변수/CLI 인자
   src/routes/      API 라우트. 공통 의존성과 HttpError 는 routes/deps.ts
   src/lib/         fsx(안전한 파일 IO) · jsonl · shell(셸 명령 파서) · text · hash
+                   · concurrent(순서를 보존하는 동시 IO 상한) · progress(AsyncLocalStorage로 작업별 실제 IO·AI 단계 추적)
   src/wiki/        프로젝트 위키: build(AI 입력 snapshot) · validate(출처 검사·격리) · plan(설명 계획) · graph(선행관계) · catalog · service
   src/learner/     내 이해 정보(사용자 전체): reducer(원장 → 개념 상태) · service(원장 쓰기, revision 충돌, 예전 프로젝트별 원장 병합)
                    · knowledge(AI 개념이 나온 곳·명시적 이해 증거) · knowledge-service(내 세션 모으기·캐시)
                    · knowledge-text(설명 문장 AI 작성: 사실 → 프롬프트, 넘겨짚는 문장 거르기, 지문별 저장, 작업)
+                   · knowledge-view(재방문용 목록 캐시: 사용자·수준·계정 권한·범위 분리, 현재 원장 상태를 다시 적용)
                    · prefs(사용자 설정: 읽는 사람 수준, prefs.json)
   src/repo/        레포 위키: scan(저장소 읽기 전용 스캔) · source(근거 파일 안전 읽기) · code(TS 구문 분석·내부 파일 연결) · wiki(사실 초안 조립, 판 비교) · inspect(AI 질문·필요한 코드만 추가 확인) · ai(AI 가 문장·주요 기능 목록 쓰기, 표·코드 유지, 근거 표시 검사)
                    · service(저장·갱신 필요 판단, AI 작업과 실패 상태) · feature(주요 기능별 페이지: AI가 질문을 만들며 여러 단계로 코드 확인, 프롬프트 원문·모델 근거 검사) · prompt-text(AI가 가리킨 코드에서 실제 프롬프트만 구문 분석으로 꺼내기)
@@ -70,7 +72,8 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
 web/               Vite + React 19 + react-router UI (한국어)
   test/           화면 렌더링 검사 (vitest, Node 환경에서 서버 렌더링)
   src/i18n/ko.ts   화면 문자열 모음
-  src/components/SessionUnderstand.tsx  "이번 세션 이해하기" 통합 화면 (요약 → 작업 이해하기 → 개념 → 내 지식 → 보안 점검 순서 + 도움 패널). 세션 탭은 이해하기 → 내 메시지 → 만들어진 것 순서 (pages/SessionPage.tsx)
+  src/components/SessionUnderstand.tsx  "세션 (대화 기록) 분석" 문서 (작업 요약 → 작업 설명 → 개념 → 내 지식 → 보안 점검 + 도움 패널). 고정 주소 /sessions/:sessionKey/analysis, 예전 탭 주소도 유지 (pages/SessionPage.tsx)
+  src/components/SessionAnalysisTree.tsx 저장된 분석 문서·하위 절의 트리. wiki/documents.ts와 /api/projects/:id/session-analyses가 원문·AI 호출 없이 저장된 결과만 모은다
   src/context/DisplayContext.tsx        화면 설정(본문 14px·코드 12px·촘촘한 밀도 기본), 설명 난이도와 분리해 브라우저에 저장
   src/components/SettingsPopover.tsx    오른쪽 위 톱니바퀴 설정. Modal.tsx 의 네이티브 dialog로 초점·Escape·복귀 처리
   src/components/RepoSourceViewer.tsx   근거 파일 원문·줄 강조·검색, RepoFlowView.tsx 는 검증된 파일 연결을 SVG로 표시
@@ -79,6 +82,8 @@ web/               Vite + React 19 + react-router UI (한국어)
   src/components/CodeBlock.tsx          의존성 없는 코드 색칠(토큰 분석, React 텍스트로만 그림). 파일 보기·레포 위키 코드·기능 페이지가 함께 쓴다
   src/pages/FeaturePage.tsx             주요 기능 페이지 (/projects/:id/features/:featureId). 본문은 components/RepoFeatureView.tsx, 기능 카드는 RepoWikiView 의 FeatureCards
 scripts/           dev.mjs(웹+API 동시 실행), memory-db.mjs(로컬 PostgreSQL 준비), check-memory-db.ts(Supabase·PostgreSQL 접속 검사), setup-accounts.ts(관리자 회원 스키마 준비), postgres-init.sql(pgvector 확장), grant-read-acl.sh(다중 계정 읽기 ACL)
+                   inspect-cloud.ts(관리자 읽기 전용 DB 행 수·통계 확인, 개인 데이터 출력 금지)
+docs/              supabase-storage.md(테이블 연결·저장 조건·조사 수치)
 compose.yaml       프로젝트 전용 PostgreSQL + pgvector, loopback 바인딩과 이름 있는 볼륨
 supabase/migrations/ 회원·관리자 승인·본인 데이터 RLS·기기 간 쓰기 잠금 SQL, AI 호출 기록 표 (관리자가 순서대로 1회 적용, scripts/setup-accounts.ts 의 MIGRATIONS 목록)
 ```
@@ -92,6 +97,7 @@ npm install
 npm run memory:db                   # 로컬 PostgreSQL + pgvector 준비 (.env에 접속 설정 생성)
 npm run memory:check                # 설정된 Supabase·PostgreSQL 접속과 합성 쓰기·검색 검사 (AI 호출 없음)
 npm run accounts:setup              # 관리자: 같은 프로젝트의 Supabase 회원·승인·RLS·AI 호출 기록 스키마 준비 (없는 표만)
+npm run cloud:inspect               # 관리자: Supabase 행 수·RLS·누적 읽기·쓰기 확인 (읽기 전용)
 npm run dev                         # API :3318 + 웹 :3317 (웹의 /api 는 API 로 프록시)
 npm run dev:server                  # API 만
 npm run dev:web                     # 웹만
@@ -193,6 +199,11 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 
 ### 회원 모드 저장소 읽기
 - Supabase 회원 모드에서는 `storage.readJson`마다 Supabase 왕복(수백 ms)이다. 예전 프로젝트 ID·수준별 파일처럼 서로 독립인 읽기는 `Promise.all`로 동시에 하고, 화면 목록에 필요 없는 큰 파일(`repo/materials.json` 등)은 읽지 않는다. 화면이 이미 받은 응답에 있는 데이터는 다시 요청하지 않는다.
+- `CloudStorage`는 같은 시점의 문서 읽기를 최대 40키·URL 예산별로 합치고, 같은 읽기를 합치며, 사용자별 문서·원장을 5초/256항목/8MiB 이내로 캐시한다. 저장 후 이전 읽기 응답이 캐시를 되살리지 못하게 하고, 잠금 안의 문서는 새로 읽는다. 원장은 추가 전용이므로 과거 prefix는 재사용하되 마지막 seq 뒤의 행을 반드시 조회한다. 잠금·실패·기기 간 revision 검사를 캐시로 우회하지 않는다.
+- 같이 저장하는 문서는 `storage.writeJsonBatch`를 쓴다(회원 모드는 한 upsert 요청, 파일 저장소는 독립 파일 병렬 쓰기). 세션 목록의 IO는 `mapConcurrent(..., 6, ...)`로 제한한다. 의존하는 AI 후속 질문은 순서를 유지한다.
+- 브라우저 GET 캐시는 메모리 5초/150항목/8MiB 이내이며 쓰기·인증 변경·작업 완료에 비운다. 인증·폴링·원문·미리보기는 제외하고 명시적 새로고침은 `cache: 'no-store'`로 호출한다. 인증·회원 권한 조회는 동시에 진행 중인 동일 토큰 요청만 합치고 응답 TTL 캐시는 만들지 않는다.
+- `JobQueue`의 진행률은 `lib/progress.ts`의 실제 단계만 사용한다. 제공자는 실제 AI 호출을 `beginActivity('ai')`로 감싸고 기록 저장 전 끝낸다. `CloudClient`는 Supabase 읽기·쓰기를 추적한다. 100%는 최종 저장 후 성공한 작업에서만 사용하고 시간 기반 가짜 진행률은 만들지 않는다. 화면은 `JobProgress`를 재사용한다. `/api/me/storage` 통계는 사용자별 저장소의 HTTP 요청 수이며 DB 스캔 통계와 구분한다.
+- 내 지식은 `/api/me/knowledge/saved`의 저장된 목록을 먼저 표시하고 최신 조회와 병렬로 갱신한다. 저장된 보기는 AI 자동 작성을 시작하지 않고, 현재 원장의 학습 상태를 적용한다. GET의 `knowledge-views` 쓰기는 파생 목록 캐시이며 학습 이벤트를 추가하지 않는다. 같은 내용은 다시 쓰지 않는다. 캐시는 현재 계정 권한·수준·범위가 일치해야 재사용하며, 늦은 캐시 응답이 새 화면을 덮어쓰면 안 된다. 이전 AI 설명은 학습 상태·정의·허용된 출처가 유지된 경우에만 표시를 붙여 남긴다.
 
 ### 위키 생성 변경
 - AI의 claim·finding·item은 제공된 근거와 올바른 개념 참조가 있어야 한다. 없는 참조를 일부 지워 카드를 살리지 않고 해당 후보를 거른다.
@@ -209,6 +220,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 위키용 개념 필드를 바꾸면 `server/src/wiki/catalog.ts` 의 `CATALOG_VERSION`, 상태 전이 규칙을 바꾸면 `POLICY_VERSION`, 원장 형식을 바꾸면 `shared/src/wiki.ts` 의 `WIKI_SCHEMA_VERSION` 을 올린다.
 
 ### 화면과 한국어 설명
+- `만들어진 것`은 `TurnReports`에서 요청별 에이전트 보고 원문을 먼저 보여 주고 마지막 보고를 펼친다. `TurnGroup.finalAssistantText`와 어댑터의 assistant 본문은 표시용 원문이므로 300/4,000자로 자르지 않는다. 도구 입력·출력과 AI 전송용 `digest`의 제한은 유지한다. Codex `phase`를 보존해 commentary를 최종 보고로 쓰지 않으며, phase가 없는 도구는 마지막 도구 활동 뒤의 답변을 사용한다. `agent_message`만 남은 요청도 위치를 보존하고 같은 요청의 response_item 중복만 제거한다. 화면은 에이전트 보고와 실제 작업 기록을 구분하고 Markdown의 HTML·위험한 URL·외부 이미지를 실행하지 않는다.
+- 세션 화면은 "세션 (대화 기록) 분석"으로 안내한다. UnifiedAiPanel의 분석 시작은 요약과 작업·개념·보안 분석을 함께 실행하고, 기반 snapshot이 없거나 오래됐으면 만든다. 기술 정보(제공자·전송 미리 보기·모델·시간·요금)는 관리자 또는 직접 선택한 junior/senior에게만 표시한다(`useTechnicalDetails`); 표시 조건으로 서버 권한을 넓히지 않는다. 분석 문서 링크는 `lib/session-analysis.ts`로 만들고 레포 위키·개념 출처에서 같은 고정 주소·개념 앵커로 연결한다. 문서 목록은 계정 권한을 먼저 검사하고 동시 읽기 상한을 지킨다.
 - 글씨와 여백은 화면 설정 변수(`--ui-font-size`, `--code-font-size`, `--card-padding` 등)로 정하고, 설명 난이도·학습자 이해 상태와 연동하지 않는다. 설정은 오른쪽 위 톱니바퀴 팝업 하나로 모은다.
 - 색상은 `web/src/styles/app.css`의 의미별 토큰(`--panel`, `--surface`, `--text` 등)으로 정한다. 새 패널에도 라이트·다크 모드, 키보드 초점, 좁은 화면, 동작 줄이기를 함께 확인한다.
 - 기술 용어는 쉬운 말을 먼저 쓰고 필요한 원어만 덧붙인다. 퀴즈 문장을 바꾸면 문항 version과 은행 version을 올리되 정답·검토 상태를 임의로 바꾸지 않는다.

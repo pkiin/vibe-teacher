@@ -11,6 +11,14 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const FIX = path.resolve(here, '../fixtures/claude/sess-1.jsonl');
 
 describe('digest', () => {
+  it('화면용 보고가 길어도 AI에는 제한한 발췌만 보낸다', () => {
+    const session = fakeSession([{ human: '기능을 정리해 줘' }, { assistant: '작업 결과입니다.\n' + '설명문장'.repeat(2000) + '\n보고의 마지막 표시' }]);
+    const built = summarizeBuilt(session);
+    expect(built.timeline[0]?.finalAssistantText).toContain('보고의 마지막 표시');
+    const digest = buildDigest(session, built, []);
+    expect(digest).toContain('작업 결과입니다.');
+    expect(digest).not.toContain('보고의 마지막 표시');
+  });
   it('masks secrets', () => {
     expect(maskSecrets('key sk-abcdefghijklmnopqrstuvwxyz1234 and ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ12 and API_KEY=supersecretvalue1')).toBe('key *** and *** and API_KEY=***');
     expect(maskSecrets('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.abcdefghijklmnop')).toBe('***');

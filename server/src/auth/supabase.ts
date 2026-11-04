@@ -14,9 +14,22 @@ interface SupabaseUser { id: string; email?: string; email_confirmed_at?: string
 
 export class SupabaseAuth {
   private refreshes = new Map<string, Promise<Session>>();
+  private readonly reads = new Map<string, Promise<unknown>>();
   constructor(readonly config: CloudConfig, private readonly home: string, private readonly request: typeof fetch = fetch) {}
 
   client(token = ''): CloudClient { return new CloudClient(this.config, token, this.request); }
+
+  /** 같은 순간의 인증만 합친다. 권한·로그아웃·회원 변경은 다음 요청에서 다시 검증한다. */
+  private async read<T>(token: string, route: string): Promise<T> {
+    const key = `${token}\0${route}`;
+    let pending = this.reads.get(key);
+    if (!pending) {
+      const request = this.client(token).call<T>(route).finally(() => { if (this.reads.get(key) === request) this.reads.delete(key); });
+      pending = request;
+      this.reads.set(key, request);
+    }
+    return await pending as T;
+  }
 
   private save(c: Context, session: Session): void {
     const opts = { httpOnly: true, sameSite: 'Lax' as const, path: '/', secure: this.config.secure };
@@ -78,7 +91,7 @@ export class SupabaseAuth {
     let token = bearer ?? getCookie(c, ACCESS);
     let user: SupabaseUser | undefined;
     if (token) {
-      try { user = await this.client(token).call<SupabaseUser>('/auth/v1/user'); }
+      try { user = await this.read<SupabaseUser>(token, '/auth/v1/user'); }
       catch (e) { if (!(e instanceof CloudError) || (e.status !== 401 && e.status !== 403)) throw e; }
     }
     if (!user && !bearer) {
@@ -94,7 +107,7 @@ export class SupabaseAuth {
         }
         const session = await pending;
         token = session.access_token;
-        user = await this.client(token).call<SupabaseUser>('/auth/v1/user');
+        user = await this.read<SupabaseUser>(token, '/auth/v1/user');
         this.save(c, session);
       } catch (e) {
         if (!(e instanceof CloudError) || e.status >= 500 || e.status === 429) throw e;
@@ -103,7 +116,7 @@ export class SupabaseAuth {
       }
     }
     if (!user || !token) return null;
-    const members = await this.client(token).call<Member[]>('/rest/v1/vt_members?select=*&user_id=eq.' + encodeURIComponent(user.id));
+    const members = await this.read<Member[]>(token, '/rest/v1/vt_members?select=*&user_id=eq.' + encodeURIComponent(user.id));
     const member = members[0];
     if (!member || member.user_id !== user.id) throw new CloudError(503, 'member_missing', '이메일 계정은 확인했지만 앱 회원 정보를 찾지 못했습니다. 관리자에게 회원 정보 복원을 요청하세요');
     return {

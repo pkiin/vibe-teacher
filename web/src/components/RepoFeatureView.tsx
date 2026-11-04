@@ -7,6 +7,7 @@ import { CodeBlock } from './CodeBlock';
 import { MiniMarkdown } from './MiniMarkdown';
 import { Notice, fmtDate } from './Notice';
 import { SourceChips, SourceContext } from './RepoWikiView';
+import { sessionAnalysisPath } from '../lib/session-analysis';
 
 type FileSource = Extract<RepoSource, { kind: 'file' }>;
 const at = (s: FileSource) => `${s.path}${s.startLine ? `:${s.startLine}${s.endLine && s.endLine !== s.startLine ? `–${s.endLine}` : ''}` : ''}`;
@@ -146,7 +147,7 @@ export function RepoFeatureView({ data }: { data: RepoFeatureResponse }) {
                 <ul className="repo-list">
                   {feature.sessions.map((s) => (
                     <li key={s.key}>
-                      <Link to={`/sessions/${encodeURIComponent(s.key)}?tab=understand`}>{s.title}</Link>
+                      <Link to={sessionAnalysisPath(s.key)}>{s.title}</Link>
                     </li>
                   ))}
                 </ul>

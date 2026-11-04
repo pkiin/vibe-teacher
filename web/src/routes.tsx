@@ -21,6 +21,7 @@ export function AppRoutes() {
       <Route path="/projects/:projectId" element={<SessionsPage />} />
       <Route path="/projects/:projectId/features/:featureId" element={<FeaturePage />} />
       <Route path="/sessions/:sessionKey" element={<SessionPage />} />
+      <Route path="/sessions/:sessionKey/analysis" element={<SessionPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

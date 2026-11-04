@@ -6,6 +6,7 @@ import type { Account, Source } from '@vibe-teacher/shared';
 import { parseCodexFile } from '../../src/adapters/codex/parse';
 import { codexAdapter } from '../../src/adapters/codex/index';
 import { extractUserMessages } from '../../src/analyzers/user-messages';
+import { buildTurnGroups } from '../../src/analyzers/turn-groups';
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -26,6 +27,39 @@ async function fixture(records: unknown[], name = 'rollout-main.jsonl') {
 }
 
 describe('Codex 메시지 파싱 회귀 검사', () => {
+  it('4천 자가 넘는 답변과 최종 답변 구분은 보존하고 도구 출력의 크기 제한은 유지한다', async () => {
+    const report = '# 결과\n' + '완료한 작업 설명입니다.\n'.repeat(500) + '보고의 마지막 줄';
+    const { file } = await fixture([
+      event('작업해 줘'),
+      { type: 'response_item', payload: { type: 'function_call', name: 'shell', call_id: 'tool-1', arguments: '{"command":"npm test"}' } },
+      { type: 'response_item', payload: { type: 'function_call_output', call_id: 'tool-1', output: '도구 출력'.repeat(2000) } },
+      { type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'report-1', phase: 'final_answer', content: [{ type: 'output_text', text: report }] } },
+      { type: 'event_msg', payload: { type: 'agent_message', message: report, phase: 'final_answer' } },
+    ]);
+    const { draft } = await parseCodexFile(file);
+    expect(draft.messages.filter((m) => m.role === 'assistant').map((m) => [m.text, m.meta?.phase])).toEqual([[report, 'final_answer']]);
+    expect(draft.messages.find((m) => m.role === 'tool_result')!.text!.length).toBeLessThanOrEqual(2000);
+    expect(draft.counts.assistant).toBe(1);
+  });
+
+  it('이벤트에만 남은 각 요청의 보고를 원래 위치에 복구하고 중복 응답과 섞지 않는다', async () => {
+    const { file } = await fixture([
+      event('첫 요청'),
+      { type: 'event_msg', payload: { type: 'agent_message', message: '첫 결과', phase: 'final_answer' } },
+      event('둘째 요청'),
+      { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '둘째 결과' }] } },
+      { type: 'event_msg', payload: { type: 'agent_message', message: '둘째 결과', phase: 'final_answer' } },
+      event('셋째 요청'),
+      { type: 'event_msg', payload: { type: 'agent_message', message: '진행 중', phase: 'commentary' } },
+      { type: 'event_msg', payload: { type: 'turn_aborted' } },
+    ]);
+    const { draft } = await parseCodexFile(file);
+    const groups = buildTurnGroups({ ...draft, key: 's1', accountId: 'a', sourceId: 's', projectId: 'p', provider: 'codex' });
+    expect(groups.map((g) => [g.promptText, g.finalAssistantText])).toEqual([['첫 요청', '첫 결과'], ['둘째 요청', '둘째 결과'], ['셋째 요청', undefined]]);
+    expect(groups[2]?.interrupted).toBe(true);
+    expect(draft.counts.assistant).toBe(3);
+  });
+
   it('이벤트와 응답에 중복 저장된 IDE 입력에서 요청만 한 번 추출한다', async () => {
     const { file } = await fixture([
       user('<external_codex_apps_open_page>자동 페이지 정보</external_codex_apps_open_page>'),

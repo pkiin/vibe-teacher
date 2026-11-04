@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import type { BuiltSummary, ConceptHit, EnrichmentRecord, LearnerProfile, WikiConcept, WikiResponse } from '@vibe-teacher/shared';
-import { ApiError, api, apiPost } from '../api/client';
+import { ApiError, api } from '../api/client';
 import { FocusProvider } from '../context/FocusContext';
 import { useApi } from '../hooks/useApi';
 import { useLearnerActions } from '../hooks/useLearner';
@@ -15,7 +16,7 @@ import { SessionSummaryCard, WikiBody, WikiCoverage, WikiHeader } from './WikiSe
 import { SecurityReview } from './SecurityReview';
 
 /**
- * "이번 세션 이해하기" — 프로젝트 위키·만들어진 것·알아야 할 개념을 한 화면에 잇고,
+ * 세션 (대화 기록) 분석 문서 — 작업·개념·보안 주의사항을 한 화면에 잇고,
  * 오른쪽 도움 패널(설명/질문/퀴즈)이 지금 보고 있는 대상을 따라간다.
  */
 export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKey: string; projectId: string; onJump?: (i: number) => void }) {
@@ -24,10 +25,10 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
   const [concepts, setConcepts] = useState<ConceptHit[] | null>(null);
   const [conceptsErr, setConceptsErr] = useState<Error | null>(null);
   const [enrichment, setEnrichment] = useState<EnrichmentRecord | null>(null);
+  const [enrichmentReady, setEnrichmentReady] = useState(false);
   const [wiki, setWiki] = useState<WikiResponse | null>(null);
   const [wikiState, setWikiState] = useState<'loading' | 'missing' | 'ready' | 'error'>('loading');
   const [wikiErr, setWikiErr] = useState<Error | null>(null);
-  const [building, setBuilding] = useState(false);
   const [profile, setProfile] = useState<LearnerProfile | null>(null);
   // AI 문장(요약·개념 설명·위키 항목 설명)은 읽는 사람 수준별로 저장되므로 수준이 바뀌면 다시 받는다
   const { level } = useReader();
@@ -60,9 +61,13 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
     loadConcepts();
     loadWiki();
     setEnrichment(null);
+    setEnrichmentReady(false);
+    let active = true;
     api<EnrichmentRecord>(`/api/sessions/${enc}/enrichment`)
-      .then(setEnrichment)
-      .catch(() => setEnrichment(null));
+      .then((result) => { if (active) setEnrichment(result); })
+      .catch(() => { if (active) setEnrichment(null); })
+      .finally(() => { if (active) setEnrichmentReady(true); });
+    return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enc, loadConcepts, loadWiki, level]);
   useEffect(() => {
@@ -82,22 +87,24 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
   const learner = useLearnerActions(sessionKey, profile?.revision ?? wiki?.plan.profileRevision ?? 0, onProfile);
 
   const [aiWriting, setAiWriting] = useState(false);
-  const build = async () => {
-    setBuilding(true);
-    setWikiErr(null);
-    try {
-      setWiki(await apiPost<WikiResponse>(`/api/sessions/${enc}/wiki/build`, {}));
-      setWikiState('ready');
-    } catch (e) {
-      setWikiErr(e as Error);
-    } finally {
-      setBuilding(false);
-    }
-  };
 
   const catalog = useMemo(() => ({ ...Object.fromEntries((concepts ?? []).map((c) => [c.id, { ...c, summary: c.explanation, confusions: [], links: c.links ?? [] }])), ...wiki?.concepts }), [concepts, wiki]);
   const data: UnderstandData = { projectId, sessionKey, wiki, built: built.data, concepts: concepts ?? [], catalog, profile, learner, enrichment, onJump };
   const covered = useMemo(() => new Set(wiki?.snapshot.items.flatMap((i) => i.conceptIds) ?? []), [wiki]);
+  // 비동기로 문서가 도착한 뒤에도 링크가 가리킨 절·개념으로 이동한다.
+  const { hash } = useLocation();
+  const scrolled = useRef('');
+  useEffect(() => {
+    if (!hash) { scrolled.current = ''; return; }
+    if (scrolled.current === hash) return;
+    if (!enrichmentReady || wikiState === 'loading' || (concepts === null && !conceptsErr)) return;
+    let id: string;
+    try { id = decodeURIComponent(hash.slice(1)); } catch { return; }
+    const target = document.getElementById(id) ?? (id.startsWith('concept-') ? document.getElementById('concepts') : null);
+    if (!target) return;
+    target.scrollIntoView({ block: 'start', behavior: 'auto' });
+    scrolled.current = hash;
+  }, [hash, wiki, concepts, conceptsErr, wikiState, enrichmentReady]);
 
   return (
     <FocusProvider>
@@ -116,7 +123,11 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
               setEnrichment(r);
               loadConcepts();
             }}
-            onWikiUpdated={() => { loadWiki(true); loadConcepts(); }}
+            onWikiUpdated={(result) => {
+              if (result) { setWiki(result); setWikiState('ready'); }
+              else loadWiki(true);
+              loadConcepts();
+            }}
             onWikiWriting={setAiWriting}
           />
 
@@ -128,7 +139,7 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
           <h2 id="wiki">{ko.understand.wiki}</h2>
           {wikiState === 'loading' && <Loading />}
           {wikiState === 'error' && wikiErr && <ErrorBox error={wikiErr} onRetry={() => loadWiki()} />}
-          {(wikiState === 'missing' || wikiState === 'ready') && <WikiHeader wiki={wiki} building={building} error={wikiErr} onBuild={build} />}
+          {(wikiState === 'missing' || wikiState === 'ready') && <WikiHeader wiki={wiki} />}
           {wiki && <WikiBody wiki={wiki} profile={profile} learner={learner} projectId={projectId} sessionKey={sessionKey} onJump={onJump} aiWriting={aiWriting} />}
 
           <h2 id="concepts">{ko.understand.concepts}</h2>
