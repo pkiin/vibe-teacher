@@ -16,6 +16,7 @@ import type {
 import { apiDelete, apiPost, api } from '../api/client';
 import { useFocus, type PanelTab } from '../context/FocusContext';
 import { useJob } from '../hooks/useJob';
+import { JobProgress } from './JobProgress';
 import { requestId, type LearnerActions } from '../hooks/useLearner';
 import { ko } from '../i18n/ko';
 import { ClaimList } from './ClaimList';
@@ -355,19 +356,19 @@ function AnswerView({ m, data, onFollowUp, disabled }: { m: HelpMessage; data: U
 }
 
 function PendingAnswer({ m, data, onDone }: { m: HelpMessage; data: UnderstandData; onDone: (m: HelpMessage) => void }) {
-  const { job } = useJob<HelpMessage>(m.jobId ? `/api/projects/${data.projectId}/help/jobs/${m.jobId}` : null);
+  const { job, error } = useJob<HelpMessage>(m.jobId ? `/api/projects/${data.projectId}/help/jobs/${m.jobId}` : null);
   useEffect(() => {
-    if (job?.result && job.state === 'done') onDone(job.result);
+    if (error) onDone({ ...m, status: 'error', error: { kind: 'network', message: error.message } });
+    else if (job?.result && job.state === 'done') onDone(job.result);
     else if (job && (job.state === 'error' || job.state === 'cancelled')) onDone({ ...m, status: job.state, error: job.error });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.state]);
+  }, [job?.state, error]);
   return (
-    <div className="small muted">
-      {ko.help.asking}{' '}
+    <JobProgress job={job} busy label={ko.help.asking}>
       <button className="link small" onClick={() => m.jobId && apiDelete(`/api/projects/${data.projectId}/help/jobs/${m.jobId}`).catch(() => {})}>
         {ko.help.cancel}
       </button>
-    </div>
+    </JobProgress>
   );
 }
 

@@ -111,6 +111,11 @@ describe('AI-only generation over the API', () => {
   it('GET never starts generation; the build button starts AI and publishes dynamic concepts', async () => {
     const enc = encodeURIComponent(sessionKey);
     expect((await app.request(`/api/sessions/${enc}/wiki`)).status).toBe(404);
+    const preview = await app.request(`/api/sessions/${enc}/wiki/ai/preview`);
+    expect(preview.status).toBe(200);
+    expect((await preview.json() as { chars: number }).chars).toBeGreaterThan(0);
+    expect((await app.request(`/api/sessions/${enc}/wiki`)).status).toBe(404);
+    expect(await (await app.request(`/api/projects/${project.id}/session-analyses`)).json()).toEqual({ documents: [], totalSessions: 1 });
     expect(calls).toEqual([]);
     const response = await post(`/api/sessions/${enc}/wiki/build`);
     const start = await response.json() as { generation: { jobId: string } };
@@ -127,6 +132,10 @@ describe('AI-only generation over the API', () => {
     expect(research.user).not.toContain('ev_');
     const concepts = await (await app.request(`/api/sessions/${enc}/concepts`)).json() as { id: string }[];
     expect(concepts.some((c) => c.id === 'authorization')).toBe(true);
+    const callCount = calls.length;
+    const documents = await (await app.request(`/api/projects/${project.id}/session-analyses`)).json() as import('@vibe-teacher/shared').SessionAnalysisDocumentsResponse;
+    expect(documents.documents).toEqual([expect.objectContaining({ sessionKey, sections: ['wiki', 'concepts', 'security'] })]);
+    expect(calls).toHaveLength(callCount);
   });
   it('rewrites another reader level without changing common project facts or refetching documents', async () => {
     const enc = encodeURIComponent(sessionKey);
@@ -191,5 +200,18 @@ describe('AI-only generation over the API', () => {
     const after = await (await app.request('/api/me/knowledge')).json() as KnowledgeWikiResponse;
     expect(after.entries.every((e) => e.reasonOrigin === 'llm')).toBe(true);
     expect(after.entries.every((e) => e.state.state === 'unknown')).toBe(true);
+    const generated = calls.filter((call) => call.schemaName === 'knowledge_texts').length;
+    const saved = await (await app.request('/api/me/knowledge/saved')).json() as { view: KnowledgeWikiResponse };
+    expect(saved.view.entries.map((e) => e.reason)).toEqual(after.entries.map((e) => e.reason));
+    expect(saved.view.text.canGenerate).toBe(false);
+    expect(await (await post('/api/me/knowledge/text')).json()).toEqual({ status: 'done' });
+    expect(calls.filter((call) => call.schemaName === 'knowledge_texts')).toHaveLength(generated);
+
+    const changed = await post('/api/me/feedback', { baseRevision: after.profile.revision, event: { kind: 'self_report', conceptId: 'authorization', value: 'unsure' } });
+    expect(changed.status).toBe(200);
+    const updated = await (await app.request('/api/me/knowledge/saved')).json() as { view: KnowledgeWikiResponse };
+    expect(updated.view.entries.find((e) => e.conceptId === 'authorization')?.state.selfReport).toBe('unsure');
+    expect(updated.view.entries.find((e) => e.conceptId === 'authorization')?.reasonOrigin).toBe('missing');
+    expect(calls.filter((call) => call.schemaName === 'knowledge_texts')).toHaveLength(generated);
   });
 });

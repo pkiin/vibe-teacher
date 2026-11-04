@@ -75,16 +75,19 @@ function fakeCloud() {
     }
     if (init?.method === 'POST') {
       if (failWrites) return reply({}, 500);
-      if (body.user_id !== owner) return reply({}, 403);
-      if (url.pathname.endsWith('/vt_events')) events.push({ seq: events.length + 1, user_id: owner, key: String(body.key), value: body.value });
-      else documents.set(`${owner}:${body.key}`, body.value);
+      for (const row of (Array.isArray(body) ? body : [body]) as Record<string, unknown>[]) {
+        if (row.user_id !== owner) return reply({}, 403);
+        if (url.pathname.endsWith('/vt_events')) events.push({ seq: events.length + 1, user_id: owner, key: String(row.key), value: row.value });
+        else documents.set(`${owner}:${row.key}`, row.value);
+      }
       return new Response(null, { status: 201 });
     }
     if (url.searchParams.get('user_id') !== `eq.${owner}`) return reply([]);
-    const key = url.searchParams.get('key')?.slice(3);
+    const filter = url.searchParams.get('key') ?? '';
+    const keys: string[] = filter.startsWith('in.') ? JSON.parse(`[${filter.slice(4, -1)}]`) : [filter.slice(3)];
+    const key = keys[0];
     if (url.pathname.endsWith('/vt_events')) return reply(events.filter((e) => e.user_id === owner && e.key === key && e.seq > Number(url.searchParams.get('seq')?.slice(3) ?? 0)).slice(0, 500));
-    const value = documents.get(`${owner}:${key}`);
-    return reply(value === undefined ? [] : [{ value }]);
+    return reply(keys.flatMap((key) => documents.has(`${owner}:${key}`) ? [{ key, value: documents.get(`${owner}:${key}`) }] : []));
   }) as typeof fetch;
   return { request, calls, members, documents, events, set failWrites(value: boolean) { failWrites = value; }, set emailConfirmed(value: boolean) { emailConfirmed = value; }, set failAuth(value: boolean) { failAuth = value; } };
 }
@@ -113,6 +116,43 @@ async function fixture(remote = fakeCloud(), deployment: 'local' | 'shared' = 's
 }
 
 describe('Supabase 로그인과 사용자 저장소', () => {
+  it('저장된 내 지식 목록은 회원·현재 계정 권한별로 분리하고 조회로 학습 이벤트를 만들지 않는다', async () => {
+    const f = await fixture();
+    expect((await f.req('/api/me/knowledge')).status).toBe(200);
+    const saved = await (await f.req('/api/me/knowledge/saved')).json() as { view: unknown };
+    expect(saved.view).not.toBeNull();
+    expect(await (await f.req('/api/me/knowledge/saved', 'bob-token')).json()).toEqual({ view: null });
+    const alice = f.remote.members.get(ALICE)!;
+    f.remote.members.set(ALICE, { ...alice, account_ids: [] });
+    expect(await (await f.req('/api/me/knowledge/saved')).json()).toEqual({ view: null });
+    expect(f.remote.events).toEqual([]);
+    expect([...f.remote.documents.keys()].some((key) => key.includes('/knowledge-views/'))).toBe(true);
+  });
+  it('동시 인증을 합치되 다음 요청에는 회원 권한을 다시 확인하고 활동 통계는 본인 것만 반환한다', async () => {
+    const f = await fixture();
+    await Promise.all([f.req('/api/me/prefs'), f.req('/api/me/onboarding')]);
+    expect(f.remote.calls.filter((call) => call.url.pathname === '/auth/v1/user')).toHaveLength(1);
+    expect(f.remote.calls.filter((call) => call.url.pathname === '/rest/v1/vt_members')).toHaveLength(1);
+    const own = await (await f.req('/api/me/storage')).json() as { mode: string; tables: { reads: number }[] };
+    expect(own.mode).toBe('supabase'); expect(own.tables.some((table) => table.reads > 0)).toBe(true);
+    const other = await (await f.req('/api/me/storage', 'bob-token')).json() as { tables: unknown[] };
+    expect(other.tables).toEqual([]);
+    expect(f.remote.calls.filter((call) => call.url.pathname === '/rest/v1/vt_members')).toHaveLength(3);
+    expect(JSON.stringify(own)).not.toContain(ALICE);
+    expect((await f.req('/api/me/storage', 'invalid-token')).status).toBe(401);
+  });
+
+  it('회원의 학습 활동은 vt_events에 추가하고 중복 요청을 다시 쓰지 않는다', async () => {
+    const f = await fixture();
+    const body = { baseRevision: 0, requestId: 'synthetic-request-001', event: { kind: 'self_report', conceptId: 'auth', value: 'unsure' } };
+    const route = '/api/projects/alice-project/understanding/feedback';
+    expect((await f.req(route, 'alice-token', body, 'POST')).status).toBe(200);
+    expect((await f.req(route, 'alice-token', body, 'POST')).status).toBe(200);
+    expect(f.remote.events).toHaveLength(1);
+    expect(f.remote.events[0]).toMatchObject({ user_id: ALICE, value: { kind: 'self_report', conceptId: 'auth' } });
+    expect([...f.remote.documents.keys()].some((key) => key.endsWith('/profile.json'))).toBe(true);
+    expect((await f.req(route, 'bob-token', body, 'POST')).status).toBe(404);
+  });
   it('검증한 사용자 ID로 격리하고 메타데이터·OS 계정·기존 관리자 토큰을 권한으로 쓰지 않는다', async () => {
     const f = await fixture();
     const me = await (await f.req('/api/auth/me')).json() as AuthMeResponse;

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { maskSecrets, maskOutput } from './digest';
 import { errorInfo, newCallId, type AiCallRecord, type AiLog } from './log';
 import { OPENROUTER_BASE_URL } from './models';
+import { beginActivity } from '../lib/progress';
 import { LlmError, extractJson, type LlmAvailability, type LlmProvider, type LlmRequest, type LlmResult } from './types';
 
 /**
@@ -101,6 +102,7 @@ export class OpenAiCompatProvider implements LlmProvider {
 
   /** 성공·실패와 관계없이 요청 하나마다 기록한다. 인증 헤더는 남기지 않는다. */
   private async request<T>(req: LlmRequest<T>, mode: OutputMode, started: number, attempt: number): Promise<LlmResult<T>> {
+    const end = beginActivity('ai');
     const at = Date.now();
     const record: AiCallRecord = {
       id: newCallId(), ...(req.trace ? { trace: req.trace } : {}), provider: 'openrouter', task: req.task ?? 'text', schemaName: req.schemaName,
@@ -116,6 +118,7 @@ export class OpenAiCompatProvider implements LlmProvider {
       throw err;
     } finally {
       record.durationMs = Date.now() - at;
+      end();
       await this.opts.log?.call(record);
     }
   }

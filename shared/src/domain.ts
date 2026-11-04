@@ -94,6 +94,8 @@ export type MessageRole =
   | 'interrupt';
 
 export interface MessageMeta {
+  /** 기록이 구분해 주는 진행 알림 / 사용자에게 전달한 최종 답변 */
+  phase?: 'commentary' | 'final_answer';
   openedFiles?: string[];
   commandName?: string;
   commandArgs?: string;
@@ -181,7 +183,10 @@ export interface TurnGroup {
   messageRange: [number, number];
   toolCallIds: string[];
   filesTouched: string[];
+  /** 작업 뒤에 남긴 답변 원문 전체. 화면 표시용이며 전송용 요약은 digest에서 따로 제한한다. */
   finalAssistantText?: string;
+  finalAssistantIndex?: number;
+  finalAssistantAt?: string;
   interrupted?: boolean;
 }
 

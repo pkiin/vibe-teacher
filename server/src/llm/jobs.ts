@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import type { BaseJobStatus, EnrichmentRecord } from '@vibe-teacher/shared';
+import { withProgress } from '../lib/progress';
 
 interface JobInternal<R> {
   status: BaseJobStatus<R>;
@@ -18,7 +19,7 @@ export class JobQueue<R = EnrichmentRecord> extends EventEmitter {
     const existing = this.findActive(sessionKey);
     if (existing) return existing;
     const id = randomUUID();
-    const status: BaseJobStatus<R> = { id, sessionKey, state: 'queued', createdAt: new Date().toISOString() };
+    const status: BaseJobStatus<R> = { id, sessionKey, state: 'queued', createdAt: new Date().toISOString(), progress: { phase: 'queued', percent: 0, aiCalls: 0, active: { reading: 0, writing: 0, ai: 0 } } };
     this.jobs.set(id, { status, run, controller: new AbortController() });
     this.queue.push(id);
     this.prune();
@@ -43,6 +44,7 @@ export class JobQueue<R = EnrichmentRecord> extends EventEmitter {
     if (j.status.state === 'queued') {
       this.queue = this.queue.filter((x) => x !== id);
       j.status.state = 'cancelled';
+      if (j.status.progress) j.status.progress.phase = 'cancelled';
       j.status.finishedAt = new Date().toISOString();
       this.emit('update', j.status);
     } else if (j.status.state === 'running') {
@@ -63,7 +65,12 @@ export class JobQueue<R = EnrichmentRecord> extends EventEmitter {
     this.emit('update', j.status);
     const started = Date.now();
     try {
-      const result = await j.run(j.controller.signal);
+      const result = await withProgress((progress) => {
+        if (j.status.state !== 'running') return;
+        j.status.progress = progress;
+        this.emit('update', j.status);
+      }, () => j.run(j.controller.signal));
+      j.controller.signal.throwIfAborted();
       j.status.state = 'done';
       j.status.result = result;
     } catch (err) {
@@ -71,6 +78,11 @@ export class JobQueue<R = EnrichmentRecord> extends EventEmitter {
       j.status.state = j.controller.signal.aborted ? 'cancelled' : 'error';
       j.status.error = { kind: e.kind ?? 'unknown', message: e.message ?? String(err), detail: e.detail };
     } finally {
+      if (j.status.progress) {
+        j.status.progress.phase = j.status.state === 'done' ? 'done' : j.status.state === 'cancelled' ? 'cancelled' : 'error';
+        if (j.status.state === 'done') j.status.progress.percent = 100;
+        j.status.progress.active = { reading: 0, writing: 0, ai: 0 };
+      }
       j.status.finishedAt = new Date().toISOString();
       j.status.durationMs = Date.now() - started;
       this.running = null;

@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { mapConcurrent } from '../lib/concurrent';
+import { beginActivity } from '../lib/progress';
 import { z } from 'zod';
 import {
   REPO_FEATURE_LIMITS,
@@ -384,16 +386,15 @@ export class FeatureAnalysisService {
 
   private async sessions(project: Project, feature: RepoFeature): Promise<FeatureMaterials['sessions']> {
     const ids = new Set(this.opts.index.getProjectIds(project.id));
-    const out: FeatureMaterials['sessions'] = [];
-    for (const s of feature.sessions.slice(0, 6)) {
+    const sessions = await mapConcurrent(feature.sessions.slice(0, 6), 6, async (s): Promise<FeatureMaterials['sessions'][number] | null> => {
       const summary = this.opts.index.getSummary(s.key);
-      if (!summary || !ids.has(summary.projectId)) continue;
+      if (!summary || !ids.has(summary.projectId)) return null;
       const session = await this.opts.index.loadSession(s.key);
       const enrichment = session ? await this.opts.enrich.getCached(session, 'any') : null;
-      out.push({ title: truncate(summary.title, 120), ...(enrichment ? { summary: enrichment.data.summary.oneLiner } : {}),
-        features: (enrichment?.data.summary.features ?? []).slice(0, 8).map((f) => ({ name: f.name, detail: truncate(f.detail, 300) })) });
-    }
-    return out;
+      return { title: truncate(summary.title, 120), ...(enrichment ? { summary: enrichment.data.summary.oneLiner } : {}),
+        features: (enrichment?.data.summary.features ?? []).slice(0, 8).map((f) => ({ name: f.name, detail: truncate(f.detail, 300) })) };
+    });
+    return sessions.filter((session): session is FeatureMaterials['sessions'][number] => !!session);
   }
 
   private async prepare(project: Project, featureId: string, level: ReaderLevel) {
@@ -426,13 +427,14 @@ export class FeatureAnalysisService {
     const { catalog, feature } = await this.prepare(project, featureId, level);
     const provider = gate.provider;
     const cfg = this.opts.store.get().llm;
-    const sessions = await this.sessions(project, feature);
     const job = this.jobs.enqueue(key, (signal) => withAiRun(this.opts.storage, { feature: 'repo_feature', projectId: project.id, readerLevel: level }, signal, async (run) => {
+      const sessions = await this.sessions(project, feature);
       const started = Date.now();
       const results: Omit<LlmResult<unknown>, 'data'>[] = [];
       const checkAbort = () => { if (signal.aborted) throw new LlmError('cancelled', '작업이 취소되었습니다'); };
       const cancelled = (err: unknown) => signal.aborted || (err instanceof LlmError && err.kind === 'cancelled');
-      const m = await collectFeatureMaterials({ root: project.rootPath, feature, files: catalog.files, sessions });
+      const endReading = beginActivity('reading', 'local');
+      const m = await collectFeatureMaterials({ root: project.rootPath, feature, files: catalog.files, sessions }).finally(endReading);
       const warnings: string[] = [];
       const answered: RepoFeatureQuestion[] = [];
       let rounds = 0, dropped = 0;
@@ -477,8 +479,8 @@ export class FeatureAnalysisService {
       const file = path.join(this.dir(project.id), `${featureId}.${level}.json`);
       const indexFile = path.join(this.dir(project.id), `index.${level}.json`);
       await this.opts.storage.lock(`repo-feature:${project.id}`, async () => {
-        await this.opts.storage.writeJson(file, page);
-        await this.opts.storage.writeJson(indexFile, { ...(await this.opts.storage.readJson<Record<string, string>>(indexFile) ?? {}), [featureId]: page.at });
+        const index = { ...(await this.opts.storage.readJson<Record<string, string>>(indexFile) ?? {}), [featureId]: page.at };
+        await this.opts.storage.writeJsonBatch([{ file, value: page }, { file: indexFile, value: index }]);
       });
       run.result(file, page);
       return { featureId, questions: answered.length, files: new Set(read.map((r) => r.path)).size };

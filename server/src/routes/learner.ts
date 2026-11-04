@@ -33,8 +33,8 @@ export function learnerRoutes(deps: AppDeps): Hono<AppEnv> {
     const learnerId = me(c);
     const [profile, events] = await Promise.all([deps.learner.profile(learnerId), deps.learner.events(learnerId)]);
     const catalog = deps.wiki.catalog();
-    for (const s of deps.index.getSessions(p.id).slice(0, 40)) {
-      const snap = await deps.wiki.current(p.id, s.key);
+    const snapshots = await Promise.all(deps.index.getSessions(p.id).slice(0, 40).map((s) => deps.wiki.current(p.id, s.key)));
+    for (const snap of snapshots) {
       for (const c of snap?.concepts ?? []) catalog.concepts.set(c.id, c);
     }
     const conceptNames: Record<string, string> = {};

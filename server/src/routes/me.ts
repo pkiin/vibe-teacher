@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { AssessmentRequestSchema, AssessmentResponseRequestSchema, FeedbackRequestSchema, type WikiSnapshot } from '@vibe-teacher/shared';
 import { z } from 'zod';
-import { ReaderPrefsRequestSchema, type KnowledgeTextStartResponse, type KnowledgeWikiResponse, type TextGenerator } from '@vibe-teacher/shared';
+import { ReaderPrefsRequestSchema, type KnowledgeTextStartResponse, type KnowledgeWikiResponse, type SavedKnowledgeResponse, type TextGenerator } from '@vibe-teacher/shared';
 import { textGate } from '../llm/gate';
 import { KnowledgeService } from '../learner/knowledge-service';
 import { KnowledgeTextService } from '../learner/knowledge-text';
+import { KnowledgeViewService } from '../learner/knowledge-view';
+import { reduceProfile, unknownConcept } from '../learner/reducer';
 import { learnerIdFor, type EventDraft } from '../learner/service';
 import { WikiStorage } from '../storage/store';
 import { assertAccount, currentUser, HttpError, notFound, parseBody, requireJson, sessionSummaryFor, type AppDeps, type AppEnv } from './deps';
@@ -19,14 +21,16 @@ const MemorySearchSchema = z.object({ query: z.string().trim().max(2000).default
  */
 export function meRoutes(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+  app.get('/storage', (c) => c.json(deps.storage?.activity() ?? { mode: 'local', tables: [] }));
   const knowledge = new KnowledgeService({ index: deps.index, analysis: deps.analysis, wiki: deps.wiki, learner: deps.learner, enrich: deps.enrich });
-  const texts = new KnowledgeTextService({ storage: deps.storage ?? new WikiStorage(deps.paths.home), store: deps.store });
+  const storage = deps.storage ?? new WikiStorage(deps.paths.home);
+  const texts = new KnowledgeTextService({ storage, store: deps.store });
+  const views = new KnowledgeViewService(storage);
   const me = (c: Context<AppEnv>) => learnerIdFor(currentUser(c).username);
   const accountScope = (c: Context<AppEnv>) => currentUser(c).cloud ? { accountIds: new Set(deps.index.getAccounts().filter((a) => deps.auth.canAccessAccount(currentUser(c), a.id)).map((a) => a.id)) } : {};
   const gate = (c: Context<AppEnv>) => textGate({ store: deps.store, resolveProvider: () => deps.enrich.resolveProvider(), allowed: deps.auth.canEnrich(currentUser(c)) });
 
-  /** 범위(전체·프로젝트·세션)를 검사하고 지식 위키 항목을 모은 뒤, 저장된 AI 문장을 입힌다 */
-  const knowledgeFor = async (c: Context<AppEnv>, scope: { projectId?: string; sessionKey?: string }) => {
+  const knowledgeScope = async (c: Context<AppEnv>, scope: { projectId?: string; sessionKey?: string }) => {
     await deps.index.ensureFresh();
     let { projectId } = scope;
     const { sessionKey } = scope;
@@ -37,11 +41,37 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
       projectId = p.id;
     }
     const session = sessionKey ? await sessionSummaryFor(c, deps, sessionKey) : undefined;
-    const base = await knowledge.wiki({ username: currentUser(c).username, learnerId: me(c), ...accountScope(c), ...(projectId ? { projectId } : {}), ...(session ? { session } : {}) });
-    const level = await deps.prefs.level(me(c));
-    const applied = await texts.apply(me(c), base.entries, level);
+    const accountIds = deps.index.getAccounts().filter((a) => deps.auth.canAccessAccount(currentUser(c), a.id)).map((a) => a.id);
+    return { ...(projectId ? { projectId } : {}), ...(session ? { sessionKey: session.key, session } : {}), accountIds };
+  };
+
+  /** 최신 목록은 저장해 두고 다음 방문 때 세션 스캔보다 먼저 표시한다. */
+  const knowledgeFor = async (c: Context<AppEnv>, scope: { projectId?: string; sessionKey?: string }) => {
+    const checked = await knowledgeScope(c, scope);
+    const [base, level, savedTexts] = await Promise.all([
+      knowledge.wiki({ username: currentUser(c).username, learnerId: me(c), ...accountScope(c), ...(checked.projectId ? { projectId: checked.projectId } : {}), ...(checked.session ? { session: checked.session } : {}) }),
+      deps.prefs.level(me(c)),
+      texts.texts(me(c)),
+    ]);
+    const applied = await texts.apply(me(c), base.entries, level, savedTexts);
+    // 파생 보기 캐시 실패가 이미 저장된 학습 상태·설명을 가리지 않게 한다.
+    await views.save(me(c), { ...checked, level }, base).catch(() => console.warn('[knowledge] 내 지식 보기 캐시를 저장하지 못했습니다'));
     return { base, level, ...applied };
   };
+
+  app.get('/knowledge/saved', async (c) => {
+    const scope = await knowledgeScope(c, { projectId: c.req.query('projectId') || undefined, sessionKey: c.req.query('sessionKey') || undefined });
+    const [level, events, savedTexts] = await Promise.all([deps.prefs.level(me(c)), deps.learner.events(me(c)), texts.texts(me(c))]);
+    const base = await views.read(me(c), { ...scope, level });
+    if (!base) return c.json({ view: null } satisfies SavedKnowledgeResponse);
+    const profile = reduceProfile(events, me(c));
+    const scoped = scope.session || scope.projectId ? reduceProfile(events.filter((event) => scope.session ? event.sessionKey === scope.session.key : !!event.projectId && deps.index.getProject(event.projectId)?.id === scope.projectId), me(c)) : null;
+    const current = base.entries.map((entry) => ({ ...entry, state: profile.concepts[entry.conceptId] ?? unknownConcept(entry.conceptId),
+      ...(scoped ? { scope: { kind: scope.session ? 'session' as const : 'project' as const, state: scoped.concepts[entry.conceptId] ?? unknownConcept(entry.conceptId) } } : {}) }));
+    const { entries, missing, generator } = await texts.apply(me(c), current, level, savedTexts);
+    const view: KnowledgeWikiResponse = { ...base, profile, entries, text: { generator: generator ? { kind: 'llm', ...generator } : { kind: 'unavailable' }, missing: missing.length, canGenerate: false } };
+    return c.json({ view } satisfies SavedKnowledgeResponse);
+  });
 
   const sessionContext = async (c: Context<AppEnv>, sessionKey?: string): Promise<{ projectId?: string; snapshot: WikiSnapshot | null }> => {
     if (!sessionKey) return { snapshot: null };

@@ -5,6 +5,7 @@ import { api, apiDelete, apiPost } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { useJob } from '../hooks/useJob';
+import { JobProgress } from './JobProgress';
 import { useReader } from '../hooks/useReader';
 import { ko } from '../i18n/ko';
 import { CodeBlock } from './CodeBlock';
@@ -14,6 +15,7 @@ import { ReaderLevelLine, ReaderLevelOptions } from './ReaderLevelPicker';
 import { Tabs } from './Tabs';
 import { RepoFlowView } from './RepoFlowView';
 import { RepoSourceViewer } from './RepoSourceViewer';
+import { sessionAnalysisPath } from '../lib/session-analysis';
 
 type FileSource = Extract<RepoSource, { kind: 'file' }>;
 export const SourceContext = createContext<(source: FileSource) => void>(() => {});
@@ -33,7 +35,7 @@ export function SourceChips({ sources }: { sources?: RepoSource[] }) {
               {s.path}{s.startLine ? `:${s.startLine}${s.endLine && s.endLine !== s.startLine ? `–${s.endLine}` : ''}` : ''}
             </button>
           ) : (
-            <Link key={i} className="pill pill-outline repo-source" to={`/sessions/${encodeURIComponent(s.key)}?tab=understand`}>
+            <Link key={i} className="pill pill-outline repo-source" to={sessionAnalysisPath(s.key)}>
               {ko.repo.session}: {s.title.length > 30 ? `${s.title.slice(0, 30)}…` : s.title}
             </Link>
           ),
@@ -243,13 +245,12 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
       {working ? ko.repo.building : wiki ? ko.repo.update : ko.repo.build}
     </button>
   );
-  const progress = jobId && (
-    <Notice kind="info">
-      <span>{ko.repo.writing}</span>
-      <button className="btn btn-small" onClick={cancel}>
+  const progress = (
+    <JobProgress job={job} busy={working} preparing={busy} label={ko.repo.writing}>
+      {jobId && <button className="btn btn-small" onClick={cancel}>
         {ko.repo.cancel}
-      </button>
-    </Notice>
+      </button>}
+    </JobProgress>
   );
   if (!wiki) {
     return (

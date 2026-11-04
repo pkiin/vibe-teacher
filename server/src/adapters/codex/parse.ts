@@ -19,6 +19,11 @@ function strip(value: unknown): unknown {
         const content = payload.content;
         const images = Array.isArray(content) ? content.filter((part) => part?.type === 'input_image').map(() => ({ type: 'input_image' })) : [];
         value = { ...line, payload: { ...payload, content: [{ type: 'input_text', text: cleanCodexUserText(partsText(content)) }, ...images] } };
+      } else if (line.type === 'response_item' && payload.type === 'message' && payload.role === 'assistant') {
+        // 읽는 화면의 답변 원문은 자르지 않는다. 도구 입력·출력 등의 크기 제한은 유지한다.
+        return { ...capStrings(line, 4000), payload: { ...capStrings(payload, 4000), content: partsText(payload.content) } };
+      } else if (line.type === 'event_msg' && payload.type === 'agent_message') {
+        return { ...capStrings(line, 4000), payload: { ...capStrings(payload, 4000), message: typeof payload.message === 'string' ? payload.message : '' } };
       }
     }
   }
@@ -105,7 +110,7 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
   let isSubagent = false;
   const fallbackHumans: Message[] = [];
   let seenAssistantIds = new Set<string>();
-  let lastAgentMessageText: string | undefined;
+  const eventAssistants = new Set<Message>();
 
   const push = (m: Omit<Message, 'index' | 'id'> & { id?: string }): Message => {
     const msg: Message = { ...m, id: m.id ?? `${messages.length}`, index: messages.length };
@@ -161,7 +166,10 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
             counts.slashCommands += 1;
           }
         } else if (p.type === 'agent_message') {
-          lastAgentMessageText = (p as { message?: string }).message;
+          const ev = p as { message?: string; phase?: string };
+          if (ev.message?.trim()) eventAssistants.add(push({ role: 'assistant', text: ev.message, timestamp: ts, meta: ev.phase === 'commentary' || ev.phase === 'final_answer' ? { phase: ev.phase } : undefined }));
+        } else if (p.type === 'turn_aborted') {
+          push({ role: 'interrupt', timestamp: ts });
         } else if (p.type === 'exec_command_end') {
           const ev = p as { call_id?: string; exit_code?: number; stdout?: string; stderr?: string };
           const tcs = ev.call_id ? pending.get(ev.call_id) : undefined;
@@ -172,7 +180,7 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
       case 'response_item': {
         const p = (payload ?? {}) as ResponseItemPayload;
         if (p.type === 'message') {
-          const msg = p as { role: string; content?: unknown; id?: string };
+          const msg = p as { role: string; content?: unknown; id?: string; phase?: string };
           const text = partsText(msg.content);
           if (msg.role === 'user') {
             if (isSubagent) break;
@@ -188,7 +196,7 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
             if (seenAssistantIds.has(key)) break;
             seenAssistantIds.add(key);
             counts.assistant += 1;
-            push({ role: 'assistant', text, timestamp: ts });
+            push({ role: 'assistant', text, timestamp: ts, meta: msg.phase === 'commentary' || msg.phase === 'final_answer' ? { phase: msg.phase } : undefined });
           } else if (msg.role === 'developer' || msg.role === 'system') {
             push({ role: 'system-injected', text: truncate(text, 300), timestamp: ts });
           }
@@ -278,10 +286,32 @@ export async function parseCodexFile(filePath: string): Promise<{ draft: Normali
     const first = fallbackHumans[0];
     firstPrompt = first?.role === 'slash-command' ? `/${first.text}` : first?.text;
   }
-  if (!messages.some((m) => m.role === 'assistant') && lastAgentMessageText) {
-    counts.assistant += 1;
-    push({ role: 'assistant', text: lastAgentMessageText });
+  // 같은 요청의 response_item과 agent_message에 중복된 답변은 한 번만 싣는다.
+  // 이벤트만 남은 요청의 답변도 원래 위치에 보존한다.
+  const normalized: Message[] = [];
+  let turn: Message[] = [];
+  const flushTurn = () => {
+    const responses = new Map(turn.filter((m) => m.role === 'assistant' && !eventAssistants.has(m)).map((m) => [m.text, m]));
+    for (const m of turn) {
+      const response = eventAssistants.has(m) ? responses.get(m.text) : undefined;
+      if (response) {
+        if (!response.meta?.phase && m.meta?.phase) response.meta = { ...response.meta, phase: m.meta.phase };
+      } else normalized.push(m);
+    }
+    turn = [];
+  };
+  for (const m of messages) {
+    if (m.role === 'human' || m.role === 'slash-command') flushTurn();
+    turn.push(m);
   }
+  flushTurn();
+  messages.length = 0;
+  normalized.forEach((m, index) => {
+    m.index = index;
+    if (m.toolCall) m.toolCall.messageIndex = index;
+    messages.push(m);
+  });
+  counts.assistant = messages.filter((m) => m.role === 'assistant').length;
 
   const draft: NormalizedDraft = {
     sessionId: sessionId || path.basename(filePath, '.jsonl'),

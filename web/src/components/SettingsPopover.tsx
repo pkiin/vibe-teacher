@@ -5,6 +5,7 @@ import { ko } from '../i18n/ko';
 import { Modal } from './Modal';
 import { ReaderLevelOptions } from './ReaderLevelPicker';
 import { ThemePicker } from './ThemePicker';
+import { StorageActivity } from './StorageActivity';
 
 export function SettingsPopover() {
   const [open, setOpen] = useState(false);
@@ -39,6 +40,7 @@ export function SettingsPopover() {
         {busy && <p className="small" role="status">{ko.settings.saving}</p>}
         {error && <p className="notice notice-error" role="alert">{error.message}</p>}
       </section>}
+      <StorageActivity />
     </Modal>
   </>;
 }

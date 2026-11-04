@@ -133,6 +133,7 @@ describe('home-token login and account scoping', () => {
     expect((await app.request(`/api/accounts/${bob.id}`, { headers: h })).status).toBe(404);
     const bobSessions = (await (await app.request(`/api/accounts/${bob.id}/projects`, { headers: { authorization: 'Bearer master' } })).json()) as Project[];
     const bobSess = (await (await app.request(`/api/projects/${bobSessions[0]!.id}/sessions`, { headers: { authorization: 'Bearer master' } })).json()) as SessionSummary[];
+    expect((await app.request(`/api/projects/${bobSessions[0]!.id}/session-analyses`, { headers: h })).status).toBe(404);
     expect((await app.request(`/api/sessions/${encodeURIComponent(bobSess[0]!.key)}/user-messages`, { headers: h })).status).toBe(404);
     expect((await app.request(`/api/projects?account=${bob.id}`, { headers: h })).status).toBe(200);
     expect((await (await app.request(`/api/projects?account=${bob.id}`, { headers: h })).json()) as Project[]).toEqual([]);

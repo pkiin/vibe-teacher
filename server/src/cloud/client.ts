@@ -1,4 +1,6 @@
 import { isLoopbackHost } from '../config/env';
+import type { CloudTableActivity } from '@vibe-teacher/shared';
+import { beginActivity } from '../lib/progress';
 
 export interface CloudConfig {
   url: string;
@@ -44,9 +46,27 @@ export class CloudError extends Error {
 
 /** 사용자 토큰으로만 Data API를 호출한다. 관리자 키나 DB 암호를 사용하지 않는다. */
 export class CloudClient {
+  readonly since = new Date().toISOString();
+  private readonly activity = new Map<string, CloudTableActivity>();
   constructor(readonly config: CloudConfig, public accessToken = '', private readonly request: typeof fetch = fetch) {}
 
   async call<T>(route: string, init: RequestInit = {}): Promise<T> {
+    const reading = !init.method || init.method === 'GET';
+    const table = route.split('?')[0]!.replace('/rest/v1/', '');
+    const stat = this.activity.get(table) ?? { table, reads: 0, writes: 0, errors: 0, durationMs: 0, requestBytes: 0, responseBytes: 0 };
+    this.activity.set(table, stat);
+    if (reading) stat.reads++; else stat.writes++;
+    stat.requestBytes += typeof init.body === 'string' ? Buffer.byteLength(init.body) : 0;
+    const at = Date.now();
+    const end = beginActivity(reading ? 'reading' : 'writing', 'supabase');
+    try { return await this.execute<T>(route, init, stat); }
+    catch (error) { stat.errors++; throw error; }
+    finally { stat.durationMs += Date.now() - at; end(); }
+  }
+
+  stats(): CloudTableActivity[] { return [...this.activity.values()].map((row) => ({ ...row })); }
+
+  private async execute<T>(route: string, init: RequestInit, stat: CloudTableActivity): Promise<T> {
     const headers = new Headers(init.headers);
     headers.set('apikey', this.config.key);
     headers.set('content-type', 'application/json');
@@ -72,6 +92,7 @@ export class CloudClient {
       throw new CloudError(503, 'cloud_storage_error', 'Supabase 저장소를 사용할 수 없습니다. 관리자에게 마이그레이션과 권한 설정 확인을 요청하세요');
     }
     const text = await response.text();
+    stat.responseBytes += Buffer.byteLength(text);
     return (text ? JSON.parse(text) : undefined) as T;
   }
 

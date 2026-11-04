@@ -19,6 +19,8 @@ import { REPO_AI_SYSTEM_PROMPT, REPO_FLOW_SYSTEM_PROMPT, RepoAiOutputSchema, app
 import { scanRepo, type RepoScan } from './scan';
 import { buildRepoWiki, REPO_WIKI_VERSION, type RepoSessionDigest } from './wiki';
 import { inspectRepo, REPO_INSPECTION_LIMITS } from './inspect';
+import { mapConcurrent } from '../lib/concurrent';
+import { beginActivity } from '../lib/progress';
 
 const MAX_SESSIONS = 60;
 const MAX_HISTORY = 30;
@@ -202,16 +204,14 @@ export class RepoWikiService {
 
   /** AI 입력으로 사용할 원본 자료와 세션 요약을 수집한다. */
   private async draft(project: Project): Promise<Draft> {
-    const scan = await scanRepo(project.rootPath);
-    const digests: RepoSessionDigest[] = [];
-    for (const summary of this.sessions(project.id)) {
+    const [scan, sessionDigests, saved] = await Promise.all([scanRepo(project.rootPath), mapConcurrent(this.sessions(project.id), 6, async (summary): Promise<RepoSessionDigest | null> => {
       const session = await this.opts.index.loadSession(summary.key);
-      if (!session) continue;
-      const { built } = await this.opts.analysis.analyze(session);
-      const snapshot = await this.opts.wiki.current(project.id, summary.key);
-      const enrichment = await this.opts.enrich.getCached(session, 'any');
+      if (!session) return null;
+      const [{ built }, snapshot, enrichment] = await Promise.all([
+        this.opts.analysis.analyze(session), this.opts.wiki.current(project.id, summary.key), this.opts.enrich.getCached(session, 'any'),
+      ]);
       const first = session.messages.find((m) => m.role === 'human' && m.text && !m.meta?.subagentId)?.text;
-      digests.push({
+      return {
         key: summary.key,
         title: summary.title,
         ...((summary.endedAt ?? summary.startedAt) ? { at: summary.endedAt ?? summary.startedAt } : {}),
@@ -222,9 +222,10 @@ export class RepoWikiService {
         built,
         findings: snapshot?.findings ?? [],
         securityReviewed: !!snapshot,
-      });
-    }
-    const previous = (await this.saved(project.id))?.draft ?? null;
+      };
+    }), this.saved(project.id)]);
+    const digests = sessionDigests.filter((digest): digest is RepoSessionDigest => !!digest);
+    const previous = saved?.draft ?? null;
     const draft = buildRepoWiki({ project: { id: project.id, name: project.name, rootPath: project.rootPath }, scan, sessions: digests, previous });
     return { scan, digests, draft };
   }
@@ -245,17 +246,26 @@ export class RepoWikiService {
     if (active) return { status: active.state === 'running' ? 'running' : 'queued', jobId: active.id };
     const gate = await this.gate(allowed);
     if (!gate.ok) throw Object.assign(new Error(gate.reason), { status: 409, code: 'llm_unavailable' });
-    const { scan, digests, draft } = await this.draft(project);
-    const { user, flowUser, handles } = buildRepoAiPrompt({ draft, scan, sessions: digests });
-    const f = this.files(project.id);
-    await this.opts.storage.lock(`repo:${project.id}`, async () => {
-      await this.opts.storage.writeJson(f.current, draft);
-      await this.opts.storage.writeJson(f.materials, { revision: draft.revision, user, flowUser, handles: [...handles.entries()], files: scan.files.map((x) => x.path) } satisfies Materials);
-      const history = (await this.history(project.id)).filter((h) => h.revision !== draft.revision);
-      history.unshift({ revision: draft.revision, builtAt: draft.builtAt, changes: draft.changes, sessions: digests.length });
-      await this.opts.storage.writeJson(f.history, history.slice(0, MAX_HISTORY));
+    const job = this.jobs.enqueue(RepoWikiService.jobKey(project.id, level), async (signal) => {
+      const end = beginActivity('reading', 'local');
+      const prepared = await this.draft(project).finally(end);
+      signal.throwIfAborted();
+      const { scan, digests, draft } = prepared;
+      const { user, flowUser, handles } = buildRepoAiPrompt({ draft, scan, sessions: digests });
+      const f = this.files(project.id);
+      await this.opts.storage.lock(`repo:${project.id}`, async () => {
+        signal.throwIfAborted();
+        const history = (await this.history(project.id)).filter((h) => h.revision !== draft.revision);
+        history.unshift({ revision: draft.revision, builtAt: draft.builtAt, changes: draft.changes, sessions: digests.length });
+        await this.opts.storage.writeJsonBatch([
+          { file: f.current, value: draft },
+          { file: f.materials, value: { revision: draft.revision, user, flowUser, handles: [...handles.entries()], files: scan.files.map((x) => x.path) } satisfies Materials },
+          { file: f.history, value: history.slice(0, MAX_HISTORY) },
+        ]);
+      });
+      return this.generateText(project, level, gate, false, signal);
     });
-    return this.writeText(project, level, allowed, false);
+    return { status: job.state === 'running' ? 'running' : 'queued', jobId: job.id };
   }
 
   /**
@@ -263,17 +273,33 @@ export class RepoWikiService {
    * 같은 입력(판·수준·제공자·모델)이면 다시 부르지 않는다. 실패한 입력도 force 없이는 다시 부르지 않는다.
    */
   async writeText(project: Project, level: ReaderLevel, allowed: Allowed, force: boolean): Promise<RepoWikiBuildResponse> {
-    const done = async (): Promise<RepoWikiBuildResponse> => ({ status: 'done', response: await this.get(project, level, allowed) });
     const key = RepoWikiService.jobKey(project.id, level);
     const active = this.jobs.findActive(key);
     if (active) return { status: active.state === 'running' ? 'running' : 'queued', jobId: active.id };
     const gate = await this.gate(allowed);
     if (!gate.ok) throw Object.assign(new Error(gate.reason), { status: 409, code: 'llm_unavailable' });
+    if (!force) {
+      const saved = await this.saved(project.id);
+      const [materials, layer] = await Promise.all([
+        saved ? this.opts.storage.readJson<Materials>(saved.files.materials) : null,
+        saved ? this.layer(project.id, saved.draft.revision, level) : null,
+      ]);
+      const inputHash = materials ? shortId(`${withReader(REPO_AI_SYSTEM_PROMPT, level)}|${materials.user}|${gate.provider.id}|${modelFor(gate.provider.id, this.opts.store.get().llm) ?? ''}`, 16) : null;
+      if (!saved || !materials || materials.revision !== saved.draft.revision || (saved.draft.generator.version === REPO_WIKI_VERSION && layer?.inputHash === inputHash)) {
+        return { status: 'done', response: await this.get(project, level, allowed) };
+      }
+    }
+    // 새 판 수집·저장·AI 실행을 같은 작업으로 관찰할 수 있도록 준비도 큐 안에서 한다.
+    const job = this.jobs.enqueue(key, (signal) => this.generateText(project, level, gate, force, signal));
+    return { status: job.state === 'running' ? 'running' : 'queued', jobId: job.id };
+  }
+
+  private async generateText(project: Project, level: ReaderLevel, gate: Extract<TextGate, { ok: true }>, force: boolean, signal: AbortSignal): Promise<RepoJobResult> {
     const f = this.files(project.id);
     const saved = await this.saved(project.id);
     const draft = saved?.draft;
     const materials = saved ? await this.opts.storage.readJson<Materials>(saved.files.materials) : null;
-    if (!draft || !materials || materials.revision !== draft.revision) return done();
+    if (!draft || !materials || materials.revision !== draft.revision) return { revision: draft?.revision ?? '', level, generator: draft?.generator.kind ?? 'pending' };
     if (draft.generator.version !== REPO_WIKI_VERSION) throw Object.assign(new Error('이전 형식의 위키입니다. 먼저 업데이트해 주세요.'), { status: 409, code: 'wiki_stale' });
 
     const provider = gate.provider;
@@ -281,10 +307,11 @@ export class RepoWikiService {
     const system = withReader(REPO_AI_SYSTEM_PROMPT, level);
     const inputHash = shortId(`${system}|${materials.user}|${provider.id}|${modelFor(provider.id, cfg) ?? ''}`, 16);
     const layer = await this.layer(project.id, draft.revision, level);
-    if (!force && layer?.revision === draft.revision && layer.promptVersion === REPO_TEXT_VERSION && layer.inputHash === inputHash) return done();
+    if (!force && layer?.revision === draft.revision && layer.promptVersion === REPO_TEXT_VERSION && layer.inputHash === inputHash) return { revision: draft.revision, level, generator: layer.generator.kind };
 
     const known = await this.knownFeatures(project.id);
-    const job = this.jobs.enqueue(key, (signal) => withAiRun(this.opts.storage, { feature: 'repo_wiki', projectId: project.id, readerLevel: level }, signal, async (run) => {
+    signal.throwIfAborted();
+    return withAiRun(this.opts.storage, { feature: 'repo_wiki', projectId: project.id, readerLevel: level }, signal, async (run) => {
       const base = { promptVersion: REPO_TEXT_VERSION, revision: draft.revision, level, inputHash, at: new Date().toISOString() };
       try {
         const inspection = await inspectRepo({ root: project.rootPath, draft, files: materials.files, provider, level, signal, trace: run.trace });
@@ -316,7 +343,6 @@ export class RepoWikiService {
         run.result(f.text(level), failed);
         throw e;
       }
-    }));
-    return { status: job.state === 'running' ? 'running' : 'queued', jobId: job.id };
+    });
   }
 }

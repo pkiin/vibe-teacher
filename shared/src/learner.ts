@@ -249,3 +249,6 @@ export interface KnowledgeWikiResponse {
 }
 
 export type KnowledgeTextStartResponse = { status: 'done' } | { status: 'running' | 'queued'; jobId: string };
+
+/** 저장된 목록을 먼저 표시한다. 최신 세션 확인과 AI 작성은 별도로 진행한다. */
+export interface SavedKnowledgeResponse { view: KnowledgeWikiResponse | null }

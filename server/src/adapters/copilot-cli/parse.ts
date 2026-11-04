@@ -77,7 +77,15 @@ export async function parseCopilotCliFile(filePath: string): Promise<{ draft: No
     if (!endedAt || iso > endedAt) endedAt = iso;
   };
 
-  for await (const { value } of readJsonl(filePath, { strip: (v) => capStrings(v, 4000), warnings })) {
+  const strip = (value: unknown) => {
+    const capped = capStrings(value, 4000);
+    const original = value as CopilotEvent | null;
+    if (original?.type === 'assistant.message' && typeof original.data?.content === 'string') {
+      return { ...capped as CopilotEvent, data: { ...(capped as CopilotEvent).data, content: original.data.content } };
+    }
+    return capped;
+  };
+  for await (const { value } of readJsonl(filePath, { strip, warnings })) {
     const ev = value as CopilotEvent;
     if (!ev || typeof ev !== 'object' || typeof ev.type !== 'string') continue;
     const data = (ev.data ?? {}) as Record<string, unknown>;

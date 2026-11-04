@@ -229,6 +229,7 @@ export interface BaseJobStatus<R> {
   startedAt?: string;
   finishedAt?: string;
   durationMs?: number;
+  progress?: import('./progress').WorkProgress;
   error?: { kind: string; message: string; detail?: string };
   result?: R;
 }

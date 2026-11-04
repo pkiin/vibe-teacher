@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { LlmProviderId, ReaderLevel } from '@vibe-teacher/shared';
 import type { WikiStorage } from '../storage/store';
 import { LlmError } from './types';
+import { artifactSaved } from '../lib/progress';
 
 /** 사용자 작업 하나의 종류. 실제 API 요청 여러 개(재시도·보조 확인 포함)를 묶는다. */
 export type AiFeature = 'session_enrich' | 'session_wiki' | 'repo_wiki' | 'repo_feature' | 'knowledge_text' | 'help_answer' | 'practice_question' | 'memory_extract';
@@ -99,6 +100,7 @@ export async function withAiRun<T>(storage: WikiStorage | undefined, info: AiTra
   };
   try {
     const out = await fn(run);
+    artifactSaved();
     await log?.run({ trace, status: 'done', startedAt, finishedAt: new Date().toISOString(), ...saved });
     return out;
   } catch (err) {

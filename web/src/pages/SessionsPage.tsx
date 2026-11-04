@@ -5,6 +5,7 @@ import { ErrorBox, Loading, Notice } from '../components/Notice';
 import { KnowledgeList } from '../components/KnowledgeList';
 import { RepoWikiView } from '../components/RepoWikiView';
 import { SessionRow } from '../components/SessionRow';
+import { SessionAnalysisIndex } from '../components/SessionAnalysisTree';
 import { Tabs } from '../components/Tabs';
 import { useApi } from '../hooks/useApi';
 import { ko } from '../i18n/ko';
@@ -46,6 +47,7 @@ function ProjectSessions({ projectId }: { projectId: string }) {
       />
       {tab === 'wiki' && (
         <div className="tab-body">
+          <SessionAnalysisIndex projectId={projectId} />
           <RepoWikiView key={projectId} projectId={projectId} />
         </div>
       )}

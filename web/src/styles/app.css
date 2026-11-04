@@ -185,11 +185,24 @@ h4 { font-size: var(--ui-font-size); margin: 12px 0 6px; }
 .evidence li { padding: 2px 0; border: none; }
 .cmd-group { margin: 6px 0; }
 .cmd-group-head { background: none; border: none; font: inherit; font-weight: 600; cursor: pointer; padding: 4px 0; color: var(--text); }
-.timeline { padding-left: 20px; }
-.timeline li { margin-bottom: 10px; }
-.tl-prompt { font-weight: 500; }
-.tl-prompt .link { padding: 0; text-align: left; white-space: normal; }
-.tl-answer { color: var(--muted); font-size: var(--font-small); margin-top: 2px; white-space: pre-wrap; }
+.turn-report { margin: var(--space) 0; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.turn-report > summary { cursor: pointer; padding: var(--card-padding); }
+.turn-report-heading { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.report-request-preview { display: block; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.turn-report[open] > summary .report-request-preview { display: none; }
+.turn-report-body { padding: var(--card-padding); border-top: 1px solid var(--border); }
+.report-request { background: var(--surface); border-radius: 6px; padding: var(--card-padding); margin-bottom: var(--space); }
+.report-request h3 { margin: 0; }
+.report-request-text { margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-report { color: var(--text); font-size: var(--ui-font-size); line-height: var(--read-line-height); overflow-wrap: anywhere; }
+.agent-report > h3 { margin-top: 0; }
+.agent-report .markdown p { white-space: pre-line; }
+.markdown blockquote { border-left: 3px solid var(--border); margin: var(--space) 0; padding-left: var(--space); color: var(--muted); }
+.report-plain, .report-records { margin-top: var(--space); }
+.report-plain > summary, .report-records > summary, .built-records > summary { cursor: pointer; }
+.report-plain pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--code-font-size); font-family: var(--mono); }
+.report-records li { overflow-wrap: anywhere; }
+.turn-report > summary:focus-visible, .built-records > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .concepts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; }
 .concept { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
@@ -321,7 +334,7 @@ textarea { font-family: var(--mono); font-size: var(--font-small); }
 .llm-models-select { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
 .llm-model-info .pill:first-child { margin-left: 0; }
 
-/* ---- 이번 세션 이해하기 (통합 화면 + 도움 패널) ---- */
+/* ---- 세션 (대화 기록) 분석 문서 + 도움 패널 ---- */
 .content:has(.understand) { max-width: 1440px; }
 .understand { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
 .understand-main { min-width: 0; }
@@ -377,6 +390,13 @@ textarea { font-family: var(--mono); font-size: var(--font-small); }
 .knowledge-state { font-weight: 500; }
 .knowledge-reason { margin: 6px 0; }
 .knowledge-sources { margin-bottom: 4px; }
+.analysis-tree { margin-bottom: var(--space); }
+.analysis-tree ul { list-style: none; padding-left: 1rem; border-left: 1px solid var(--border); }
+.analysis-tree li { margin: .6rem 0; overflow-wrap: anywhere; }
+.analysis-tree summary { cursor: pointer; }
+.analysis-tree p { margin: .5rem 0; }
+.analysis-tree a:focus-visible, .knowledge-sources a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.understand-main :is(section[id], h2[id], article[id]) { scroll-margin-top: 100px; }
 .knowledge-explain { margin-top: 8px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 
 /* ---- 레포 위키 ---- */
@@ -673,3 +693,20 @@ summary::marker { color: var(--muted); }
 .member-account { display: flex; gap: 8px; align-items: baseline; margin: 8px 0; flex-wrap: wrap; }
 @media (max-width: 850px) { .stage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .welcome-auth { grid-template-columns: 1fr; gap: 24px; max-width: 600px; } .welcome-auth .login-card { max-width: none; } }
 @media (max-width: 480px) { .stage-grid { grid-template-columns: 1fr; } .welcome-auth { padding: 24px 16px; } }
+/* 작업 단계는 실제 IO 상태를 사용하며 타이머로 진행률을 올리지 않는다. */
+.work-progress { margin-block: 12px; padding: var(--card-padding, 14px); border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); }
+.work-heading, .work-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.work-progress p { margin-block: 8px; }
+.work-percent { font-variant-numeric: tabular-nums; font-weight: 700; }
+.work-progress progress { display: block; width: 100%; height: 9px; border: 0; border-radius: 8px; overflow: hidden; accent-color: var(--accent); }
+.work-progress progress::-webkit-progress-bar { background: var(--surface); border-radius: 8px; }
+.work-progress progress::-webkit-progress-value { background: var(--accent); border-radius: 8px; }
+.work-progress progress::-moz-progress-bar { background: var(--accent); border-radius: 8px; }
+.work-steps { display: flex; justify-content: space-between; gap: 8px; padding: 0; margin-block: 10px; list-style: none; font-size: .8em; color: var(--muted); }
+.work-step-reached { color: var(--text); font-weight: 600; }
+.work-progress .work-estimate { margin-bottom: 0; font-size: .8em; }
+.network-activity { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; align-items: center; gap: 8px; padding: 10px 16px; max-width: calc(100vw - 32px); border: 1px solid var(--border); border-radius: 24px; background: var(--panel); color: var(--text); box-shadow: 0 4px 20px #0002; font-size: .85em; pointer-events: none; }
+.activity-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.storage-activity summary { cursor: pointer; font-weight: 600; }
+.storage-activity .table-scroll { overflow-x: auto; margin-block: 12px; }
+@media (max-width: 480px) { .work-steps { gap: 4px; font-size: .75em; } .network-activity { bottom: 10px; width: max-content; } }

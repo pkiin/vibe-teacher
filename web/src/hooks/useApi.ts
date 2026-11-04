@@ -17,15 +17,17 @@ export function useApi<T>(path: string | null, deps: unknown[] = []): ApiState<T
   const latest = useRef(0);
 
   useEffect(() => {
+    const id = ++latest.current;
     if (!path) {
       setData(null);
+      setError(null);
       setLoading(false);
       return;
     }
-    const id = ++latest.current;
+    setData(null);
     setLoading(true);
     setError(null);
-    api<T>(path)
+    api<T>(path, tick ? { cache: 'no-store' } : {})
       .then((d) => {
         if (latest.current === id) setData(d);
       })
@@ -35,6 +37,7 @@ export function useApi<T>(path: string | null, deps: unknown[] = []): ApiState<T
       .finally(() => {
         if (latest.current === id) setLoading(false);
       });
+    return () => { latest.current++; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, tick, ...deps]);
 
