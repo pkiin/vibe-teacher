@@ -135,6 +135,8 @@ export interface AuthMeResponse {
   osUser?: string | null;
   localOwner?: boolean;
   canManageInstallation?: boolean;
+  /** 소스 설정의 스캔 범위를 보고 바꿀 수 있는지 (SSH 터널 서버는 서버 실행 계정으로 접속한 관리자만) */
+  canManageScan?: boolean;
 }
 
 export interface LoginRequest {

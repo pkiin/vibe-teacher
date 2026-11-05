@@ -19,8 +19,9 @@ export interface AuthUser {
   via: 'cookie' | 'bearer' | 'open';
   cloud?: {
     userId: string; email: string; accessToken: string; approved: boolean; accountIds: string[]; localOwner: boolean;
-    /** SSH 터널 서버에서 이 연결을 연 OS 계정. 확인하지 못하면 null */
+    /** SSH 터널 서버에서 이 연결을 연 OS 계정과 uid. 확인하지 못하면 null */
     osUser?: string | null;
+    osUid?: number | null;
   };
 }
 
@@ -81,6 +82,17 @@ export class AuthService {
 
   isAdmin(username: string): boolean {
     return username === this.opts.serviceUser || this.opts.store.get().auth.admins.includes(username);
+  }
+
+  /**
+   * 스캔 범위는 다른 OS 계정의 홈까지 읽게 하는 설정이다. SSH 터널 서버에서는 서버를 실행하는 계정으로
+   * 접속한 설치 관리자만 바꾼다. 다른 계정으로 접속한 Supabase 관리자에게는 보이지 않는다.
+   */
+  canManageScan(user: AuthUser): boolean {
+    if (!user.isAdmin && !user.cloud?.localOwner) return false;
+    if (this.cloud?.config.deployment !== 'ssh') return true;
+    const self = this.opts.serviceUid ?? process.getuid?.();
+    return self !== undefined && user.cloud?.osUid === self;
   }
 
   canEnrich(user: AuthUser): { ok: boolean; reason?: string } {
@@ -146,7 +158,7 @@ export class AuthService {
     const uid = await this.peerUid(c);
     let os: { username: string; home: string } | undefined;
     if (uid !== null) for (const [home, v] of await this.passwdHomes()) if (v.uid === uid) { os = { username: v.username, home }; break; }
-    return { ...user, cloud: { ...user.cloud, accountIds: os ? [accountIdFor(os.home)] : [], osUser: os?.username ?? null } };
+    return { ...user, cloud: { ...user.cloud, accountIds: os ? [accountIdFor(os.home)] : [], osUser: os?.username ?? null, osUid: uid } };
   }
 
   private bearerUser(c: Context): AuthUser | null {

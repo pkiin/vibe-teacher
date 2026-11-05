@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh().catch(() => {});
     return onUnauthorized(() => {
       // 세션이 만료되면 로그인 화면으로
-      setMe((prev) => (prev && prev.authenticated && prev.mode !== 'none' ? { ...prev, authenticated: false, username: undefined, isAdmin: undefined, canManageInstallation: false, reader: null, email: undefined } : prev));
+      setMe((prev) => (prev && prev.authenticated && prev.mode !== 'none' ? { ...prev, authenticated: false, username: undefined, isAdmin: undefined, canManageInstallation: false, canManageScan: false, reader: null, email: undefined } : prev));
     });
   }, [refresh]);
 

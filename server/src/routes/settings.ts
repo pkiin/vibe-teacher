@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { LlmModelsResponse, SettingsResponse, SettingsUpdateRequest } from '@vibe-teacher/shared';
 import { LlmSchema } from '../config/schema';
 import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENROUTER_MODEL } from '../llm/models';
-import { HttpError, requireInstallationAdmin, type AppDeps, type AppEnv } from './deps';
+import { HttpError, currentUser, requireInstallationAdmin, type AppDeps, type AppEnv } from './deps';
 
 const UpdateSchema = z.object({
   scan: z
@@ -79,6 +79,9 @@ export function settingsRoutes(deps: AppDeps): Hono<AppEnv> {
     const parsed = UpdateSchema.safeParse(await c.req.json<SettingsUpdateRequest>().catch(() => ({})));
     if (!parsed.success) throw new HttpError(400, 'bad_request', '설정 형식이 올바르지 않습니다');
     const scanChanged = !!parsed.data.scan;
+    if (scanChanged && !deps.auth.canManageScan(currentUser(c))) {
+      throw new HttpError(403, 'forbidden', `스캔 범위는 서버를 실행하는 계정(${deps.auth.serviceUser})으로 접속해 바꿀 수 있습니다`);
+    }
     await deps.store.update((cfg) => {
       if (parsed.data.scan) cfg.scan = { ...cfg.scan, ...stripUndefined(parsed.data.scan) };
       if (parsed.data.llm) cfg.llm = LlmSchema.parse({ ...cfg.llm, ...stripUndefined(parsed.data.llm) });
