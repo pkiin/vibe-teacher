@@ -13,6 +13,7 @@ import { ErrorBox, Loading, Notice } from './Notice';
 import { QuizCard } from './QuizCard';
 import { ConceptBody } from './WikiItemCard';
 import { LearningHistory } from './LearningHistory';
+import { KnowledgeDashboard } from './KnowledgeDashboard';
 import { askConceptPath, conceptAnchor, sessionAnalysisPath } from '../lib/session-analysis';
 
 const STATE_PILL: Record<string, string> = { unknown: 'pill-gray', partial: 'pill-blue', demonstrated: 'pill-green', conflicting: 'pill-yellow' };
@@ -286,6 +287,7 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
     <div className="knowledge">
       {refreshing && <p className="small muted" role="status">{ko.knowledge.checkingSaved}</p>}
       {error && <ErrorBox error={error} onRetry={load} />}
+      {showMeta && <KnowledgeDashboard entries={data.entries} />}
       {showMeta && (
         <p className="small muted">
           {ko.knowledge.note} {ko.knowledge.scanned(data.scannedSessions, data.totalSessions)}

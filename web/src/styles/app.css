@@ -397,6 +397,33 @@ textarea { font-family: var(--mono); font-size: var(--font-small); }
 .analysis-tree p { margin: .5rem 0; }
 .analysis-tree a:focus-visible, .knowledge-sources a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .understand-main :is(section[id], h2[id], article[id]) { scroll-margin-top: 100px; }
+/* ---- 내 지식 대시보드: 숫자 타일 한 줄 + 알게 된 개념 막대 + 내가 한 질문 ---- */
+.knowledge-dashboard { margin: 8px 0 16px; }
+.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat-tile { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat-label, .stat-note { color: var(--muted); font-size: var(--font-small); }
+.stat-value { color: var(--text); font-weight: 600; font-size: calc(var(--ui-font-size) * 1.9); line-height: 1.2; }
+.stat-unit { color: var(--muted); font-size: var(--ui-font-size); font-weight: 500; margin-left: 2px; }
+.learned-meter { margin-top: 12px; }
+.learned-meter p { margin: 4px 0 0; }
+.meter { height: 8px; border-radius: 999px; background: var(--green-soft); overflow: hidden; }
+.meter-fill { display: block; height: 100%; border-radius: 999px; background: var(--green); }
+@media (forced-colors: active) {
+  .meter { border: 1px solid CanvasText; }
+  .meter-fill { forced-color-adjust: none; background: Highlight; }
+}
+.my-questions { margin-top: 14px; }
+.my-questions h3 { margin: 0 0 4px; font-size: calc(var(--ui-font-size) * 1.05); }
+.my-questions ul { list-style: none; padding: 0; margin: 0; }
+.my-questions li { padding: 8px 0; border-bottom: 1px dashed var(--border); overflow-wrap: anywhere; }
+.my-question { margin: 0 0 2px; }
+.memory-panel .my-questions h3 { margin-top: 12px; }
+.my-questions .solved-options { list-style: disc; padding-left: 1.2rem; margin: 4px 0; }
+.my-questions .solved-options li { border: 0; padding: 2px 0; }
+.memory-technical { margin-top: 12px; }
+.quiz-report { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+.quiz-report legend { padding: 0 4px; }
+.quiz-report button { align-self: flex-start; }
 .knowledge-explain { margin-top: 8px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 
 /* ---- 레포 위키 ---- */

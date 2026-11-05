@@ -6,12 +6,15 @@ import type {
   AssessmentResult,
   AssessmentStartResponse,
   LearnerProfile,
+  QuestionFeedbackReason,
+  QuestionFeedbackRequest,
   ResponseEvent,
   WikiSnapshot,
   WikiConcept,
   ReaderLevel,
 } from '@vibe-teacher/shared';
 import { shortId } from '../lib/hash';
+import { truncate } from '../lib/text';
 import { maskSecrets } from '../llm/digest';
 import type { ResolvedLlm } from '../llm/select';
 import { withAiRun } from '../llm/log';
@@ -88,6 +91,12 @@ export class AssessmentService {
       const { provider, status } = await this.ai.resolveProvider();
       if (!provider) throw Object.assign(new Error(status.reason ?? 'AI 제공자가 필요합니다'), { status: 409, code: 'llm_unavailable' });
       const ai = this.ai;
+      // 같은 개념에서 이미 푼 문제(문제 은행)와 '문제가 이상해요' 사유를 함께 보내 반복·같은 실수를 피한다
+      const feedback = new Map(events.flatMap((e) => (e.kind === 'question_feedback' ? [[`${e.questionId}@${e.questionVersion}`, e] as const] : [])));
+      const previousQuestions = (await this.learner.questionBank(learnerId)).filter((b) => b.conceptIds.includes(concept.id)).slice(0, 6).map((b) => {
+        const f = feedback.get(`${b.questionId}@${b.version}`);
+        return { prompt: truncate(b.prompt, 240), ...(f ? { userFeedback: `${FEEDBACK_TEXT[f.reason]}${f.note ? `: ${truncate(f.note, 200)}` : ''}` } : {}) };
+      });
       // 생성 문항은 기억 속 대기 목록에만 있으므로 실행 기록에 정답·해설까지 결과물로 남긴다 (회원 본인도 조회할 수 없는 추가 전용 기록).
       candidates.push(await withAiRun(ai.storage, { feature: 'practice_question', ...(projectId ? { projectId } : {}), ...(req.sessionKey ? { sessionKey: req.sessionKey } : {}), readerLevel: level }, undefined, async (run) => {
         const result = await provider.complete({
@@ -95,7 +104,8 @@ export class AssessmentService {
           user: maskSecrets(JSON.stringify({ name: concept.name, explanation: concept.explanation, example: concept.example,
             learning: (await this.learner.profile(learnerId)).concepts[concept.id],
             recentResponses: events.filter((e) => e.kind === 'response' && e.conceptIds.includes(concept.id)).slice(-5),
-            instruction: '과거 응답과 다른 상황의 적용을 물으세요. 최근 어려워한 부분은 더 명확한 조건으로 묻고, 이전 이유를 그대로 정답으로 삼지 마세요. 연습 성과는 숙련 확정이 아닙니다.' })),
+            previousQuestions,
+            instruction: '과거 응답과 다른 상황의 적용을 물으세요. previousQuestions 와 같거나 거의 같은 문제는 내지 마세요. userFeedback 이 있는 문제는 사용자가 이상하다고 알린 문제이니 그 문제점(정답 오류·애매함·개념과 무관)을 반복하지 마세요. 최근 어려워한 부분은 더 명확한 조건으로 묻고, 이전 이유를 그대로 정답으로 삼지 마세요.' })),
           schema: z.object({ prompt: z.string(), format: selfCheck ? z.literal('true_false') : z.enum(['single_choice', 'true_false']), kind: z.enum(['distinction', 'application']), options: z.array(z.object({ id: z.string(), text: z.string() })), correctOptionId: z.string(), explanation: z.string() }),
           schemaName: 'concept_practice', maxTokens: 8000, timeoutMs: ai.timeoutMs(), trace: run.trace,
         });
@@ -135,6 +145,28 @@ export class AssessmentService {
     };
     this.pending.set(p.assessmentId, p);
     return { assessmentId: p.assessmentId, attemptId: p.attemptId, question: toPublicQuestion(q), firstAttempt: p.firstAttempt, profileRevision: profile.revision };
+  }
+
+  /**
+   * '문제가 이상해요'. 문제 은행에 있는(정답을 확인한) 내 문제만 받는다. 개념·프로젝트는 은행 기록에서 정하고
+   * 문제 하나에 한 번만 기록한다. 그 문제의 응답은 개념 상태·정답 수에서 빠진다 (reducer).
+   */
+  async feedback(learnerId: string, req: QuestionFeedbackRequest): Promise<LearnerProfile> {
+    const entry = (await this.learner.questionBank(learnerId)).find((b) => b.questionId === req.questionId && b.version === req.questionVersion);
+    if (!entry) throw Object.assign(new Error('문제를 찾을 수 없습니다'), { status: 404, code: 'not_found' });
+    const { profile } = await this.learner.record(learnerId, req.baseRevision, {
+      id: `qf_${shortId(`${req.questionId}@${req.questionVersion}`, 16)}`,
+      at: new Date().toISOString(),
+      ...(entry.projectId ? { projectId: entry.projectId } : {}),
+      ...(entry.sessionKey ? { sessionKey: entry.sessionKey } : {}),
+      kind: 'question_feedback',
+      questionId: entry.questionId,
+      questionVersion: entry.version,
+      conceptIds: entry.conceptIds,
+      reason: req.reason,
+      ...(req.note ? { note: maskSecrets(req.note) } : {}),
+    });
+    return profile;
   }
 
   /** projectId 를 주면 그 프로젝트에서 낸 문항인지도 확인한다 (/api/me 에서는 학습자만 확인) */
@@ -210,10 +242,22 @@ export class AssessmentService {
       relatedConceptIds: q?.conceptIds ?? [],
       profile,
     };
+    // 정답이 공개된 문제만 문제 은행에 남긴다 (건너뛰기는 정답을 보여 주지 않으므로 저장하지 않음).
+    // 문제 은행은 보조 기록이라 저장 실패가 채점 결과를 실패로 바꾸지 않는다
+    if (reveal && q) {
+      await this.learner.saveQuestion(learnerId, {
+        questionId: q.questionId, version: q.version, conceptIds: q.conceptIds, kind: q.kind, format: q.format,
+        prompt: q.prompt, options: q.options.map((o) => ({ id: o.id, text: o.text })), correctOptionIds: q.correctOptionIds, explanation: q.explanation,
+        answeredAt: new Date().toISOString(), status: body.status, grade: graded.grade,
+        ...(p.purpose ? { purpose: p.purpose } : {}), ...(p.projectId ? { projectId: p.projectId } : {}), ...(p.sessionKey ? { sessionKey: p.sessionKey } : {}),
+      }).catch((e: unknown) => console.warn(`[문제 은행] 저장하지 못했습니다: ${(e as Error).message}`));
+    }
     p.result = result;
     return result;
   }
 }
+
+const FEEDBACK_TEXT: Record<QuestionFeedbackReason, string> = { wrong_answer: '정답이 틀린 것 같음', ambiguous: '문제가 애매함', off_topic: '이 개념과 상관없음', other: '기타' };
 
 function scopeNote(x: { q?: BankQuestion; status: string; grade: string; counted: boolean; firstAttempt: boolean; assisted: boolean; selfCheck: boolean }): string {
   if (x.status === 'skipped') return x.selfCheck ? '건너뛰어도 괜찮아요. ‘알고 있어요’는 문제를 맞혔을 때 기록돼요.' : '건너뛰어도 괜찮아요. 나중에 다시 풀 수 있어요.';

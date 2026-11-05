@@ -3,7 +3,7 @@
  * 문항 풀이는 선택 사항이고, 건너뛰기·모르겠어요는 오답이 아니다.
  */
 import { z } from 'zod';
-import type { Grade, LearnerProfile, ResponseStatus } from './learner';
+import { QUESTION_FEEDBACK_REASONS, type Grade, type LearnerProfile, type QuestionFeedbackReason, type ResponseStatus } from './learner';
 
 export type QuestionFormat = 'single_choice' | 'true_false';
 export type QuestionTarget = 'concept_knowledge' | 'project_awareness';
@@ -85,3 +85,49 @@ export const AssessmentResponseRequestSchema = z.object({
 });
 
 export type AssessmentResponseRequest = z.infer<typeof AssessmentResponseRequestSchema>;
+
+// ---- 문제 은행 ----
+
+/**
+ * 문제 은행 항목. 정답이 공개된 뒤(답했거나 모르겠어요)에만 사용자 저장소에 남긴다.
+ * 제출 전 문항의 정답은 저장하지 않는다 (브라우저·사용자 토큰으로 미리 읽지 못하게).
+ */
+export interface QuestionBankEntry {
+  questionId: string;
+  version: number;
+  conceptIds: string[];
+  kind: QuestionKind;
+  format: QuestionFormat;
+  prompt: string;
+  options: QuestionOption[];
+  correctOptionIds: string[];
+  explanation: string;
+  answeredAt: string;
+  status: ResponseStatus;
+  grade: Grade;
+  purpose?: 'self_check';
+  projectId?: string;
+  sessionKey?: string;
+}
+
+/** 내 기억 검색의 "내가 풀어 본 문제" 한 줄 */
+export interface SolvedQuestion extends QuestionBankEntry {
+  conceptNames: string[];
+  /** '문제가 이상해요'로 알린 사유 */
+  feedback?: QuestionFeedbackReason;
+}
+
+export interface SolvedQuestionsResponse {
+  questions: SolvedQuestion[];
+  total: number;
+}
+
+export const QuestionFeedbackRequestSchema = z.object({
+  baseRevision: z.number().int().nonnegative(),
+  questionId: z.string().min(1).max(80),
+  questionVersion: z.number().int().positive(),
+  reason: z.enum(QUESTION_FEEDBACK_REASONS),
+  note: z.string().trim().max(500).optional(),
+});
+
+export type QuestionFeedbackRequest = z.infer<typeof QuestionFeedbackRequestSchema>;

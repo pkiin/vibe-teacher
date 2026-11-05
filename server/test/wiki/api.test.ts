@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { AssessmentResult, AssessmentStartResponse, LearnerProfile, Project, SessionSummary, UnderstandingResponse, WikiResponse } from '@vibe-teacher/shared';
+import type { AssessmentResult, AssessmentStartResponse, LearnerProfile, Project, SessionSummary, SolvedQuestionsResponse, UnderstandingResponse, WikiResponse } from '@vibe-teacher/shared';
 import { allAdapters } from '../../src/adapters/registry';
 import { AnalysisService } from '../../src/analyzers/index';
 import { createApp } from '../../src/app';
@@ -145,6 +145,21 @@ describe('wiki / understanding / assessment API', () => {
     expect(retry.profile.revision).toBe(result.profile.revision);
     const u = (await (await app.request(`/api/projects/${project.id}/understanding`, { headers: h })).json()) as UnderstandingResponse;
     expect(u.events.filter((e) => e.kind === 'response')).toHaveLength(1);
+
+    // 문제 은행: 답한 문제는 정답·해설과 함께 다시 볼 수 있고, '문제가 이상해요'를 받으면 상태에서 빠진다
+    const solved = (await (await app.request(`/api/me/solved?projectId=${project.id}`, { headers: h })).json()) as SolvedQuestionsResponse;
+    expect(solved.total).toBe(1);
+    expect(solved.questions[0]).toMatchObject({ questionId: start.question.questionId, correctOptionIds: result.correctOptionIds, explanation: result.explanation, projectId: project.id });
+    expect(((await (await app.request(`/api/me/solved?q=${encodeURIComponent('결제환불')}`, { headers: h })).json()) as SolvedQuestionsResponse).total).toBe(0);
+    const bob = await login('bob', BOB);
+    expect(((await (await app.request('/api/me/solved', { headers: bob })).json()) as SolvedQuestionsResponse).total).toBe(0);
+    expect((await post('/api/me/question-feedback', bob, { baseRevision: 0, questionId: start.question.questionId, questionVersion: start.question.version, reason: 'wrong_answer' })).status).toBe(404);
+    const flagged = await post('/api/me/question-feedback', h, { baseRevision: result.profile.revision, questionId: start.question.questionId, questionVersion: start.question.version, reason: 'ambiguous' });
+    expect(flagged.status).toBe(200);
+    const after = ((await flagged.json()) as { profile: LearnerProfile }).profile;
+    expect(after.concepts.authorization?.counts.correct ?? 0).toBe(0);
+    const marked = (await (await app.request(`/api/me/solved?projectId=${project.id}`, { headers: h })).json()) as SolvedQuestionsResponse;
+    expect(marked.questions[0]?.feedback).toBe('ambiguous');
   });
 
   it('applies feedback with revision checks and rejects malformed input (T25)', async () => {

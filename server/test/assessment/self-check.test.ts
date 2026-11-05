@@ -46,7 +46,7 @@ function setup() {
       ? { baseRevision: started.profileRevision, status: 'answered', selectedOptionId: choice, explanationSeen: false, helpUsed: false }
       : { baseRevision: started.profileRevision, status: 'skipped', explanationSeen: false, helpUsed: false });
   };
-  return { seen, answer };
+  return { seen, answer, svc, learner, concepts };
 }
 
 describe("'알고 있어요' OX 확인", () => {
@@ -69,5 +69,30 @@ describe("'알고 있어요' OX 확인", () => {
     expect(wrong.scopeNote).toContain('맞혔을 때 기록돼요');
     const skipped = await answer('l_skip', null);
     expect(skipped.profile.concepts.c1?.selfReport).toBeUndefined();
+  });
+});
+
+describe('문제 은행과 문제가 이상해요', () => {
+  it('정답이 공개된 문제만 은행에 남기고, 건너뛴 문제는 남기지 않는다', async () => {
+    const { answer, learner } = setup();
+    await answer('l_bank', 'x');
+    await answer('l_bank', null);
+    const bank = await learner.questionBank('l_bank');
+    expect(bank).toHaveLength(1);
+    expect(bank[0]).toMatchObject({ prompt: '합성 개념에 대한 문장 1번은 맞나요?', correctOptionIds: ['o'], explanation: '합성 해설입니다.', grade: 'incorrect', status: 'answered', purpose: 'self_check' });
+  });
+
+  it('이상하다고 알린 문제는 상태에서 빠지고, 다음 문제를 만들 때 이전 문제와 사유를 보낸다', async () => {
+    const { seen, answer, svc, learner, concepts } = setup();
+    const wrong = await answer('l_flag', 'x');
+    const [entry] = await learner.questionBank('l_flag');
+    await expect(svc.feedback('l_flag', { baseRevision: wrong.profile.revision, questionId: 'q-unknown', questionVersion: 1, reason: 'other' })).rejects.toMatchObject({ status: 404 });
+    const profile = await svc.feedback('l_flag', { baseRevision: wrong.profile.revision, questionId: entry!.questionId, questionVersion: entry!.version, reason: 'wrong_answer', note: '정답이 반대입니다' });
+    expect(profile.concepts.c1?.counts.incorrect).toBe(0);
+    const again = await svc.feedback('l_flag', { baseRevision: profile.revision, questionId: entry!.questionId, questionVersion: entry!.version, reason: 'ambiguous' });
+    expect(again.revision).toBe(profile.revision);
+    await svc.start('l_flag', undefined, { conceptId: 'c1' }, null, concepts);
+    const input = JSON.parse(seen.at(-1)!.user) as { previousQuestions: { prompt: string; userFeedback?: string }[] };
+    expect(input.previousQuestions).toEqual([{ prompt: entry!.prompt, userFeedback: '정답이 틀린 것 같음: 정답이 반대입니다' }]);
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AssessmentResult, AssessmentStartResponse, ResponseStatus } from '@vibe-teacher/shared';
+import { QUESTION_FEEDBACK_REASONS, type AssessmentResult, type AssessmentStartResponse, type LearnerProfile, type QuestionFeedbackReason, type ResponseStatus } from '@vibe-teacher/shared';
 import { ApiError, apiPost } from '../api/client';
 import type { LearnerActions } from '../hooks/useLearner';
 import { ko } from '../i18n/ko';
@@ -165,6 +165,8 @@ export function QuizCard({
           {result.explanation && <p>{result.explanation}</p>}
           {result.optionFeedback && <p className="small">{result.optionFeedback}</p>}
           <div className="small muted">{result.scopeNote}</div>
+          {/* 정답을 확인한 문제만 문제 은행에 있으므로 건너뛴 문제에는 피드백을 받지 않는다 */}
+          {result.status !== 'skipped' && <QuestionReport key={`${q.questionId}@${q.version}`} questionId={q.questionId} version={q.version} learner={learner} />}
           <div className="quiz-actions">
             <button className="btn btn-small" onClick={() => load(seen, q.conceptIds[0])}>
               {ko.quiz.another}
@@ -178,5 +180,41 @@ export function QuizCard({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * '문제가 이상해요'. 보내면 이 문제의 응답은 내 지식 상태·정답 수에서 빠지고, 다음 문제를 만들 때 AI 에 사유를 알려 준다.
+ */
+export function QuestionReport({ questionId, version, learner }: { questionId: string; version: number; learner: LearnerActions }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<QuestionFeedbackReason | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  if (sent) return <p className="small muted" role="status">{ko.quiz.reportSent}</p>;
+  if (!open) return <button type="button" className="link small" onClick={() => setOpen(true)}>{ko.quiz.report}</button>;
+  const send = async () => {
+    if (!reason) return;
+    setBusy(true); setError(null);
+    try {
+      const r = await learner.withRevision((baseRevision) => apiPost<{ profile: LearnerProfile }>('/api/me/question-feedback', { baseRevision, questionId, questionVersion: version, reason, ...(note.trim() ? { note: note.trim() } : {}) }));
+      learner.profileChanged(r.profile);
+      setSent(true);
+    } catch (e) { setError(e as Error); } finally { setBusy(false); }
+  };
+  return (
+    <fieldset className="quiz-report" disabled={busy}>
+      <legend className="small">{ko.quiz.reportTitle}</legend>
+      {QUESTION_FEEDBACK_REASONS.map((r) => (
+        <label key={r} className="small">
+          <input type="radio" name={`report-${questionId}-${version}`} value={r} checked={reason === r} onChange={() => setReason(r)} /> {ko.quiz.reportReasons[r]}
+        </label>
+      ))}
+      <textarea rows={2} maxLength={500} placeholder={ko.quiz.reportNote} value={note} onChange={(e) => setNote(e.target.value)} />
+      <button type="button" className="btn btn-small" disabled={!reason || busy} onClick={() => void send()}>{ko.quiz.reportSend}</button>
+      {error && <ErrorBox error={error} />}
+    </fieldset>
   );
 }

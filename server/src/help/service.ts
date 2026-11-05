@@ -16,6 +16,7 @@ import { mergeWikiAi } from '../wiki/ai';
 import type { WikiAiService } from '../wiki/ai-service';
 import type { WikiService } from '../wiki/service';
 import { HELP_SYSTEM_PROMPT, HelpOutputSchema, acceptHelpOutput, buildHelpContext, buildHelpPrompt } from './answer';
+import { mapConcurrent } from '../lib/concurrent';
 
 /**
  * 도움 패널 질문·답변. 개인 기록으로만 남는다:
@@ -56,6 +57,14 @@ export class HelpService {
 
   private append(learnerId: string, projectId: string, m: HelpMessage): Promise<void> {
     return this.opts.storage.appendJsonl(this.file(learnerId, projectId), m);
+  }
+
+  /** 여러 프로젝트에서 답을 받은 내 질문 (최신순, 최대 limit 개). 내 지식 대시보드에서 다시 읽는 용도 */
+  async answered(learnerId: string, projectIds: readonly string[], limit: number): Promise<{ items: { message: HelpMessage; projectId: string }[]; total: number }> {
+    const lists = await mapConcurrent(projectIds, 6, async (projectId) => (await this.all(learnerId, projectId)).map((message) => ({ message, projectId })));
+    const done = lists.flat().filter(({ message }) => message.status === 'done' && !!message.answer);
+    done.sort((a, b) => b.message.askedAt.localeCompare(a.message.askedAt) || a.message.id.localeCompare(b.message.id));
+    return { items: done.slice(0, limit), total: done.length };
   }
 
   /** 이 세션에서 한 질문들. 서버가 다시 시작되어 끊긴 질문은 오류로 보여 준다 */

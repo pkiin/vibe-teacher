@@ -26,8 +26,9 @@ import {
  * - 정답과 오답이 함께 있으면 마지막 오답 뒤의 정답만으로 위 규칙을 다시 본다. 그것으로 오르면 그 상태
  *   (다시 풀어 익힌 것), 아니면 conflicting. 예전 오답 하나가 상태를 영구히 묶지 않게 한다.
  * - 사용자 정정이 마지막 채점 증거보다 나중이면 disputed, 긍정 상태는 conflicting 으로 내린다.
+ * - '문제가 이상해요'(question_feedback)로 알린 문제의 응답은 상태·정답 수·학습 흐름에 넣지 않는다 (활동 기록에는 남김).
  */
-export const POLICY_VERSION = 'policy-0.3';
+export const POLICY_VERSION = 'policy-0.4';
 
 export function emptyConceptCounts(): ConceptEvidenceCounts {
   return { correct: 0, incorrect: 0, dontKnow: 0, skipped: 0, practice: 0, exposure: 0, practiceCorrect: 0, practiceIncorrect: 0, questions: 0 };
@@ -62,6 +63,8 @@ function levelOf(correct: ResponseEvent[], selfKnown: boolean): 'unknown' | 'par
   return 'unknown';
 }
 
+const questionKey = (e: { questionId: string; questionVersion: number }) => `${e.questionId}@${e.questionVersion}`;
+
 function later(a: string | undefined, b: string): string {
   return a && a > b ? a : b;
 }
@@ -79,16 +82,19 @@ export function reduceProfile(events: LearnerEvent[], learnerId: string, project
     return a;
   };
 
+  // 이상하다고 알린 문제는 순서와 관계없이 (피드백이 응답보다 나중이어도) 처음부터 빼고 센다
+  const flagged = new Set(unique.flatMap((e) => (e.kind === 'question_feedback' ? [questionKey(e)] : [])));
   let revision = 0;
   let updatedAt: string | undefined;
   for (const e of unique) {
     if (isStateEvent(e)) revision += 1;
     updatedAt = later(updatedAt, e.at);
-    const ids = e.kind === 'response' || e.kind === 'question' ? e.conceptIds : e.conceptId ? [e.conceptId] : [];
+    const ids = e.kind === 'response' || e.kind === 'question' || e.kind === 'question_feedback' ? e.conceptIds : e.conceptId ? [e.conceptId] : [];
+    const excluded = e.kind === 'response' && flagged.has(questionKey(e));
     for (const id of ids) {
       const s = get(id).state;
       const activity = { id: e.id, at: e.at, kind: e.kind, ...(e.projectId ? { projectId: e.projectId } : {}), ...(e.sessionKey ? { sessionKey: e.sessionKey } : {}),
-        ...(e.kind === 'response' ? { grade: e.grade, status: e.status, practice: isPracticeOnly(e) } : {}), ...(e.kind === 'self_report' ? { selfReport: e.value } : {}) };
+        ...(e.kind === 'response' && !excluded ? { grade: e.grade, status: e.status, practice: isPracticeOnly(e) } : {}), ...(e.kind === 'self_report' ? { selfReport: e.value } : {}) };
       s.activity = [...(s.activity ?? []), activity].slice(-12);
     }
     switch (e.kind) {
@@ -119,7 +125,11 @@ export function reduceProfile(events: LearnerEvent[], learnerId: string, project
         a.lastCorrectionAt = later(a.lastCorrectionAt, e.at);
         break;
       }
+      case 'question_feedback':
+        for (const id of e.conceptIds) get(id).state.lastObservedAt = later(get(id).state.lastObservedAt, e.at);
+        break;
       case 'response':
+        if (excluded) break;
         for (const conceptId of e.conceptIds) {
           const a = get(conceptId);
           const c = a.state.counts;

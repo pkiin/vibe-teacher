@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { LearnerEvent, LearnerProfile, WikiConcept } from '@vibe-teacher/shared';
+import type { LearnerEvent, LearnerProfile, QuestionBankEntry, WikiConcept } from '@vibe-teacher/shared';
 import { shortId } from '../lib/hash';
 import type { WikiStorage } from '../storage/store';
 import { isStateEvent, reduceProfile } from './reducer';
@@ -33,6 +33,7 @@ export interface RememberedConcept {
  * 사용자 한 명의 이해 정보 원장 (프로젝트를 가리지 않음):
  *   wiki/learners/<learnerId>/events.jsonl   추가만 하는 원장 (이벤트마다 projectId·sessionKey 를 남김)
  *   wiki/learners/<learnerId>/profile.json   파생 캐시
+ *   wiki/learners/<learnerId>/question-bank.jsonl   정답이 공개된 연습 문제 (추가만, 같은 문제는 마지막 줄이 현재)
  * 예전에 프로젝트별로 쓴 learners/<id>/projects/<p>/events.jsonl 도 함께 읽는다.
  */
 export class LearnerService {
@@ -40,7 +41,22 @@ export class LearnerService {
 
   private files(learnerId: string) {
     const dir = this.storage.learnerDir(learnerId);
-    return { dir, events: path.join(dir, 'events.jsonl'), profile: path.join(dir, 'profile.json') };
+    return { dir, events: path.join(dir, 'events.jsonl'), profile: path.join(dir, 'profile.json'), bank: path.join(dir, 'question-bank.jsonl') };
+  }
+
+  /**
+   * 문제 은행에 추가한다. 정답이 이미 공개된 문제만 넣어야 한다 (assessment respond 에서 reveal 뒤에만 호출).
+   * 원장과 같은 저장소(회원 모드는 사용자 토큰의 Supabase)에 남는다.
+   */
+  async saveQuestion(learnerId: string, entry: QuestionBankEntry): Promise<void> {
+    await this.storage.appendJsonl(this.files(learnerId).bank, entry);
+  }
+
+  /** 문제 은행 (같은 문제·판은 마지막 기록, 최근에 푼 순서) */
+  async questionBank(learnerId: string): Promise<QuestionBankEntry[]> {
+    const latest = new Map<string, QuestionBankEntry>();
+    for (const q of (await this.storage.readJsonl<QuestionBankEntry>(this.files(learnerId).bank)).items) latest.set(`${q.questionId}@${q.version}`, q);
+    return [...latest.values()].sort((a, b) => b.answeredAt.localeCompare(a.answeredAt) || a.questionId.localeCompare(b.questionId));
   }
 
   async events(learnerId: string): Promise<LearnerEvent[]> {

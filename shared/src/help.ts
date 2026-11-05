@@ -33,6 +33,25 @@ export interface HelpAnswer {
 export type HelpMode = 'llm' | 'fallback';
 export type HelpStatus = 'pending' | 'done' | 'error' | 'cancelled';
 
+/** 내 지식 대시보드의 "내가 한 질문" 한 줄. 답은 다시 읽기 위한 것이며 현재 프로젝트 사실의 근거가 아니다 */
+export interface MyQuestion {
+  id: string;
+  question: string;
+  answer: string;
+  askedAt: string;
+  projectId: string;
+  sessionKey: string;
+  sessionTitle?: string;
+  focus: HelpFocus;
+  conceptIds: string[];
+}
+
+export interface MyQuestionsResponse {
+  questions: MyQuestion[];
+  /** 답을 받은 질문 전체 수 (questions 는 최근 것만) */
+  total: number;
+}
+
 export interface HelpMessage {
   id: string;
   threadId: string;

@@ -48,6 +48,20 @@ describe('learner reducer (policy-0.3)', () => {
     expect(auth([resp({ assistance: 'assisted' }), known]).state).toBe('unknown');
   });
 
+  it("leaves out answers to questions the learner flagged as broken, even when the flag comes later", () => {
+    const right = resp({ questionId: 'q-ai-1', format: 'single_choice', questionKind: 'application' });
+    const wrong = resp({ questionId: 'q-ai-2', format: 'single_choice', grade: 'incorrect' });
+    const flag = { ...base(), kind: 'question_feedback' as const, questionId: 'q-ai-2', questionVersion: 1, conceptIds: ['auth'], reason: 'wrong_answer' as const };
+    expect(auth([right, wrong]).state).toBe('conflicting');
+    const s = auth([right, wrong, flag]);
+    expect(s.state).toBe('partial');
+    expect(s.counts).toMatchObject({ correct: 1, incorrect: 0, practice: 0 });
+    expect(s.progress).toBe('practicing');
+    expect(s.activity?.find((a) => a.id === wrong.id)?.grade).toBeUndefined();
+    expect(s.activity?.at(-1)?.kind).toBe('question_feedback');
+    expect(reduce([right, wrong, flag]).revision).toBe(3);
+  });
+
   it('stores self-report separately without promoting the state (T03)', () => {
     const s = auth([{ ...base(), kind: 'self_report', conceptId: 'auth', value: 'known' }]);
     expect(s.selfReport).toBe('known');
