@@ -67,6 +67,8 @@ export const AssessmentRequestSchema = z
     /** 계획기가 제안한 특정 문항 */
     questionId: z.string().max(80).optional(),
     excludeQuestionIds: z.array(z.string().max(80)).max(100).optional(),
+    /** '알고 있어요' 확인: OX 한 문제를 내고, 맞히면 서버가 '알고 있어요' 자기보고를 함께 기록한다 */
+    purpose: z.enum(['self_check']).optional(),
   })
   .refine((v) => v.conceptId || v.itemId || v.questionId, { message: 'conceptId, itemId, questionId 중 하나가 필요합니다' });
 

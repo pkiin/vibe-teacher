@@ -120,7 +120,7 @@ describe('wiki / understanding / assessment API', () => {
     expect((await post(`/api/projects/${alice.project.id}/assessments`, h, { sessionKey: bob.session.key, conceptId: 'auth' })).status).toBe(404);
   });
 
-  it('hides answers until submission, grades on the server and keeps candidates as practice (T37, T38)', async () => {
+  it('hides answers until submission, grades on the server and counts first-try AI questions (T37, T38)', async () => {
     const h = await login('alice', ALICE);
     const { project, session } = await sessionOf('alice');
     const startRes = await post(`/api/projects/${project.id}/assessments`, h, { sessionKey: session.key, conceptId: 'authorization', learnerId: 'l_someone_else' });
@@ -137,9 +137,9 @@ describe('wiki / understanding / assessment API', () => {
     const result = (await ok.json()) as AssessmentResult;
     expect(result.correctOptionIds).toHaveLength(1);
     expect(result.explanation.length).toBeGreaterThan(5);
-    expect(result.counted).toBe(false);
-    expect(result.scopeNote).toContain('검토 전 문항');
-    expect(result.profile.concepts.authorization?.state ?? 'unknown').toBe('unknown');
+    // AI 가 만든(candidate) 문항도 처음 풀고 도움 없이 낸 응답이면 내 지식에 반영한다 (policy-0.3)
+    expect(result.counted).toBe(true);
+    expect(result.scopeNote).not.toMatch(/검토 전|숙련|오개념/);
     // 같은 응답 재전송은 한 번만 기록된다
     const retry = (await (await post(`/api/projects/${project.id}/assessments/${start.assessmentId}/responses`, h, { baseRevision: start.profileRevision, status: 'answered', selectedOptionId: 'o' })).json()) as AssessmentResult;
     expect(retry.profile.revision).toBe(result.profile.revision);

@@ -85,6 +85,7 @@ export function WikiItemCard({
   const [example, setExample] = useState(false);
   const [glossary, setGlossary] = useState(false);
   const [quiz, setQuiz] = useState(false);
+  const [check, setCheck] = useState(false);
   const [later, setLater] = useState(false);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -112,7 +113,7 @@ export function WikiItemCard({
       void learner.preference(primaryId, next, action === 'simpler' || example).catch(() => setPreferenceError(true));
     }
   };
-  const report = async (value: 'known' | 'unsure') => {
+  const report = async (value: 'unsure') => {
     if (!primaryId) return;
     setBusy(true);
     try {
@@ -299,12 +300,15 @@ export function WikiItemCard({
         </section>
       )}
 
-      {primary && primaryId && !later && !quiz && (
+      {primary && primaryId && !later && !quiz && !check && (
         <div className="understanding-check">
           <span className="small">{primary.name}</span>
-          <button className="btn btn-small" disabled={busy} onClick={() => report('known')}>
-            {ko.understanding.known}
-          </button>
+          {/* '알고 있어요'는 OX 확인 문제를 맞혀야 기록된다 */}
+          {profile?.concepts[primaryId]?.selfReport !== 'known' && (
+            <button className="btn btn-small" disabled={busy} onClick={() => setCheck(true)}>
+              {ko.understanding.known}
+            </button>
+          )}
           <button className="btn btn-small" disabled={busy} onClick={() => report('unsure')}>
             {ko.understanding.unsure}
           </button>
@@ -321,6 +325,7 @@ export function WikiItemCard({
           </button>
         </div>
       )}
+      {check && primaryId && <QuizCard sessionKey={sessionKey} target={{ conceptId: primaryId }} learner={learner} explanationSeen purpose="self_check" onClose={() => setCheck(false)} />}
       {quiz && primaryId && <QuizCard sessionKey={sessionKey} target={{ conceptId: primaryId }} learner={learner} explanationSeen onClose={() => setQuiz(false)} />}
     </article>
   );

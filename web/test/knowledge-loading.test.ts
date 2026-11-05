@@ -6,6 +6,8 @@ import type { KnowledgeWikiResponse } from '@vibe-teacher/shared';
 import { loadKnowledge, retainKnowledgeReasons } from '../src/api/knowledge';
 import { clearApiCache } from '../src/api/client';
 import { KnowledgeCard } from '../src/components/KnowledgeList';
+import { QuizCard } from '../src/components/QuizCard';
+import { askedConcept } from '../src/lib/session-analysis';
 import type { LearnerActions } from '../src/hooks/useLearner';
 import { profileWith } from '../../server/test/wiki/helpers';
 import { unknownConcept } from '../../server/src/learner/reducer';
@@ -73,9 +75,78 @@ describe('내 지식 다시 열기', () => {
     expect(unknown).not.toContain('숙련 확인 전');
     expect(unknown).toContain('<h3>인증</h3>');
     const demonstrated = render({ ...entry, state: { ...entry.state, state: 'demonstrated' } });
-    expect(demonstrated.match(/푼 문제에서는 확인했어요/g)).toHaveLength(1);
+    expect(demonstrated.match(/문제로 확인했어요/g)).toHaveLength(1);
     const disputed = render({ ...entry, state: { ...entry.state, state: 'demonstrated', disputed: true } });
-    expect(disputed.match(/이의 제기됨/g)).toHaveLength(1);
-    expect(disputed).not.toContain('푼 문제에서는 확인했어요');
+    expect(disputed.match(/더 알아보는 중/g)).toHaveLength(1);
+    expect(disputed).not.toContain('문제로 확인했어요');
+    // 맞힌 문제가 없으면 카운트 대신 퀴즈를 권한다
+    expect(unknown).toContain('간단히 확인하기');
+    expect(unknown).not.toMatch(/연습 오답|질문 \d/);
+  });
+
+  it('문제로 오른 상태에서만 "사실 아직 잘 몰라요"를, 나머지는 "잘 모르겠어요"를 보여 준다', () => {
+    const learner = { revision: () => 0 } as LearnerActions;
+    const render = (state: Partial<KnowledgeWikiResponse['entries'][number]['state']>) => {
+      const entry = view().entries[0]!;
+      return renderToStaticMarkup(createElement(MemoryRouter, null, createElement(KnowledgeCard, { entry: { ...entry, state: { ...entry.state, ...state } }, learner })));
+    };
+    for (const state of ['partial', 'demonstrated'] as const) {
+      const html = render({ state });
+      expect(html).toContain('사실 아직 잘 몰라요');
+      expect(html).not.toContain('잘 모르겠어요');
+    }
+    for (const html of [render({}), render({ state: 'conflicting' }), render({ state: 'demonstrated', disputed: true })]) {
+      expect(html).toContain('잘 모르겠어요');
+      expect(html).not.toMatch(/사실 아직 잘 몰라요|추정이 잘못/);
+    }
+    expect(render({ selfReport: 'unsure' })).toMatch(/disabled=""[^>]*>잘 모르겠어요/);
+  });
+
+  it('제목 옆에는 분류만 두고, 내 학습 상태는 학습 기록 줄에 모은다', () => {
+    const learner = { revision: () => 0 } as LearnerActions;
+    const entry = view().entries[0]!;
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(KnowledgeCard, { entry: { ...entry, state: { ...entry.state, state: 'partial', selfReport: 'known', progress: 'practicing' } }, learner })));
+    const head = /<div class="concept-head">(.*?)<\/div>/.exec(html)?.[1] ?? '';
+    expect(head).toContain('보안');
+    expect(head).not.toMatch(/익히는 중|알고 있어요/);
+    const row = /<p class="learning-status">(.*?)<\/p>/.exec(html)?.[1] ?? '';
+    expect(row).toContain('익히는 중');
+    expect(row).toContain('알고 있어요');
+    expect(html).not.toContain('연습하고 있어요');
+    const improving = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(KnowledgeCard, { entry: { ...entry, state: { ...entry.state, progress: 'improving' } }, learner })));
+    expect(/<p class="learning-status">(.*?)<\/p>/.exec(improving)?.[1]).toContain('실력이 늘고 있어요');
+  });
+
+  it("'알고 있어요'는 바로 기록하지 않고 OX 확인을 열며, 확인을 마치면 버튼을 숨긴다", () => {
+    const recorded: string[] = [];
+    const learner = { revision: () => 0, selfReport: async (_id: string, v: string) => { recorded.push(v); } } as unknown as LearnerActions;
+    const entry = view().entries[0]!;
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(KnowledgeCard, { entry, learner })));
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>알고 있어요<\/button>/);
+    expect(recorded).toEqual([]);
+    const known = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(KnowledgeCard, { entry: { ...entry, state: { ...entry.state, selfReport: 'known' } }, learner })));
+    expect(known).not.toMatch(/<button[^>]*>알고 있어요<\/button>/);
+    const check = renderToStaticMarkup(createElement(QuizCard, { target: { conceptId: 'auth' }, learner, explanationSeen: false, purpose: 'self_check' }));
+    expect(check).toContain('나에게 꼭 맞는 문제를 만들고 있어요');
+  });
+
+  it('질문하기는 개념이 나온 분석 문서의 질문 탭으로 이어지고, 근거 세션이 없으면 보이지 않는다', () => {
+    const learner = { revision: () => 0 } as LearnerActions;
+    const entry = view().entries[0]!;
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(KnowledgeCard, { entry, learner })));
+    expect(html).toContain('href="/sessions/s/analysis?ask=auth#concept-auth"');
+    expect(html).toMatch(/>질문하기<\/a>/);
+    const none = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(KnowledgeCard, { entry: { ...entry, sources: [] }, learner })));
+    expect(none).not.toContain('질문하기');
+    expect(askedConcept(new URLSearchParams('ask=auth'))).toBe('auth');
+    expect(askedConcept(new URLSearchParams('ask=../x'))).toBeNull();
+    expect(askedConcept(new URLSearchParams(''))).toBeNull();
+  });
+
+  it('문제를 만드는 동안 친근한 안내를 보여 준다', () => {
+    const learner = { revision: () => 0 } as LearnerActions;
+    const html = renderToStaticMarkup(createElement(QuizCard, { target: { conceptId: 'auth' }, learner, explanationSeen: false }));
+    expect(html).toContain('나에게 꼭 맞는 문제를 만들고 있어요');
+    expect(html).not.toContain('불러오는 중');
   });
 });

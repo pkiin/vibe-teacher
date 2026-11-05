@@ -12,17 +12,22 @@ import {
 /**
  * 이벤트 원장 → 개념별 상태. 순수 함수이며 원장이 진실이고 profile.json 은 파생 캐시다.
  *
- * policy-0.2 (보수적 규칙, 검증된 숙련 확률이 아님):
+ * policy-0.3 (보수적 규칙, 검증된 숙련 확률이 아님):
  * - 자기보고·노출·건너뛰기·모르겠어요는 상태를 바꾸지 않는다.
- * - 검토 전(candidate) 문항, 해설을 본 뒤의 재시도, 앱 안 도움을 쓴 응답은 연습 성과로 구분한다.
+ * - 화면의 '알고 있어요'는 OX 확인 문제를 맞혀야 기록된다(assessment self_check). 그래서 자기보고 known 과
+ *   처음 풀어 맞힌 문제가 함께 있으면 OX 하나여도 partial 로 본다. 자기보고만으로는 오르지 않는다.
+ * - AI 가 만든 문항(candidate)도 처음 풀고 앱 안 도움 없이 낸 응답이면 상태 근거로 센다.
+ *   해설을 본 뒤의 재시도, 앱 안 도움을 쓴 응답은 연습 성과로 구분한다.
  * - 질문·연습 성과·직접 선택한 설명 방식은 teaching에 반영하되 숙련 상태로 승격하지 않는다.
  * - 같은 문항은 처음 채점된 한 번만 센다 (같은 원문 반복 수집으로 증거가 늘지 않게).
  * - OX 정답 1개만으로는 올리지 않는다 (추측 가능). 객관식 정답 또는 서로 다른 문항 2개 정답 → partial.
  * - 서로 다른 문항 2개 이상 정답 + 그중 적용(application) 객관식 포함 → demonstrated (범위 표시).
- * - 오답만 있으면 unknown 유지 (오개념으로 확정하지 않음). 정답과 오답이 함께 있으면 conflicting.
+ * - 오답만 있으면 unknown 유지 (오개념으로 확정하지 않음).
+ * - 정답과 오답이 함께 있으면 마지막 오답 뒤의 정답만으로 위 규칙을 다시 본다. 그것으로 오르면 그 상태
+ *   (다시 풀어 익힌 것), 아니면 conflicting. 예전 오답 하나가 상태를 영구히 묶지 않게 한다.
  * - 사용자 정정이 마지막 채점 증거보다 나중이면 disputed, 긍정 상태는 conflicting 으로 내린다.
  */
-export const POLICY_VERSION = 'policy-0.2';
+export const POLICY_VERSION = 'policy-0.3';
 
 export function emptyConceptCounts(): ConceptEvidenceCounts {
   return { correct: 0, incorrect: 0, dontKnow: 0, skipped: 0, practice: 0, exposure: 0, practiceCorrect: 0, practiceIncorrect: 0, questions: 0 };
@@ -45,7 +50,16 @@ interface ConceptAcc {
 }
 
 function isPracticeOnly(e: ResponseEvent): boolean {
-  return e.questionReview !== 'reviewed' || !e.firstAttempt || e.assistance === 'assisted' || e.target !== 'concept_knowledge';
+  return !e.firstAttempt || e.assistance === 'assisted' || e.target !== 'concept_knowledge';
+}
+
+/** 정답 응답으로 오를 수 있는 상태 (오답은 따로 본다). selfKnown: '알고 있어요' 확인을 마친 개념 */
+function levelOf(correct: ResponseEvent[], selfKnown: boolean): 'unknown' | 'partial' | 'demonstrated' {
+  const hasChoice = correct.some((e) => e.format === 'single_choice');
+  const hasApplication = correct.some((e) => e.format === 'single_choice' && e.questionKind === 'application');
+  if (correct.length >= 2 && hasApplication) return 'demonstrated';
+  if (hasChoice || correct.length >= 2 || (selfKnown && correct.length)) return 'partial';
+  return 'unknown';
 }
 
 function later(a: string | undefined, b: string): string {
@@ -159,20 +173,20 @@ function finalize(a: ConceptAcc): LearnerConceptState {
   const correct = scored.filter((e) => e.grade === 'correct');
   const incorrect = scored.filter((e) => e.grade === 'incorrect');
 
-  if (correct.length && incorrect.length) s.state = 'conflicting';
-  else if (correct.length) {
-    const hasChoice = correct.some((e) => e.format === 'single_choice');
-    const hasApplication = correct.some((e) => e.format === 'single_choice' && e.questionKind === 'application');
-    if (correct.length >= 2 && hasApplication) s.state = 'demonstrated';
-    else if (hasChoice || correct.length >= 2) s.state = 'partial';
-    else s.state = 'unknown';
-  } else s.state = 'unknown';
+  if (correct.length && incorrect.length) {
+    // 채점 순서대로 들어 있다. 마지막 오답 뒤에 다시 맞힌 것만으로 오를 수 있으면 그 상태로 본다
+    let lastWrong = -1;
+    scored.forEach((e, i) => { if (e.grade === 'incorrect') lastWrong = i; });
+    const relearned = levelOf(scored.slice(lastWrong + 1).filter((e) => e.grade === 'correct'), s.selfReport === 'known');
+    s.state = relearned === 'unknown' ? 'conflicting' : relearned;
+  } else s.state = correct.length ? levelOf(correct, s.selfReport === 'known') : 'unknown';
 
   if (scored.length) {
     s.evidenceIds = scored.map((e) => e.id);
     s.reviewStatus = 'auto_scored';
     s.assistance = scored.reduce<Assistance>((acc, e) => (e.assistance === 'unknown' || acc === 'unknown' ? 'unknown' : acc), 'none');
-    s.assessmentScope = `서로 다른 문항 ${scored.length}개 (정답 ${correct.length} · 오답 ${incorrect.length}) · 자동 채점${s.assistance === 'unknown' ? ' · 앱 밖 도움 여부는 확인할 수 없음' : ''}`;
+    // 화면(배지 설명)과 AI 사실에 들어간다. 오답 수는 원장에만 두고 여기에 쓰지 않는다
+    s.assessmentScope = `처음 풀어 맞힌 서로 다른 문제 ${correct.length}개 · 자동 채점${s.assistance === 'unknown' ? ' · 앱 밖 도움 여부는 확인할 수 없음' : ''}`;
   }
 
   if (a.lastCorrectionAt && (!a.lastScoredAt || a.lastCorrectionAt >= a.lastScoredAt)) {

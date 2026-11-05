@@ -20,6 +20,7 @@ export function QuizCard({
   learner,
   explanationSeen,
   helpUsed = false,
+  purpose,
   onClose,
 }: {
   /** 세션 화면에서 풀면 그 세션 (전체 지식 위키에서는 없음) */
@@ -29,6 +30,8 @@ export function QuizCard({
   explanationSeen: boolean;
   /** 이 개념을 도움 패널로 물어본 뒤의 응답이면 true — 보조(assisted)로 기록되어 이해 상태 추정에 쓰지 않는다 */
   helpUsed?: boolean;
+  /** '알고 있어요' 확인: 첫 문제는 OX 로 내고, 맞히면 서버가 '알고 있어요'를 기록한다. "다른 문제"부터는 일반 문제 */
+  purpose?: 'self_check';
   onClose?: () => void;
 }) {
   const [start, setStart] = useState<AssessmentStartResponse | null>(null);
@@ -38,6 +41,7 @@ export function QuizCard({
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState(false);
   const [seen, setSeen] = useState<string[]>([]);
+  const [checking, setChecking] = useState(!!purpose);
   const request = useRef(0);
 
   /** 처음에는 지정한 문항/개념, "다른 문제"는 같은 개념에서 이미 본 문항을 빼고 고른다 */
@@ -48,7 +52,9 @@ export function QuizCard({
     setSelected(null);
     setReason('');
     setError(null);
-    const ctx = sessionKey ? { sessionKey } : {};
+    const selfCheck = !!purpose && !exclude.length;
+    setChecking(selfCheck);
+    const ctx = { ...(sessionKey ? { sessionKey } : {}), ...(selfCheck ? { purpose } : {}) };
     const body = exclude.length ? { ...ctx, conceptId: target.conceptId ?? conceptId, excludeQuestionIds: exclude } : { ...ctx, ...target };
     apiPost<AssessmentStartResponse>('/api/me/assessments', body)
       .then((s) => {
@@ -91,18 +97,18 @@ export function QuizCard({
 
   if (error instanceof ApiError && error.code === 'no_question') return <div className="quiz card small muted">{ko.quiz.noQuestion}</div>;
   if (error && !start) return <ErrorBox error={error} onRetry={() => load([])} />;
-  if (!start) return <Loading />;
+  if (!start) return <div className="quiz card" aria-busy="true"><Loading text={ko.quiz.preparing} /></div>;
   const q = start.question;
   const name = `quiz-${start.assessmentId}`;
 
   return (
-    <div className="quiz card" role="group" aria-label={ko.quiz.title} aria-busy={busy}>
+    <div className="quiz card" role="group" aria-label={checking ? ko.quiz.selfCheckTitle : ko.quiz.title} aria-busy={busy}>
       <div className="concept-head">
-        <strong>{ko.quiz.title}</strong>
+        <strong>{checking ? ko.quiz.selfCheckTitle : ko.quiz.title}</strong>
         <span className="pill pill-outline">{ko.quiz.format[q.format]}</span>
-        {q.reviewStatus === 'candidate' && <span className="pill pill-yellow">{ko.quiz.candidate}</span>}
+        {q.reviewStatus === 'candidate' && <span className="pill pill-outline">{ko.quiz.candidate}</span>}
       </div>
-      <p className="small muted">{ko.quiz.intro}</p>
+      <p className="small muted">{checking ? ko.quiz.selfCheckIntro : ko.quiz.intro}</p>
       {q.reviewStatus === 'candidate' && <p className="small muted">{ko.quiz.candidateNote}</p>}
       {!start.firstAttempt && !result && <div className="small muted">{ko.quiz.retry}</div>}
       <p className="quiz-prompt">{q.prompt}</p>
@@ -153,7 +159,8 @@ export function QuizCard({
         <div className="quiz-result" aria-live="polite">
           <div>
             <strong>{result.grade === 'correct' ? ko.quiz.correct : result.grade === 'incorrect' ? ko.quiz.incorrect : ko.quiz.unscorable}</strong>{' '}
-            <span className={`pill ${result.counted ? 'pill-blue' : 'pill-gray'}`}>{result.counted ? ko.quiz.counted : ko.quiz.practice}</span>
+            {/* 맞힌 응답만 어디에 기록됐는지 보여 준다. 틀린 응답은 원장에만 남긴다 */}
+            {result.grade === 'correct' && <span className={`pill ${result.counted ? 'pill-green' : 'pill-gray'}`}>{result.counted ? ko.quiz.counted : ko.quiz.practice}</span>}
           </div>
           {result.explanation && <p>{result.explanation}</p>}
           {result.optionFeedback && <p className="small">{result.optionFeedback}</p>}

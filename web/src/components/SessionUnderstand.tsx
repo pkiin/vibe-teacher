@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 import type { BuiltSummary, ConceptHit, EnrichmentRecord, LearnerProfile, WikiConcept, WikiResponse } from '@vibe-teacher/shared';
 import { ApiError, api } from '../api/client';
-import { FocusProvider } from '../context/FocusContext';
+import { FocusProvider, useFocus } from '../context/FocusContext';
 import { useApi } from '../hooks/useApi';
 import { useLearnerActions } from '../hooks/useLearner';
 import { useReader } from '../hooks/useReader';
@@ -14,6 +14,7 @@ import { KnowledgeList } from './KnowledgeList';
 import { UnifiedAiPanel } from './UnifiedAiPanel';
 import { SessionSummaryCard, WikiBody, WikiCoverage, WikiHeader } from './WikiSections';
 import { SecurityReview } from './SecurityReview';
+import { askedConcept } from '../lib/session-analysis';
 
 /**
  * 세션 (대화 기록) 분석 문서 — 작업·개념·보안 주의사항을 한 화면에 잇고,
@@ -108,6 +109,7 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
 
   return (
     <FocusProvider>
+      <OpenAskFromUrl />
       <div className="understand">
         <div className="understand-main">
           <nav className="reading-path" aria-label={ko.reading.path}>
@@ -165,4 +167,18 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
       </div>
     </FocusProvider>
   );
+}
+
+/** ?ask=<개념 ID> 로 열면 도움 패널을 그 개념의 질문 탭으로 연다 (내 지식·프로젝트 화면의 "질문하기") */
+function OpenAskFromUrl() {
+  const focus = useFocus();
+  const [params] = useSearchParams();
+  const id = askedConcept(params);
+  const opened = useRef('');
+  useEffect(() => {
+    if (!focus || !id || opened.current === id) return;
+    opened.current = id;
+    focus.show({ kind: 'concept', id }, 'ask');
+  }, [focus, id]);
+  return null;
 }

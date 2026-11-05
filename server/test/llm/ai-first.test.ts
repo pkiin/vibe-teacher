@@ -10,7 +10,7 @@ import { createApp } from '../../src/app';
 import { AuthService } from '../../src/auth/service';
 import { ConfigStore, resolvePaths } from '../../src/config/store';
 import { SessionIndex } from '../../src/index/session-index';
-import { acceptKnowledgeText, entryFingerprint } from '../../src/learner/knowledge-text';
+import { acceptKnowledgeText, entryFacts, entryFingerprint } from '../../src/learner/knowledge-text';
 import { unknownConcept } from '../../src/learner/reducer';
 import { textGate } from '../../src/llm/gate';
 import { withReader } from '../../src/llm/reader';
@@ -39,6 +39,22 @@ describe('knowledge text checks', () => {
     expect(acceptKnowledgeText(entry(), '권한 검사를 잘 알고 계십니다.')).toBeNull();
     expect(acceptKnowledgeText(entry({ state: 'demonstrated' }), '문항 범위에서 이해하고 계십니다.')).not.toBeNull();
     expect(acceptKnowledgeText(entry(), '짧음')).toBeNull();
+  });
+
+  it('praises solved questions only when the record has them', () => {
+    const solved = entry({ counts: { ...unknownConcept('authorization').counts, practiceCorrect: 2 } });
+    expect(acceptKnowledgeText(entry(), '로그인 기능에 쓰인 개념이에요. 문제 2개를 맞히셨어요!')).toBeNull();
+    expect(acceptKnowledgeText(solved, '로그인 기능에 쓰인 개념이에요. 문제 2개를 맞히셨어요!')).not.toBeNull();
+    expect(acceptKnowledgeText(entry(), "로그인 기능에 쓰인 개념이에요. '간단히 확인하기'로 짧은 문제를 풀어 보세요.")).not.toBeNull();
+  });
+
+  it('gives the AI solved counts but not wrong answers, question counts or review jargon', () => {
+    const facts = entryFacts(entry({ state: 'conflicting', progress: 'improving', counts: { ...unknownConcept('authorization').counts, correct: 1, incorrect: 3, practiceCorrect: 1, practiceIncorrect: 2, practice: 3, questions: 4 } }));
+    expect(facts).toContain('맞힌 문제: 2번');
+    expect(facts).toContain('실력이 늘고 있음');
+    expect(facts).not.toMatch(/오답|질문|검토 전|숙련 인증/);
+    expect(entryFacts(entry())).toContain('아직 푼 문제 없음');
+    expect(entryFacts(entry({ selfReport: 'known' }))).not.toContain('확인된 것은 아님');
   });
 
   it('changes the fingerprint when the facts or the reader level change, so the sentence is rewritten', () => {

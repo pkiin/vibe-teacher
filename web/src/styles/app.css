@@ -124,6 +124,7 @@ h4 { font-size: var(--ui-font-size); margin: 12px 0 6px; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn-primary:hover { background: var(--accent-hover); }
 .btn-small { min-height: var(--small-control-height); padding: 5px 10px; font-size: var(--font-small); }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .btn-danger { color: var(--red); }
 .link { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0 4px; font: inherit; }
 .link:hover { text-decoration: underline; }
@@ -639,6 +640,8 @@ summary::marker { color: var(--muted); }
 .question-example-list .btn { white-space: normal; text-align: left; line-height: 1.5; }
 .learning-history { padding: .65rem 0; }
 .learning-history p { margin: .3rem 0; }
+.learning-status { display: flex; flex-wrap: wrap; gap: 6px; }
+.learning-status .pill { margin-left: 0; }
 .memory-panel { margin-top: 1.2rem; }
 .memory-search { display: flex; gap: .5rem; flex-wrap: wrap; }
 .memory-search input { flex: 1; min-width: 12rem; }

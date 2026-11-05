@@ -102,7 +102,9 @@ function ExplainView({ data }: { data: UnderstandData }) {
   const [depth, setDepth] = useState<ExplanationDepth>('D1');
   const [example, setExample] = useState(false);
   const [preferenceError, setPreferenceError] = useState(false);
+  const [checking, setChecking] = useState(false);
   const currentState = data.profile?.concepts[focus.id ?? ''];
+  useEffect(() => { setChecking(false); }, [focus.kind, focus.id]);
   useEffect(() => {
     setDepth(currentState?.teaching?.depth ?? 'D1');
     setExample(currentState?.teaching?.examples ?? false);
@@ -166,9 +168,12 @@ function ExplainView({ data }: { data: UnderstandData }) {
           </div>
         )}
         <div className="wiki-buttons">
-          <button className="btn btn-small" onClick={() => data.learner.selfReport(id, 'known')}>
-            {ko.understanding.known}
-          </button>
+          {/* '알고 있어요'는 OX 확인 문제를 맞혀야 기록된다 */}
+          {currentState?.selfReport !== 'known' && (
+            <button className="btn btn-small" aria-expanded={checking} onClick={() => setChecking((v) => !v)}>
+              {ko.understanding.known}
+            </button>
+          )}
           <button className="btn btn-small" onClick={() => data.learner.selfReport(id, 'unsure')}>
             {ko.understanding.unsure}
           </button>
@@ -179,6 +184,7 @@ function ExplainView({ data }: { data: UnderstandData }) {
             {ko.help.quizAbout}
           </button>
         </div>
+        {checking && <QuizCard key={`check-${id}`} sessionKey={data.sessionKey} target={{ conceptId: id }} learner={data.learner} explanationSeen helpUsed={f.helped.has(id)} purpose="self_check" onClose={() => setChecking(false)} />}
       </div>
     );
   }
