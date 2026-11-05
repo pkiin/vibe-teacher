@@ -108,6 +108,9 @@ export interface AuthSettings {
   enrichFor: 'admins' | 'everyone';
 }
 
+/** 회원 모드 실행 방식: 각자의 노트북 · HTTPS 공용 서버 · SSH 터널로 접속하는 개발 서버 */
+export type Deployment = 'local' | 'shared' | 'ssh';
+
 export interface AuthMeResponse {
   mode: AuthMode;
   authenticated: boolean;
@@ -127,7 +130,9 @@ export interface AuthMeResponse {
   reader: ReaderPrefs | null;
   email?: string;
   approved?: boolean;
-  deployment?: 'local' | 'shared';
+  deployment?: Deployment;
+  /** SSH 터널 서버에서 이 연결을 연 OS 계정 (확인하지 못하면 null) */
+  osUser?: string | null;
   localOwner?: boolean;
   canManageInstallation?: boolean;
 }

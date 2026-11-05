@@ -14,6 +14,7 @@ import { createWikiServices } from './wiki/service';
 import { cloudConfig } from './cloud/client';
 import { SupabaseAuth } from './auth/supabase';
 import { userLlmEnvironment } from './llm/credentials';
+import { procNetAvailable } from './lib/peer';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = '0.1.0';
@@ -30,6 +31,11 @@ async function main() {
   const env = readServerEnv(cfg.server, process.env, args);
   const cloud = cloudConfig();
   if (cloud?.deployment === 'local' && !env.isLoopback) throw new Error('로컬 설치는 loopback 주소에서 실행하세요. 공용 서버는 VIBE_TEACHER_DEPLOYMENT=shared로 지정하세요');
+  if (cloud?.deployment === 'ssh') {
+    // 다른 기기에서 직접 들어온 연결은 접속한 OS 계정을 알 수 없으므로 SSH 터널로만 받는다.
+    if (!env.isLoopback) throw new Error('SSH 터널 서버는 loopback 주소(기본 127.0.0.1)에서 실행하세요. 사용자는 ssh -L 로 접속합니다');
+    if (!procNetAvailable()) throw new Error('SSH 터널 서버는 접속한 OS 계정을 /proc/net/tcp 에서 확인하므로 리눅스에서만 실행할 수 있습니다');
+  }
   if (!env.isLoopback && !env.token && cfg.auth.mode !== 'home-token' && !cloud) {
     console.error(
       `[vibe-teacher] ${env.host} 처럼 loopback 이 아닌 주소에 바인딩하려면 VIBE_TEACHER_TOKEN 환경변수 또는 로그인 모드(auth.mode=home-token)가 필요합니다. ` +
@@ -47,7 +53,7 @@ async function main() {
   });
   const analysis = new AnalysisService();
   const enrich = new EnrichService({ store, paths, env: userLlmEnvironment({ isAdmin: true }, cloud?.deployment ?? 'local', cfg.llm.provider) });
-  const auth = new AuthService({ store, paths, index, serviceUser: currentUser().username, bearerToken: env.token, isLoopback: env.isLoopback, cookieSecure: process.env.VIBE_TEACHER_COOKIE_SECURE === '1', ...(cloud ? { cloud: new SupabaseAuth(cloud, paths.home) } : {}) });
+  const auth = new AuthService({ store, paths, index, serviceUser: currentUser().username, serviceUid: currentUser().uid, bearerToken: env.token, isLoopback: env.isLoopback, cookieSecure: process.env.VIBE_TEACHER_COOKIE_SECURE === '1', ...(cloud ? { cloud: new SupabaseAuth(cloud, paths.home) } : {}) });
   await auth.init();
   const { wiki, learner, assessments, wikiAi, help, prefs, memory } = createWikiServices(paths.home, store, () => enrich.resolveProvider(), (id) => index.getProjectIds(id));
 
@@ -62,7 +68,7 @@ async function main() {
   );
   const server = serve({ fetch: app.fetch, hostname: env.host, port: env.port }, (info) => {
     console.log(`[vibe-teacher] http://${info.address === '::' ? 'localhost' : info.address}:${info.port}  (설정: ${paths.configFile})`);
-    console.log(`[vibe-teacher] 로그인 모드: ${auth.mode()}${cloud ? ` · ${cloud.deployment} · Supabase 사용자별 저장` : ''}${cfg.auth.mode === 'home-token' ? ` · 관리자: ${[currentUser().username, ...cfg.auth.admins].join(', ')}` : ''}`);
+    console.log(`[vibe-teacher] 로그인 모드: ${auth.mode()}${cloud ? ` · ${cloud.deployment} · Supabase 사용자별 저장${cloud.deployment === 'ssh' ? ' · 접속한 SSH 계정의 기록만 표시' : ''}` : ''}${cfg.auth.mode === 'home-token' ? ` · 관리자: ${[currentUser().username, ...cfg.auth.admins].join(', ')}` : ''}`);
   });
   let stopping = false;
   const shutdown = () => {

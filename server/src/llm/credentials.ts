@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { LlmProviderSetting } from '@vibe-teacher/shared';
+import type { Deployment, LlmProviderSetting } from '@vibe-teacher/shared';
 
 const UserKeysSchema = z.record(z.uuid(), z.string().trim().min(1).max(4096));
 
@@ -20,10 +20,10 @@ export function userOpenRouterKeys(env: NodeJS.ProcessEnv): Record<string, strin
   return Object.fromEntries(entries);
 }
 
-/** 인증된 UUID·관리자 여부만 받는다. 공용 서버의 일반 회원은 등록된 본인 키만 사용한다. */
+/** 인증된 UUID·관리자 여부만 받는다. 공용 서버·SSH 터널 서버의 일반 회원은 등록된 본인 키만 사용한다. */
 export function userLlmEnvironment(
   identity: { userId?: string; isAdmin: boolean },
-  deployment: 'local' | 'shared',
+  deployment: Deployment,
   configuredProvider: LlmProviderSetting,
   source: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
@@ -33,7 +33,7 @@ export function userLlmEnvironment(
   // 하위 제공자와 CLI에 전체 회원 키 목록·관리자 전용 키를 넘기지 않는다.
   delete env.VIBE_TEACHER_USER_OPENROUTER_KEYS;
   delete env.VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY;
-  if (deployment === 'shared') {
+  if (deployment !== 'local') {
     const keys = userOpenRouterKeys(source);
     const memberKey = identity.userId ? keys[identity.userId.toLowerCase()] : undefined;
     env.OPENROUTER_API_KEY = memberKey || (identity.isAdmin ? adminKey || personalKey : undefined) || '';

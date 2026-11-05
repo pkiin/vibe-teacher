@@ -1,11 +1,14 @@
 import { timingSafeEqual } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
+import type { Socket } from 'node:net';
 import path from 'node:path';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Account, AuthMode } from '@vibe-teacher/shared';
 import type { ConfigStore, Paths } from '../config/store';
 import type { SessionIndex } from '../index/session-index';
-import { readPasswdHomes } from '../index/accounts';
+import { accountIdFor, readPasswdHomes } from '../index/accounts';
+import { PEER_UID_HEADER, readPeerUid, trustedPeerUid } from '../lib/peer';
 import { COOKIE_NAME, CookieSigner, loadOrCreateSecret } from './cookie';
 import { readLoginToken, tokenHash } from './token-file';
 import type { SupabaseAuth } from './supabase';
@@ -14,7 +17,11 @@ export interface AuthUser {
   username: string;
   isAdmin: boolean;
   via: 'cookie' | 'bearer' | 'open';
-  cloud?: { userId: string; email: string; accessToken: string; approved: boolean; accountIds: string[]; localOwner: boolean };
+  cloud?: {
+    userId: string; email: string; accessToken: string; approved: boolean; accountIds: string[]; localOwner: boolean;
+    /** SSH 터널 서버에서 이 연결을 연 OS 계정. 확인하지 못하면 null */
+    osUser?: string | null;
+  };
 }
 
 export type LoginResult = { ok: true; user: AuthUser } | { ok: false; status: 401 | 403 | 429; reason: string };
@@ -25,12 +32,18 @@ export interface AuthServiceOptions {
   index: SessionIndex;
   /** 앱을 실행 중인 OS 계정 (항상 관리자) */
   serviceUser: string;
+  /** 앱을 실행 중인 OS 계정의 uid. 같은 계정의 개발 프록시가 넘긴 접속자만 믿는 데 쓴다 */
+  serviceUid?: number;
   /** VIBE_TEACHER_TOKEN — 있으면 관리자용 Bearer 토큰 */
   bearerToken: string | null;
   /** 비-loopback 바인딩 여부 (없음 모드에서 토큰 필요 여부 계산용) */
   isLoopback: boolean;
   cookieSecure?: boolean;
   cloud?: SupabaseAuth;
+  /** 시험용: 연결을 연 쪽 소켓의 uid (기본은 /proc/net/tcp) */
+  socketUid?: (c: Context) => Promise<number | null>;
+  /** 시험용: 홈 → 사용자명·uid (기본은 /etc/passwd) */
+  passwd?: () => Promise<Map<string, { username: string; uid: number }>>;
 }
 
 const MAX_FAILS = 5;
@@ -42,6 +55,7 @@ export class AuthService {
   private fails = new Map<string, { count: number; until: number }>();
   private tokenCache = new Map<string, { at: number; hash: string | null }>();
   private uidCache: { at: number; map: Map<string, { username: string; uid: number }> } | null = null;
+  private socketUids = new WeakMap<Socket, Promise<number | null>>();
 
   constructor(private readonly opts: AuthServiceOptions) {}
 
@@ -99,10 +113,40 @@ export class AuthService {
     return this.opts.index.getAccounts().filter((a) => a.username === username);
   }
 
+  private async passwdHomes(): Promise<Map<string, { username: string; uid: number }>> {
+    if (!this.uidCache || Date.now() - this.uidCache.at > 300_000) this.uidCache = { at: Date.now(), map: await (this.opts.passwd ?? readPasswdHomes)() };
+    return this.uidCache.map;
+  }
+
   private async uidFor(username: string): Promise<number | undefined> {
-    if (!this.uidCache || Date.now() - this.uidCache.at > 300_000) this.uidCache = { at: Date.now(), map: await readPasswdHomes() };
-    for (const v of this.uidCache.map.values()) if (v.username === username) return v.uid;
+    for (const v of (await this.passwdHomes()).values()) if (v.username === username) return v.uid;
     return undefined;
+  }
+
+  /** 이 요청의 TCP 연결을 연 OS 계정의 uid. 연결이 유지되는 동안 결과가 같으므로 소켓마다 한 번만 찾는다. */
+  private async peerUid(c: Context): Promise<number | null> {
+    let socketUid: number | null;
+    if (this.opts.socketUid) socketUid = await this.opts.socketUid(c);
+    else {
+      const socket = (c.env as { incoming?: IncomingMessage } | undefined)?.incoming?.socket;
+      if (!socket) return null;
+      let pending = this.socketUids.get(socket);
+      if (!pending) {
+        pending = readPeerUid(socket).catch(() => null);
+        this.socketUids.set(socket, pending);
+      }
+      socketUid = await pending;
+    }
+    return trustedPeerUid(socketUid, c.req.header(PEER_UID_HEADER), this.opts.serviceUid ?? process.getuid?.() ?? -1);
+  }
+
+  /** SSH 터널 서버: 회원이 볼 OS 계정은 관리자 연결 목록이 아니라 이 연결을 연 OS 계정 하나로 정한다. */
+  private async withSshAccount(c: Context, user: AuthUser): Promise<AuthUser> {
+    if (!user.cloud) return user;
+    const uid = await this.peerUid(c);
+    let os: { username: string; home: string } | undefined;
+    if (uid !== null) for (const [home, v] of await this.passwdHomes()) if (v.uid === uid) { os = { username: v.username, home }; break; }
+    return { ...user, cloud: { ...user.cloud, accountIds: os ? [accountIdFor(os.home)] : [], osUser: os?.username ?? null } };
   }
 
   private bearerUser(c: Context): AuthUser | null {
@@ -119,7 +163,10 @@ export class AuthService {
 
   /** 요청에서 사용자를 알아낸다. 없으면 null. */
   async authenticate(c: Context): Promise<AuthUser | null> {
-    if (this.cloud) return this.cloud.authenticate(c);
+    if (this.cloud) {
+      const user = await this.cloud.authenticate(c);
+      return user && this.cloud.config.deployment === 'ssh' ? this.withSshAccount(c, user) : user;
+    }
     const bearer = this.bearerUser(c);
     if (bearer) return bearer;
     if (this.mode() === 'none') {

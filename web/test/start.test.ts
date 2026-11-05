@@ -24,6 +24,22 @@ describe('처음 시작하는 화면', () => {
     expect(html).not.toContain('AI와 시작할 첫 대화');
   });
 
+  it('SSH 터널 서버에서는 접속한 OS 계정을 알리고 확인하지 못하면 기록을 보여 주지 않는다고 안내한다', () => {
+    const before = state.me;
+    try {
+      state.me = { mode: 'supabase', authenticated: true, deployment: 'ssh', approved: true, osUser: 'user99' } as AuthMeResponse;
+      let html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(StartPage)));
+      expect(html).toContain('SSH 터널 개발 서버에서 실행 중');
+      expect(html).toContain('접속한 SSH 계정: user99');
+      expect(html).not.toContain('다른 계정에 연결되어');
+      state.me = { ...state.me, osUser: null };
+      html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(StartPage)));
+      expect(html).toContain('접속한 OS 계정을 확인하지 못해');
+    } finally {
+      state.me = before;
+    }
+  });
+
   it('이메일 로그인과 회원가입 진입을 표시하며 서버 토큰 파일을 요구하지 않는다', () => {
     const html = renderToStaticMarkup(createElement(LoginPage));
     expect(html).toContain('type="email"');
