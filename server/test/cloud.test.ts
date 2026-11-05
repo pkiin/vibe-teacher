@@ -116,7 +116,7 @@ async function fixture(remote = fakeCloud(), deployment: Deployment = 'shared', 
   const index = {
     ensureFresh: async () => {}, getAccounts: () => accounts, getProjects: () => [], getProjectIds: (id: string) => [id],
     getProject: (id: string) => id === 'alice-project' ? { id, accountId: 'alice-account' } : undefined,
-    getSummary: () => undefined,
+    getSummary: () => undefined, rescan: async () => ({ accounts: accounts.length, sources: 0, projects: 0, sessions: 0, durationMs: 0 }),
   } as unknown as SessionIndex;
   const cloud = new SupabaseAuth({ ...config, deployment, secure: deployment === 'shared' }, home, remote.request);
   const auth = new AuthService({
@@ -208,7 +208,7 @@ describe('Supabase 로그인과 사용자 저장소', () => {
 
   it('로컬 소유자는 기기 설정을 관리해도 회원 승인 권한을 얻지 않는다', async () => {
     const f = await fixture(fakeCloud(), 'local');
-    expect(await (await f.req('/api/auth/me')).json()).toMatchObject({ localOwner: true, isAdmin: false, canManageInstallation: true, canEnrich: false });
+    expect(await (await f.req('/api/auth/me')).json()).toMatchObject({ localOwner: true, isAdmin: false, canManageInstallation: true, canManageScan: true, canEnrich: false });
     expect((await f.req('/api/settings')).status).toBe(200);
     expect((await f.req('/api/settings', 'alice-token', { auth: { enrichFor: 'everyone' } })).status).toBe(200);
     expect(await (await f.req('/api/auth/me')).json()).toMatchObject({ canEnrich: false });
@@ -359,6 +359,24 @@ describe('SSH 터널 서버', () => {
     const service = await sshFixture(1000);
     expect((await (await service.req('/api/accounts')).json() as Account[]).map((a) => a.username)).toEqual(['ubuntu']);
     expect(await (await service.req('/api/auth/me')).json()).toMatchObject({ osUser: 'ubuntu' });
+  });
+
+  it('스캔 범위는 서버 실행 계정으로 접속한 설치 관리자만 보고 바꾼다', async () => {
+    const other = await sshFixture(1099);
+    expect(await (await other.req('/api/auth/me', 'bob-token')).json()).toMatchObject({ isAdmin: true, canManageInstallation: true, canManageScan: false });
+    const denied = await other.req('/api/settings', 'bob-token', { scan: { mode: 'all' } });
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toMatchObject({ error: { code: 'forbidden', message: expect.stringContaining('서버를 실행하는 계정(service)') } });
+    // 스캔 범위가 아닌 설치 설정은 그대로 바꿀 수 있다.
+    expect((await other.req('/api/settings', 'bob-token', { llm: { autoText: false } })).status).toBe(200);
+    const service = await sshFixture(1000);
+    expect(await (await service.req('/api/auth/me', 'bob-token')).json()).toMatchObject({ canManageScan: true });
+    expect((await service.req('/api/settings', 'bob-token', { scan: { mode: 'all' } })).status).toBe(200);
+    // 서버 실행 계정으로 접속해도 일반 회원은 설치 설정을 바꾸지 못한다.
+    expect(await (await service.req('/api/auth/me')).json()).toMatchObject({ canManageScan: false });
+    expect((await service.req('/api/settings', 'alice-token', { scan: { mode: 'all' } })).status).toBe(403);
+    // 공용 서버(shared)의 관리자는 지금처럼 바꿀 수 있다.
+    expect(await (await (await fixture()).req('/api/auth/me', 'bob-token')).json()).toMatchObject({ canManageScan: true });
   });
 
   it('접속한 계정을 확인하지 못하면 서버 기록을 보여 주지 않는다', async () => {

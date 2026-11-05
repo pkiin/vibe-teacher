@@ -148,7 +148,7 @@ export function SourcesPage() {
       )}
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
 
-      <section className="section card">
+      {me?.canManageScan && <section className="section card">
         <h2>{ko.sources.scanTitle}</h2>
         <div className="form-grid">
           {(['current', 'list', 'all'] as const).map((m) => (
@@ -179,7 +179,7 @@ export function SourcesPage() {
             </button>
           </div>
         </div>
-      </section>
+      </section>}
 
       <section className="section">
         <h2>기록 위치</h2>

@@ -22,6 +22,7 @@ export function authRoutes(deps: AppDeps, runtime?: CloudRuntime): Hono<AppEnv> 
       username: user?.username,
       isAdmin: user?.isAdmin,
       canManageInstallation: !!user && (user.isAdmin || !!user.cloud?.localOwner),
+      canManageScan: !!user && deps.auth.canManageScan(user),
       via: user?.via,
       canEnrich: user ? deps.auth.canEnrich(user).ok : false,
       enrichReason: user ? deps.auth.canEnrich(user).reason : undefined,
