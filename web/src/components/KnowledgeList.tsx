@@ -62,10 +62,13 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
   return (
     <article className="knowledge-card">
       <div className="concept-head">
-        <h3>
-          {entry.name} <span className="muted">—</span> <span className="knowledge-state">{s.disputed ? ko.knowledge.disputed : ko.knowledge.state[s.state]}</span>
-        </h3>
-        <span className={`pill ${STATE_PILL[s.state] ?? 'pill-gray'}`}>{ko.knowledge.state[s.state]}</span>
+        <h3>{entry.name}</h3>
+        {/* 상태는 배지 하나로만. 확인 기록이 없는 상태(unknown)는 묶음 제목과 학습 기록이 이미 말해 주므로 표시하지 않는다 */}
+        {s.disputed ? (
+          <span className="pill pill-yellow">{ko.knowledge.disputed}</span>
+        ) : (
+          s.state !== 'unknown' && <span className={`pill ${STATE_PILL[s.state] ?? 'pill-gray'}`}>{ko.knowledge.state[s.state]}</span>
+        )}
         {s.selfReport && <span className="pill pill-outline">{ko.knowledge.selfReport[s.selfReport]}</span>}
         <span className="pill pill-outline">{entry.category}</span>
       </div>

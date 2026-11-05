@@ -564,7 +564,7 @@ export const ko = {
     allProjects: '모든 프로젝트',
     scanned: (n: number, total: number) => (n < total ? `최근 세션 ${n}개를 살펴봤습니다 (전체 ${total}개)` : `세션 ${n}개를 살펴봤습니다`),
     groups: { check: '한번 확인해 볼까요?', confirmed: '문제로 확인해 본 개념', background: '함께 알아 두면 좋은 개념' } as Record<string, string>,
-    state: { unknown: '숙련 확인 전', partial: '일부 확인', demonstrated: '푼 문제에서는 확인했어요', conflicting: '판단 보류' } as Record<string, string>,
+    state: { partial: '일부 확인', demonstrated: '푼 문제에서는 확인했어요', conflicting: '판단 보류' } as Record<string, string>,
     disputed: '이의 제기됨',
     sources: '근거',
     moreSources: (n: number) => `외 ${n}개`,

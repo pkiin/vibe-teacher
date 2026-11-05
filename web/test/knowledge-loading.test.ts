@@ -64,4 +64,18 @@ describe('내 지식 다시 열기', () => {
     const loading = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(KnowledgeCard, { entry: pending, writing: true, learner })));
     expect(loading).toContain(entry.summary); expect(loading).toContain('AI가 설명을 쓰는 중');
   });
+
+  it('상태는 배지 하나로만 보이고, 확인 기록이 없는 상태는 따로 표시하지 않는다', () => {
+    const learner = { revision: () => 0 } as LearnerActions;
+    const render = (entry: KnowledgeWikiResponse['entries'][number]) => renderToStaticMarkup(createElement(MemoryRouter, null, createElement(KnowledgeCard, { entry, learner })));
+    const entry = view().entries[0]!;
+    const unknown = render(entry);
+    expect(unknown).not.toContain('숙련 확인 전');
+    expect(unknown).toContain('<h3>인증</h3>');
+    const demonstrated = render({ ...entry, state: { ...entry.state, state: 'demonstrated' } });
+    expect(demonstrated.match(/푼 문제에서는 확인했어요/g)).toHaveLength(1);
+    const disputed = render({ ...entry, state: { ...entry.state, state: 'demonstrated', disputed: true } });
+    expect(disputed.match(/이의 제기됨/g)).toHaveLength(1);
+    expect(disputed).not.toContain('푼 문제에서는 확인했어요');
+  });
 });
