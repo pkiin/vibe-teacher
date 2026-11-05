@@ -13,16 +13,18 @@ export function MembersPage() {
 }
 
 function Members() {
+  const { me } = useAuth();
+  const ssh = me?.deployment === 'ssh';
   const members = useApi<Member[]>('/api/members');
-  const accounts = useApi<Account[]>('/api/members/accounts');
+  const accounts = useApi<Account[]>(ssh ? null : '/api/members/accounts');
   return <div className="page"><h1>{ko.members.title}</h1><p className="muted">{ko.members.subtitle}</p>
     {members.loading && <Loading />}{members.error && <ErrorBox error={members.error} onRetry={members.reload} />}
     {accounts.error && <ErrorBox error={accounts.error} onRetry={accounts.reload} />}
-    <div className="member-grid">{members.data?.map((member) => <MemberCard key={`${member.user_id}:${member.approved}:${member.account_ids.join(',')}`} member={member} accounts={accounts.data ?? []} onSaved={members.reload} />)}</div>
+    <div className="member-grid">{members.data?.map((member) => <MemberCard key={`${member.user_id}:${member.approved}:${member.account_ids.join(',')}`} member={member} accounts={accounts.data ?? []} ssh={ssh} onSaved={members.reload} />)}</div>
   </div>;
 }
 
-function MemberCard({ member, accounts, onSaved }: { member: Member; accounts: Account[]; onSaved: () => void }) {
+function MemberCard({ member, accounts, ssh, onSaved }: { member: Member; accounts: Account[]; ssh: boolean; onSaved: () => void }) {
   const [approved, setApproved] = useState(member.approved);
   const [ids, setIds] = useState(member.account_ids);
   const [busy, setBusy] = useState(false);
@@ -38,10 +40,10 @@ function MemberCard({ member, accounts, onSaved }: { member: Member; accounts: A
     <p className="muted small">{ko.members.keyUserId} <code>{member.user_id}</code></p>
     {member.is_admin && <span className="pill pill-blue">{ko.login.admin}</span>}
     <label><input type="checkbox" checked={approved} onChange={(e) => setApproved(e.target.checked)} /> {ko.members.approve}</label>
-    <fieldset><legend>{ko.members.accounts}</legend>
+    {ssh ? <p className="muted small">{ko.members.sshAccounts}</p> : <fieldset><legend>{ko.members.accounts}</legend>
       {!accounts.length && <p className="muted small">{ko.members.noAccounts}</p>}
       {accounts.map((a) => <label className="member-account" key={a.id}><input type="checkbox" checked={ids.includes(a.id)} onChange={(e) => setIds(e.target.checked ? [...ids, a.id] : ids.filter((id) => id !== a.id))} />{a.username} <span className="muted small">{a.homePath}</span></label>)}
-    </fieldset>
+    </fieldset>}
     {error && <p role="alert" className="notice notice-error">{error}</p>}
     <button className="btn btn-primary" disabled={busy} onClick={() => void save()}>{busy ? ko.common.loading : ko.members.save}</button>
   </section>;

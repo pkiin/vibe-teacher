@@ -1,11 +1,11 @@
 import { isLoopbackHost } from '../config/env';
-import type { CloudTableActivity } from '@vibe-teacher/shared';
+import type { CloudTableActivity, Deployment } from '@vibe-teacher/shared';
 import { beginActivity } from '../lib/progress';
 
 export interface CloudConfig {
   url: string;
   key: string;
-  deployment: 'local' | 'shared';
+  deployment: Deployment;
   secure: boolean;
   publicUrl?: string;
 }
@@ -16,13 +16,15 @@ export function normalizeAppUrl(value: string, deployment: CloudConfig['deployme
   try { url = new URL(value); }
   catch { throw new Error('인증 후 돌아올 앱 주소를 확인하세요'); }
   const loopback = isLoopbackHost(url.hostname.replace(/^\[|\]$/g, ''));
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash || (deployment === 'local' && !loopback) || (deployment === 'shared' && url.protocol !== 'https:')) {
-    throw new Error('인증 후 돌아올 주소는 로컬 설치의 loopback 주소 또는 공용 서버의 HTTPS 앱 주소여야 합니다');
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash || (deployment !== 'shared' && !loopback) || (deployment === 'shared' && url.protocol !== 'https:')) {
+    throw new Error('인증 후 돌아올 주소는 로컬 설치·SSH 터널 서버의 loopback 주소 또는 공용 서버의 HTTPS 앱 주소여야 합니다');
   }
   return `${url.origin}/`;
 }
 
 export function cloudConfig(env: NodeJS.ProcessEnv = process.env): CloudConfig | null {
+  // SSH 터널 서버를 회원 로그인 없이 띄우면 모든 접속자가 서버 실행 계정으로 보이므로 막는다.
+  if (!env.VIBE_TEACHER_AUTH_MODE && env.VIBE_TEACHER_DEPLOYMENT?.trim() === 'ssh') throw new Error('VIBE_TEACHER_DEPLOYMENT=ssh는 회원 로그인(VIBE_TEACHER_AUTH_MODE=supabase)과 함께 사용하세요');
   if (!env.VIBE_TEACHER_AUTH_MODE) return null;
   if (env.VIBE_TEACHER_AUTH_MODE !== 'supabase') throw new Error('VIBE_TEACHER_AUTH_MODE는 supabase 또는 미설정이어야 합니다');
   const url = env.SUPABASE_URL?.trim().replace(/\/$/, '');
@@ -34,8 +36,8 @@ export function cloudConfig(env: NodeJS.ProcessEnv = process.env): CloudConfig |
   let role: string | undefined;
   try { role = JSON.parse(Buffer.from(key.split('.')[1] ?? '', 'base64url').toString()).role; } catch { /* 새 공개 키는 JWT가 아니다 */ }
   if (!key.startsWith('sb_publishable_') && role !== 'anon') throw new Error('Supabase 공개 키(publishable 또는 anon)를 사용하세요');
-  const deployment = env.VIBE_TEACHER_DEPLOYMENT ?? 'local';
-  if (deployment !== 'local' && deployment !== 'shared') throw new Error('VIBE_TEACHER_DEPLOYMENT는 local 또는 shared여야 합니다');
+  const deployment = env.VIBE_TEACHER_DEPLOYMENT?.trim() || 'local';
+  if (deployment !== 'local' && deployment !== 'shared' && deployment !== 'ssh') throw new Error('VIBE_TEACHER_DEPLOYMENT는 local·shared·ssh 중 하나여야 합니다');
   const publicUrl = env.VIBE_TEACHER_PUBLIC_URL?.trim();
   return { url, key, deployment, secure: deployment === 'shared' || env.VIBE_TEACHER_COOKIE_SECURE === '1', ...(publicUrl ? { publicUrl: normalizeAppUrl(publicUrl, deployment) } : {}) };
 }

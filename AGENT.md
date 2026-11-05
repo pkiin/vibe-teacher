@@ -56,6 +56,7 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
   src/routes/      API 라우트. 공통 의존성과 HttpError 는 routes/deps.ts
   src/lib/         fsx(안전한 파일 IO) · jsonl · shell(셸 명령 파서) · text · hash
                    · concurrent(순서를 보존하는 동시 IO 상한) · progress(AsyncLocalStorage로 작업별 실제 IO·AI 단계 추적)
+                   · peer(loopback 연결을 연 OS 계정 uid를 /proc/net/tcp에서 찾기, web/vite.config.ts 프록시도 사용)
   src/wiki/        프로젝트 위키: build(AI 입력 snapshot) · validate(출처 검사·격리) · plan(설명 계획) · graph(선행관계) · catalog · service
   src/learner/     내 이해 정보(사용자 전체): reducer(원장 → 개념 상태) · service(원장 쓰기, revision 충돌, 예전 프로젝트별 원장 병합)
                    · knowledge(AI 개념이 나온 곳·명시적 이해 증거) · knowledge-service(내 세션 모으기·캐시)
@@ -147,7 +148,9 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 
 - **메일 인증의 복귀 주소는 앱 주소다.** 가입 요청에 `redirect_to`를 전달한다. `VIBE_TEACHER_PUBLIC_URL` > 요청 Origin > 요청 URL의 origin 순서로 정하며 Vite 프록시 뒤에서도 웹 포트를 보존한다. local은 loopback, shared는 HTTPS만 허용하고 사용자 정보·경로·쿼리·해시가 붙은 주소는 거절한다. Supabase 대시보드의 Redirect URLs 등록은 별도이며 앱 환경변수로 자동 변경하지 않는다. `web/src/auth/email-confirmation.ts`가 React·라우터 시작 전에 콜백 토큰·외부 오류를 URL에서 제거하고 가입용 access token만 POST 본문으로 보낸다. `/api/auth/email-confirmation`은 `/auth/v1/user`의 `email_confirmed_at`을 확인하고 결과만 반환한다. 콜백에서 로그인 쿠키·로컬 소유자를 만들거나 refresh token을 사용·보관하지 않는다. 확인된 결과만 완료 화면에 표시하며 토큰과 외부 오류 원문을 로그·화면·저장소에 남기지 않는다. 만료·검증 실패·서버 장애는 완료와 구분하고 로그인 버튼으로 이어 간다.
 
-- **공용 서버 AI 키는 인증 UUID로 선택한다.** `llm/credentials.ts`는 `shared` 요청에 `VIBE_TEACHER_USER_OPENROUTER_KEYS`의 본인 UUID 키만 전달합니다. 일반 회원은 관리자 키·서버의 공통 키·CLI로 우회하지 못합니다. 관리자 계정만 본인 매핑이 없을 때 개발용 키를 사용할 수 있습니다. 승인 검사는 별도로 유지합니다. 키 목록과 관리자 전용 변수는 하위 제공자 환경에서 지우고 응답·로그에 노출하지 않습니다. `CloudRuntime`은 사용자별 환경을 분리하고 키·관리자 상태가 바뀌면 제공자 캐시를 무효화합니다. 로컬 사용자는 `.env`의 본인 키를 사용하며 관리자 개발용 키는 관리자에게만 적용합니다.
+- **SSH 터널 서버는 연결을 연 OS 계정으로 기록 범위를 정한다.** `VIBE_TEACHER_DEPLOYMENT=ssh`는 Supabase 회원 모드 전용이며 리눅스·loopback 바인딩만 허용한다 (`server/src/index.ts`, `cloudConfig`). 볼 수 있는 OS 계정은 `vt_members.account_ids`가 아니라 커널이 기록한 상대편 소켓의 uid 하나다 (`lib/peer.ts` → `AuthService.withSshAccount`). Supabase 관리자도 범위가 넓어지지 않는다. uid를 확인하지 못하면 빈 범위로 둔다. 서비스 계정 이름이나 첫 로그인으로 대체하지 않는다. `x-vibe-teacher-peer-uid` 헤더는 연결을 연 쪽이 서버와 같은 uid일 때만 믿는다 (`trustedPeerUid`, vite 개발 프록시용). vite 프록시는 이 헤더를 항상 덮어쓴다. AI 키·승인은 `shared`와 같다.
+
+- **공용 서버 AI 키는 인증 UUID로 선택한다.** `llm/credentials.ts`는 `shared`·`ssh` 요청에 `VIBE_TEACHER_USER_OPENROUTER_KEYS`의 본인 UUID 키만 전달합니다. 일반 회원은 관리자 키·서버의 공통 키·CLI로 우회하지 못합니다. 관리자 계정만 본인 매핑이 없을 때 개발용 키를 사용할 수 있습니다. 승인 검사는 별도로 유지합니다. 키 목록과 관리자 전용 변수는 하위 제공자 환경에서 지우고 응답·로그에 노출하지 않습니다. `CloudRuntime`은 사용자별 환경을 분리하고 키·관리자 상태가 바뀌면 제공자 캐시를 무효화합니다. 로컬 사용자는 `.env`의 본인 키를 사용하며 관리자 개발용 키는 관리자에게만 적용합니다.
 
 - **인증 메일 재발송은 접수와 전달을 구분한다.** 로그인 화면·인증 실패 화면은 `ResendConfirmation`을 사용한다. 공개 키로 `/auth/v1/resend`에 가입용 재발송만 요청하며 가입과 같은 복귀 주소 검사를 적용한다. 계정 존재·인증 여부를 공개 조회하거나 메일 전달을 보장하지 않는다. 가입·재발송 후 60초 대기는 UI 안내이며 Supabase 발송 제한은 별도로 유지한다. 알려진 발송 한도·수신 주소 제한·미인증 오류 코드만 안전한 문구로 바꾸고 외부 오류 원문은 노출하지 않는다. 관리자가 삭제한 `vt_members`는 자동 복구하지 않는다.
 

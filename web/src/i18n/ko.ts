@@ -54,7 +54,9 @@ export const ko = {
     repositoryNote: '시작 안내에 참고할 정보입니다. 주소를 입력해도 저장소를 자동으로 내려받거나 실행하지 않습니다.',
     optional: '아직 정하지 못한 항목은 비워 두어도 괜찮아요. 나중에 언제든 바꿀 수 있어요.', submit: '내 시작점 보기',
     ready: '여기서부터 시작해 보세요', readyNote: '지금 단계에 맞는 순서로, 작은 것부터 하나씩 진행해 보세요.',
-    local: '내 노트북에서 실행 중', shared: '공용 서버에서 실행 중', synced: '내 계정의 Supabase 저장소 사용',
+    local: '내 노트북에서 실행 중', shared: '공용 서버에서 실행 중', ssh: 'SSH 터널 개발 서버에서 실행 중', synced: '내 계정의 Supabase 저장소 사용',
+    sshAccount: (user: string) => `접속한 SSH 계정: ${user} — 이 OS 계정의 대화 기록만 보입니다. 기록이 보이지 않으면 관리자에게 스캔 범위와 읽기 권한(ACL) 설정을 요청하세요.`,
+    sshUnknown: '접속한 OS 계정을 확인하지 못해 서버의 대화 기록을 보여 주지 않습니다. 본인 계정으로 서버에 SSH 로그인한 뒤 ssh -L 터널로 접속해 주세요.',
     pending: 'AI 사용 승인 대기 중입니다. 시작 안내와 내 설정은 먼저 저장할 수 있어요.', checkApproval: '승인 상태 확인',
     otherLocalOwner: '이 설치의 로컬 기록은 다른 계정에 연결되어 있습니다. 내 기록은 별도의 설치에서 연결해 주세요.',
     promptTitle: 'AI와 시작할 첫 대화', promptNote: '아래 요청을 복사해 사용 중인 AI 코딩 도구에 붙여넣으세요.',
@@ -89,6 +91,7 @@ export const ko = {
     subtitle: 'AI 사용을 승인하고, 공용 서버의 OS 계정을 해당 회원에게 연결하세요. 다른 회원의 학습 데이터는 조회하지 않습니다.',
     forbidden: 'Supabase 관리자만 회원을 관리할 수 있습니다.', approve: 'AI 사용 승인', accounts: '공용 서버에서 볼 수 있는 OS 계정',
     noAccounts: '발견한 OS 계정이 없습니다. 서버의 스캔 설정을 확인하세요.', save: '저장',
+    sshAccounts: 'SSH 터널 서버에서는 회원이 SSH로 접속한 OS 계정의 기록이 자동으로 보입니다. 여기서 계정을 연결하지 않습니다.',
   },
   provider: {
     'claude-code': 'Claude Code',

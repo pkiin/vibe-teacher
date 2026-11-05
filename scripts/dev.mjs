@@ -82,7 +82,7 @@ function usage() {
       --api-host <h>   API 바인딩 주소           (기본 127.0.0.1, VIBE_TEACHER_HOST; 외부 접근은 토큰 또는 로그인 필요)
       --home <dir>     설정/캐시 디렉터리        (기본 ~/.vibe-teacher, VIBE_TEACHER_HOME)
 회원 로그인: .env에 VIBE_TEACHER_AUTH_MODE=supabase와 SUPABASE_URL·SUPABASE_PUBLISHABLE_KEY 설정
-실행 방식: VIBE_TEACHER_DEPLOYMENT=local(기본, loopback) 또는 shared(HTTPS 공용 서버)
+실행 방식: VIBE_TEACHER_DEPLOYMENT=local(기본, loopback) · shared(HTTPS 공용 서버) · ssh(SSH 터널 개발 서버, 접속한 OS 계정의 기록만 표시)
 인증 후 복귀: 가입한 웹 주소 사용. 고정하려면 VIBE_TEACHER_PUBLIC_URL 설정 및 Supabase Redirect URLs 등록
 서버 전용 비밀값은 .env.admin에 저장할 수 있습니다.
 예)  npm run dev -- --port 3337 --api-port 3338`);

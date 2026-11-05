@@ -29,7 +29,7 @@ export class CloudRuntime {
     const projectIds = (id: string) => this.base.index.getProjectIds(id);
     const backend = new CloudStorage(this.base.auth.cloud.client(accessToken), userId, path.join(this.base.paths.home, 'wiki'));
     const storage = new WikiStorage(this.base.paths.home, projectIds, backend);
-    const enrich = new EnrichService({ store: this.base.store, paths: this.base.paths, storage, env, requireUserKey: deployment === 'shared' });
+    const enrich = new EnrichService({ store: this.base.store, paths: this.base.paths, storage, env, requireUserKey: deployment !== 'local' });
     const services = createWikiServices(this.base.paths.home, this.base.store, () => enrich.resolveProvider(), projectIds, storage);
     const deps = { ...this.base, ...services, enrich, storage };
     this.users.set(userId, { deps, backend, env });

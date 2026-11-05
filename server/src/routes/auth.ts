@@ -32,6 +32,7 @@ export function authRoutes(deps: AppDeps, runtime?: CloudRuntime): Hono<AppEnv> 
       reader: user ? await personal.prefs.get(learnerIdFor(user.username)) : null,
       ...(user?.cloud ? { email: user.cloud.email, approved: user.cloud.approved, localOwner: user.cloud.localOwner } : {}),
       ...(deps.auth.cloud ? { deployment: deps.auth.cloud.config.deployment } : {}),
+      ...(user?.cloud && deps.auth.cloud?.config.deployment === 'ssh' ? { osUser: user.cloud.osUser ?? null } : {}),
     };
     return c.json(body);
   });

@@ -41,7 +41,8 @@ export function StartPage() {
   return <div className="page start-page">
     <div className="start-heading"><span className="eyebrow">{t.eyebrow}</span><h1>{editing ? t.title : t.ready}</h1><p className="muted">{editing ? t.subtitle : t.readyNote}</p></div>
     {me?.mode === 'supabase' && <div className="notice start-status">
-      <span>{me.deployment === 'shared' ? t.shared : t.local} · {t.synced}</span>
+      <span>{me.deployment === 'shared' ? t.shared : me.deployment === 'ssh' ? t.ssh : t.local} · {t.synced}</span>
+      {me.deployment === 'ssh' && <span>{me.osUser ? t.sshAccount(me.osUser) : t.sshUnknown}</span>}
       {!me.approved && <span>{t.pending} <button className="link" onClick={() => void refresh().catch((e: Error) => setError(e.message))}>{t.checkApproval}</button></span>}
       {me.deployment === 'local' && !me.localOwner && <span>{t.otherLocalOwner}</span>}
     </div>}

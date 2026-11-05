@@ -1,8 +1,11 @@
 import fs from 'node:fs/promises';
+import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { serve } from '@hono/node-server';
+import type { Context } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Account, AuthMeResponse, Member, OnboardingProfile } from '@vibe-teacher/shared';
+import type { Account, AuthMeResponse, Deployment, Member, OnboardingProfile } from '@vibe-teacher/shared';
 import { createApp } from '../src/app';
 import { AuthService } from '../src/auth/service';
 import { SupabaseAuth } from '../src/auth/supabase';
@@ -14,6 +17,8 @@ import type { SessionIndex } from '../src/index/session-index';
 import { EnrichService } from '../src/llm/service';
 import { WikiStorage } from '../src/storage/store';
 import { createWikiServices } from '../src/wiki/service';
+import { accountIdFor } from '../src/index/accounts';
+import { PEER_UID_HEADER, procNetAvailable } from '../src/lib/peer';
 
 const ALICE = '11111111-1111-4111-8111-111111111111';
 const BOB = '22222222-2222-4222-8222-222222222222';
@@ -92,12 +97,19 @@ function fakeCloud() {
   return { request, calls, members, documents, events, set failWrites(value: boolean) { failWrites = value; }, set emailConfirmed(value: boolean) { emailConfirmed = value; }, set failAuth(value: boolean) { failAuth = value; } };
 }
 
-async function fixture(remote = fakeCloud(), deployment: 'local' | 'shared' = 'shared') {
+interface FixtureOptions {
+  accounts?: Account[];
+  socketUid?: (c: Context) => Promise<number | null>;
+  passwd?: () => Promise<Map<string, { username: string; uid: number }>>;
+  serviceUid?: number;
+}
+
+async function fixture(remote = fakeCloud(), deployment: Deployment = 'shared', opts: FixtureOptions = {}) {
   const home = await temp();
   const paths = resolvePaths(home);
   const store = new ConfigStore(paths); await store.load();
   await store.update((cfg) => { cfg.llm.provider = 'none'; cfg.auth.enrichFor = 'everyone'; });
-  const accounts = [
+  const accounts = opts.accounts ?? [
     { id: 'alice-account', username: 'service', homePath: '/synthetic/alice', readable: 'ok', sessionCount: 0 },
     { id: 'bob-account', username: 'bob', homePath: '/synthetic/bob', readable: 'ok', sessionCount: 0 },
   ] as Account[];
@@ -107,7 +119,10 @@ async function fixture(remote = fakeCloud(), deployment: 'local' | 'shared' = 's
     getSummary: () => undefined,
   } as unknown as SessionIndex;
   const cloud = new SupabaseAuth({ ...config, deployment, secure: deployment === 'shared' }, home, remote.request);
-  const auth = new AuthService({ store, paths, index, serviceUser: 'service', bearerToken: 'legacy-admin-token', isLoopback: true, cloud });
+  const auth = new AuthService({
+    store, paths, index, serviceUser: 'service', bearerToken: 'legacy-admin-token', isLoopback: true, cloud,
+    ...(opts.socketUid ? { socketUid: opts.socketUid } : {}), ...(opts.passwd ? { passwd: opts.passwd } : {}), ...(opts.serviceUid !== undefined ? { serviceUid: opts.serviceUid } : {}),
+  });
   const enrich = new EnrichService({ store, paths, providerOverride: null });
   const services = createWikiServices(home, store, () => enrich.resolveProvider());
   const app = createApp({ quiet: true, deps: { store, paths, index, auth, enrich, analysis: new AnalysisService(), ...services, version: 'test' } });
@@ -325,11 +340,69 @@ describe('Supabase 로그인과 사용자 저장소', () => {
   });
 });
 
+const SSH_HOMES = new Map([
+  ['/synthetic/ubuntu', { username: 'ubuntu', uid: 1000 }],
+  ['/synthetic/user99', { username: 'user99', uid: 1099 }],
+]);
+const sshAccounts = [...SSH_HOMES].map(([homePath, v]) => ({ id: accountIdFor(homePath), username: v.username, homePath, readable: 'ok', sessionCount: 0 })) as Account[];
+const sshFixture = (socketUid: number | null) => fixture(fakeCloud(), 'ssh', { accounts: sshAccounts, socketUid: async () => socketUid, passwd: async () => SSH_HOMES, serviceUid: 1000 });
+
+describe('SSH 터널 서버', () => {
+  it('연결을 연 OS 계정의 기록만 보여 주고 회원 관리의 연결 목록·관리자 여부로 범위를 넓히지 않는다', async () => {
+    const f = await sshFixture(1099);
+    const me = await (await f.req('/api/auth/me')).json() as AuthMeResponse;
+    expect(me).toMatchObject({ deployment: 'ssh', osUser: 'user99', localOwner: false, canManageInstallation: false });
+    expect((await (await f.req('/api/accounts')).json() as Account[]).map((a) => a.username)).toEqual(['user99']);
+    // Supabase 관리자도 터널을 연 계정만 본다.
+    expect((await (await f.req('/api/accounts', 'bob-token')).json() as Account[]).map((a) => a.username)).toEqual(['user99']);
+    // 서버 실행 계정으로 접속하면 그 계정의 기록이 보인다.
+    const service = await sshFixture(1000);
+    expect((await (await service.req('/api/accounts')).json() as Account[]).map((a) => a.username)).toEqual(['ubuntu']);
+    expect(await (await service.req('/api/auth/me')).json()).toMatchObject({ osUser: 'ubuntu' });
+  });
+
+  it('접속한 계정을 확인하지 못하면 서버 기록을 보여 주지 않는다', async () => {
+    const f = await sshFixture(null);
+    expect(await (await f.req('/api/auth/me')).json()).toMatchObject({ authenticated: true, osUser: null });
+    expect(await (await f.req('/api/accounts')).json()).toEqual([]);
+    // passwd 에 없는 uid 도 같은 처리
+    const unknown = await sshFixture(4242);
+    expect(await (await unknown.req('/api/accounts')).json()).toEqual([]);
+  });
+
+  it('개발 프록시의 접속자 헤더는 서버와 같은 계정이 연 연결에서만 믿는다', async () => {
+    const headers = (value: string) => ({ authorization: 'Bearer alice-token', [PEER_UID_HEADER]: value });
+    const viaProxy = await sshFixture(1000);
+    expect(await (await viaProxy.app.request('/api/auth/me', { headers: headers('1099') })).json()).toMatchObject({ osUser: 'user99' });
+    expect(await (await viaProxy.app.request('/api/auth/me', { headers: headers('') })).json()).toMatchObject({ osUser: null });
+    const direct = await sshFixture(1099);
+    expect(await (await direct.app.request('/api/auth/me', { headers: headers('1000') })).json()).toMatchObject({ osUser: 'user99' });
+  });
+
+  it.skipIf(!procNetAvailable())('실제 TCP 연결의 상대편 계정을 /proc/net/tcp 에서 찾는다', async () => {
+    const self = process.getuid!();
+    const homes = new Map([['/synthetic/self', { username: 'self-user', uid: self }], ['/synthetic/other', { username: 'other-user', uid: self + 1 }]]);
+    const f = await fixture(fakeCloud(), 'ssh', { passwd: async () => homes });
+    const server = serve({ fetch: f.app.fetch, hostname: '127.0.0.1', port: 0 });
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+    try {
+      const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/auth/me`;
+      expect(await (await fetch(url, { headers: { authorization: 'Bearer alice-token' } })).json()).toMatchObject({ osUser: 'self-user' });
+      // 같은 계정의 프로세스가 연 연결이므로 개발 프록시 헤더로 취급한다.
+      expect(await (await fetch(url, { headers: { authorization: 'Bearer alice-token', [PEER_UID_HEADER]: String(self + 1) } })).json()).toMatchObject({ osUser: 'other-user' });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
+
 describe('Supabase 설치 설정', () => {
   it('앱 복귀 주소의 프로토콜·호스트·포트와 공개 주소 설정을 검사한다', () => {
     expect(normalizeAppUrl('http://localhost:5173', 'local')).toBe('http://localhost:5173/');
     expect(normalizeAppUrl('http://[::1]:8787/', 'local')).toBe('http://[::1]:8787/');
     expect(() => normalizeAppUrl('http://app.example.test/', 'shared')).toThrow();
+    expect(normalizeAppUrl('http://127.0.0.1:3318', 'ssh')).toBe('http://127.0.0.1:3318/');
+    expect(() => normalizeAppUrl('https://app.example.test/', 'ssh')).toThrow();
     expect(() => normalizeAppUrl('https://app.example.test/#access_token=synthetic', 'shared')).toThrow();
     expect(() => normalizeAppUrl('https://user:pass@app.example.test/', 'shared')).toThrow();
     expect(cloudConfig({ VIBE_TEACHER_AUTH_MODE: 'supabase', SUPABASE_URL: config.url, SUPABASE_PUBLISHABLE_KEY: config.key, VIBE_TEACHER_PUBLIC_URL: 'http://localhost:5173' })).toMatchObject({ publicUrl: 'http://localhost:5173/' });
@@ -341,5 +414,8 @@ describe('Supabase 설치 설정', () => {
     expect(cloudConfig(env)).toMatchObject({ deployment: 'local', secure: false });
     expect(() => cloudConfig({ ...env, SUPABASE_PUBLISHABLE_KEY: 'sb_secret_private' })).toThrow('공개 키');
     expect(() => cloudConfig({ ...env, VIBE_TEACHER_DEPLOYMENT: 'typo' })).toThrow();
+    expect(cloudConfig({ ...env, VIBE_TEACHER_DEPLOYMENT: 'ssh' })).toMatchObject({ deployment: 'ssh', secure: false });
+    // 회원 로그인 없이 SSH 터널 서버를 띄우면 모든 접속자가 서버 실행 계정으로 보이므로 거절한다.
+    expect(() => cloudConfig({ VIBE_TEACHER_DEPLOYMENT: 'ssh' })).toThrow('VIBE_TEACHER_AUTH_MODE=supabase');
   });
 });

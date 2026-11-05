@@ -52,6 +52,13 @@ describe('설치 방식과 인증 사용자별 AI 키', () => {
     expect(await service.status()).toMatchObject({ available: false, reason: expect.stringContaining('관리자에게 키 등록') });
   });
 
+  it('SSH 터널 서버도 공용 서버처럼 본인 UUID의 키만 쓰고 서버 계정의 .env 키·CLI를 쓰지 않는다', () => {
+    const alice = userLlmEnvironment({ userId: ALICE, isAdmin: false }, 'ssh', 'claude-cli', source);
+    expect(alice.OPENROUTER_API_KEY).toBe('synthetic-alice-key');
+    expect(alice.VIBE_TEACHER_LLM_PROVIDER).toBe('openrouter');
+    expect(userLlmEnvironment({ userId: '33333333-3333-4333-8333-333333333333', isAdmin: false }, 'ssh', 'auto', source).OPENROUTER_API_KEY).toBe('');
+  });
+
   it('공용 서버 관리자도 UUID에 등록된 키가 우선하며 미등록이면 관리자 개발용 키를 사용한다', () => {
     expect(userLlmEnvironment({ userId: ALICE, isAdmin: true }, 'shared', 'auto', source).OPENROUTER_API_KEY).toBe('synthetic-alice-key');
     expect(userLlmEnvironment({ isAdmin: true }, 'shared', 'auto', source).OPENROUTER_API_KEY).toBe('synthetic-admin-key');
