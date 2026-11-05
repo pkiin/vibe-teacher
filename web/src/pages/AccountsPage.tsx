@@ -21,7 +21,6 @@ export function AccountsPage() {
     <div className="page">
       <Breadcrumb items={[{ label: ko.accounts.title }]} />
       <h1>{ko.accounts.title}</h1>
-      <p className="muted">{ko.accounts.subtitle}</p>
       {loading && <Loading />}
       {error && <ErrorBox error={error} onRetry={reload} />}
       {data && readable.length === 0 && <Notice kind="warn">{ko.accounts.empty}</Notice>}

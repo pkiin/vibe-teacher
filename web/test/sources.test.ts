@@ -2,13 +2,14 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
-import type { AuthMeResponse } from '@vibe-teacher/shared';
+import type { Account, AuthMeResponse } from '@vibe-teacher/shared';
 import { Layout } from '../src/components/Layout';
+import { AccountsPage } from '../src/pages/AccountsPage';
 import { SourcesPage } from '../src/pages/SourcesPage';
 
-const state = vi.hoisted(() => ({ me: null as AuthMeResponse | null }));
+const state = vi.hoisted(() => ({ me: null as AuthMeResponse | null, accounts: null as Account[] | null }));
 vi.mock('../src/context/AuthContext', () => ({ useAuth: () => ({ me: state.me, refresh: async () => {}, logout: async () => {} }) }));
-vi.mock('../src/hooks/useApi', () => ({ useApi: () => ({ data: null, error: null, loading: false, reload: () => {} }) }));
+vi.mock('../src/hooks/useApi', () => ({ useApi: (path: string | null) => ({ data: path === '/api/accounts' ? state.accounts : null, error: null, loading: false, reload: () => {} }) }));
 // 탭 표시만 검사하므로 화면 설정·진행 표시·수준 선택은 비운다.
 vi.mock('../src/components/SettingsPopover', () => ({ SettingsPopover: () => null }));
 vi.mock('../src/components/NetworkActivity', () => ({ NetworkActivity: () => null }));
@@ -34,5 +35,30 @@ describe('소스 설정 탭', () => {
     expect(nav).toContain('href="/sources"');
     expect(page).toContain('<h2>스캔 범위</h2>');
     expect(page).toContain('/home 전체 (모든 계정)');
+  });
+});
+
+describe('상단 탭 이름', () => {
+  it('맨 앞 탭과 목록 제목을 내 프로젝트로 표시하고 계정을 고르라는 안내를 넣지 않는다', () => {
+    const { nav } = render({ canManageInstallation: false });
+    expect(nav).toContain('>내 프로젝트</a>');
+    expect(nav).not.toContain('>계정</a>');
+    const page = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(AccountsPage)));
+    expect(page).toContain('<h1>내 프로젝트</h1>');
+    expect(page).not.toContain('계정을 고르면');
+  });
+
+  it('계정이 여럿일 때의 상단 드롭다운은 계정 이름 목록이므로 계정 레이블을 유지한다', () => {
+    state.accounts = [
+      { id: 'a1', username: 'ubuntu', homePath: '/synthetic/ubuntu', readable: 'ok', sessionCount: 3 },
+      { id: 'a2', username: 'user99', homePath: '/synthetic/user99', readable: 'ok', sessionCount: 1 },
+    ] as Account[];
+    try {
+      const { nav } = render({ canManageInstallation: true });
+      expect(nav).toContain('aria-label="계정"');
+      expect(nav).toContain('>내 프로젝트</a>');
+    } finally {
+      state.accounts = null;
+    }
   });
 });

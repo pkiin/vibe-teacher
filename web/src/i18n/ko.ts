@@ -16,7 +16,7 @@ export const ko = {
     cache: (hits: number, joined: number) => `캐시 재사용 ${hits}회 · 중복 읽기 합치기 ${joined}회`,
     local: '이 기기에 저장하고 있습니다.',
   },
-  nav: { accounts: '계정', sources: '소스 설정' },
+  nav: { accounts: '내 프로젝트', accountSelect: '계정', sources: '소스 설정' },
   cloudLogin: {
     title: '지금의 출발점에서, 만들고 이해하기',
     subtitle: '아이디어를 찾는 중이어도, 이미 만든 코드가 있어도 괜찮아요. 준비한 만큼부터 시작해 보세요.',
@@ -119,8 +119,7 @@ export const ko = {
     live: '기록 중',
   },
   accounts: {
-    title: '계정',
-    subtitle: '누구의 작업 기록을 살펴볼까요? 계정을 고르면 프로젝트를 볼 수 있습니다.',
+    title: '내 프로젝트',
     needPermission: '이 계정의 기록을 보려면 읽기 권한이 필요합니다.',
     current: '현재 계정',
     empty: '읽을 수 있는 계정이 없습니다. 소스 설정에서 스캔 범위를 확인하세요.',

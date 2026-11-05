@@ -34,8 +34,8 @@ export function Layout({ children }: { children: ReactNode }) {
         </Link>
         <nav className="nav">
           {readable.length > 1 && (
-            <select className="account-select" value={currentAccountId} onChange={(e) => e.target.value && navigate(`/accounts/${e.target.value}`)} aria-label={ko.nav.accounts}>
-              <option value="">{ko.nav.accounts}…</option>
+            <select className="account-select" value={currentAccountId} onChange={(e) => e.target.value && navigate(`/accounts/${e.target.value}`)} aria-label={ko.nav.accountSelect}>
+              <option value="">{ko.nav.accountSelect}…</option>
               {readable.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.username} ({a.sessionCount})
