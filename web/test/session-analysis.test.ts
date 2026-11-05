@@ -38,11 +38,20 @@ describe('세션 분석의 기술 정보 표시', () => {
     expect(html).not.toContain('테스트 제공자 · 바꾸기');
   });
   it('관리자는 쉬운 난이도에서도 상세 정보와 AI 변경을 볼 수 있다', () => {
+    // 서버는 설치 관리자인 관리자에게 canManageInstallation 을 함께 보낸다.
     auth.me!.isAdmin = true;
+    auth.me!.canManageInstallation = true;
     const html = panel();
     expect(html).toContain('테스트 제공자 · 바꾸기');
     expect(html).toContain(ko.aiUnified.preview);
     expect(html).toContain('$0.108');
+  });
+  it('SSH 터널 서버에 다른 계정으로 접속한 관리자는 상세 정보만 보고 AI 설정은 바꾸지 못한다', () => {
+    auth.me!.isAdmin = true;
+    auth.me!.canManageInstallation = false;
+    const html = panel();
+    expect(html).toContain(ko.aiUnified.preview);
+    expect(html).not.toContain('테스트 제공자 · 바꾸기');
   });
   it('난이도를 아직 선택하지 않았으면 기술 정보를 숨긴다', () => {
     auth.me!.reader = { readerLevel: 'junior', chosen: false };

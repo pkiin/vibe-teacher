@@ -85,10 +85,10 @@ export class AuthService {
   }
 
   /**
-   * 스캔 범위는 다른 OS 계정의 홈까지 읽게 하는 설정이다. SSH 터널 서버에서는 서버를 실행하는 계정으로
-   * 접속한 설치 관리자만 바꾼다. 다른 계정으로 접속한 Supabase 관리자에게는 보이지 않는다.
+   * 설치 설정(스캔 범위·기록 위치·AI 설정·다시 읽기)을 다룰 수 있는지. SSH 터널 서버에서는 서버를 실행하는
+   * 계정으로 접속한 설치 관리자만 허용한다. 다른 계정으로 접속한 Supabase 관리자는 회원 관리만 한다.
    */
-  canManageScan(user: AuthUser): boolean {
+  canManageInstallation(user: AuthUser): boolean {
     if (!user.isAdmin && !user.cloud?.localOwner) return false;
     if (this.cloud?.config.deployment !== 'ssh') return true;
     const self = this.opts.serviceUid ?? process.getuid?.();

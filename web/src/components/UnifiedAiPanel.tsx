@@ -147,7 +147,7 @@ export function UnifiedAiPanel({
       </div>
       <p className="small">{ko.aiUnified.intro}</p>
       {reader.available && <ReaderLevelLine />}
-      {technical && !busy && ((me?.isAdmin || me?.canManageInstallation) ? <LlmQuickSwitch /> : me?.llmStatus && <p className="small muted">{ko.sources.llmCurrent}: <strong>{me.llmStatus.resolvedProvider === 'none' ? ko.sources.llmChoice.none.label : ko.sources.llmChoice[me.llmStatus.resolvedProvider].label}</strong></p>)}
+      {technical && !busy && (me?.canManageInstallation ? <LlmQuickSwitch /> : me?.llmStatus && <p className="small muted">{ko.sources.llmCurrent}: <strong>{me.llmStatus.resolvedProvider === 'none' ? ko.sources.llmChoice.none.label : ko.sources.llmChoice[me.llmStatus.resolvedProvider].label}</strong></p>)}
       {!available && <Notice kind="warn">{ko.aiUnified.ruleFallback(reason ?? '…')}</Notice>}
       {available && me && !me.autoText && !hasResult && <div className="small muted">{ko.aiUnified.autoOff}</div>}
       {available && wiki?.stale && <div className="small muted">{ko.aiUnified.wikiStale}</div>}

@@ -52,7 +52,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/knowledge" className={({ isActive }) => (isActive ? 'active' : '')}>
             {ko.knowledge.nav}
           </NavLink>
-          {(isAdmin || me?.canManageInstallation) && (
+          {me?.canManageInstallation && (
             <NavLink to="/sources" className={({ isActive }) => (isActive ? 'active' : '')}>
               {ko.nav.sources}
             </NavLink>

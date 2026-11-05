@@ -59,11 +59,14 @@ export function requireAdmin(c: Context<AppEnv>): AuthUser {
   return user;
 }
 
-/** 로컬 소유자는 자기 기기의 소스·모델만 관리하며 회원 승인 권한은 얻지 않는다. */
-export function requireInstallationAdmin(c: Context<AppEnv>): AuthUser {
+/** 로컬 소유자는 자기 기기의 소스·모델만 관리하며 회원 승인 권한은 얻지 않는다. SSH 터널 서버는 서버 실행 계정으로 접속해야 한다. */
+export function requireInstallationAdmin(c: Context<AppEnv>, deps: Pick<AppDeps, 'auth'>): AuthUser {
   const user = currentUser(c);
-  if (!user.isAdmin && !user.cloud?.localOwner) throw new HttpError(403, 'forbidden', '설치 관리자만 할 수 있습니다');
-  return user;
+  if (deps.auth.canManageInstallation(user)) return user;
+  if (user.isAdmin && deps.auth.cloud?.config.deployment === 'ssh') {
+    throw new HttpError(403, 'forbidden', `설치 설정은 서버를 실행하는 계정(${deps.auth.serviceUser})으로 접속해 바꿀 수 있습니다`);
+  }
+  throw new HttpError(403, 'forbidden', '설치 관리자만 할 수 있습니다');
 }
 
 /** 계정 범위 밖이면 존재 여부를 숨기기 위해 404 로 처리 */

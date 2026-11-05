@@ -30,7 +30,7 @@ export function sourcesRoutes(deps: AppDeps): Hono<AppEnv> {
   });
 
   app.post('/', async (c) => {
-    requireInstallationAdmin(c);
+    requireInstallationAdmin(c, deps);
     const parsed = AddSchema.safeParse(await c.req.json<AddSourceRequest>().catch(() => ({})));
     if (!parsed.success) throw new HttpError(400, 'bad_request', '경로와 제공자를 입력하세요');
     const p = normalizePath(expandHome(parsed.data.path));
@@ -46,7 +46,7 @@ export function sourcesRoutes(deps: AppDeps): Hono<AppEnv> {
   });
 
   app.patch('/:id', async (c) => {
-    requireInstallationAdmin(c);
+    requireInstallationAdmin(c, deps);
     const id = c.req.param('id');
     const parsed = PatchSchema.safeParse(await c.req.json<PatchSourceRequest>().catch(() => ({})));
     if (!parsed.success) throw new HttpError(400, 'bad_request', '잘못된 요청입니다');
@@ -72,7 +72,7 @@ export function sourcesRoutes(deps: AppDeps): Hono<AppEnv> {
   });
 
   app.delete('/:id', async (c) => {
-    requireInstallationAdmin(c);
+    requireInstallationAdmin(c, deps);
     const id = c.req.param('id');
     const existing = deps.index.getSource(id);
     if (!existing) throw notFound('소스');
@@ -90,7 +90,7 @@ export function sourcesRoutes(deps: AppDeps): Hono<AppEnv> {
 export function rescanRoute(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
   app.post('/', async (c) => {
-    requireInstallationAdmin(c);
+    requireInstallationAdmin(c, deps);
     const res: RescanResponse = await deps.index.rescan();
     return c.json(res);
   });

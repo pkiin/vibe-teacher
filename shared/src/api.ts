@@ -134,9 +134,8 @@ export interface AuthMeResponse {
   /** SSH 터널 서버에서 이 연결을 연 OS 계정 (확인하지 못하면 null) */
   osUser?: string | null;
   localOwner?: boolean;
+  /** 소스 설정(스캔 범위·기록 위치·AI 설정)을 다룰 수 있는지. SSH 터널 서버는 서버 실행 계정으로 접속한 관리자만 */
   canManageInstallation?: boolean;
-  /** 소스 설정의 스캔 범위를 보고 바꿀 수 있는지 (SSH 터널 서버는 서버 실행 계정으로 접속한 관리자만) */
-  canManageScan?: boolean;
 }
 
 export interface LoginRequest {

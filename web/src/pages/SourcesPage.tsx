@@ -14,7 +14,7 @@ const PROVIDERS: Provider[] = ['claude-code', 'codex', 'copilot-cli', 'copilot-v
 
 export function SourcesPage() {
   const { me, refresh: refreshAuth } = useAuth();
-  const isAdmin = !!me?.isAdmin || !!me?.canManageInstallation;
+  const isAdmin = !!me?.canManageInstallation;
   const sources = useApi<SourceStatus[]>(isAdmin ? '/api/sources' : null);
   const accounts = useApi<Account[]>(isAdmin ? '/api/accounts' : null);
   const settings = useApi<SettingsResponse>(isAdmin ? '/api/settings' : null);
@@ -148,7 +148,7 @@ export function SourcesPage() {
       )}
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
 
-      {me?.canManageScan && <section className="section card">
+      <section className="section card">
         <h2>{ko.sources.scanTitle}</h2>
         <div className="form-grid">
           {(['current', 'list', 'all'] as const).map((m) => (
@@ -179,7 +179,7 @@ export function SourcesPage() {
             </button>
           </div>
         </div>
-      </section>}
+      </section>
 
       <section className="section">
         <h2>기록 위치</h2>
