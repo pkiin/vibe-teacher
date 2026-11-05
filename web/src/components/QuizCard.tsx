@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AssessmentResult, AssessmentStartResponse, ResponseStatus } from '@vibe-teacher/shared';
+import { QUESTION_FEEDBACK_REASONS, type AssessmentResult, type AssessmentStartResponse, type LearnerProfile, type QuestionFeedbackReason, type ResponseStatus } from '@vibe-teacher/shared';
 import { ApiError, apiPost } from '../api/client';
 import type { LearnerActions } from '../hooks/useLearner';
 import { ko } from '../i18n/ko';
@@ -20,6 +20,7 @@ export function QuizCard({
   learner,
   explanationSeen,
   helpUsed = false,
+  purpose,
   onClose,
 }: {
   /** 세션 화면에서 풀면 그 세션 (전체 지식 위키에서는 없음) */
@@ -29,6 +30,8 @@ export function QuizCard({
   explanationSeen: boolean;
   /** 이 개념을 도움 패널로 물어본 뒤의 응답이면 true — 보조(assisted)로 기록되어 이해 상태 추정에 쓰지 않는다 */
   helpUsed?: boolean;
+  /** '알고 있어요' 확인: 첫 문제는 OX 로 내고, 맞히면 서버가 '알고 있어요'를 기록한다. "다른 문제"부터는 일반 문제 */
+  purpose?: 'self_check';
   onClose?: () => void;
 }) {
   const [start, setStart] = useState<AssessmentStartResponse | null>(null);
@@ -38,6 +41,7 @@ export function QuizCard({
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState(false);
   const [seen, setSeen] = useState<string[]>([]);
+  const [checking, setChecking] = useState(!!purpose);
   const request = useRef(0);
 
   /** 처음에는 지정한 문항/개념, "다른 문제"는 같은 개념에서 이미 본 문항을 빼고 고른다 */
@@ -48,7 +52,9 @@ export function QuizCard({
     setSelected(null);
     setReason('');
     setError(null);
-    const ctx = sessionKey ? { sessionKey } : {};
+    const selfCheck = !!purpose && !exclude.length;
+    setChecking(selfCheck);
+    const ctx = { ...(sessionKey ? { sessionKey } : {}), ...(selfCheck ? { purpose } : {}) };
     const body = exclude.length ? { ...ctx, conceptId: target.conceptId ?? conceptId, excludeQuestionIds: exclude } : { ...ctx, ...target };
     apiPost<AssessmentStartResponse>('/api/me/assessments', body)
       .then((s) => {
@@ -91,18 +97,18 @@ export function QuizCard({
 
   if (error instanceof ApiError && error.code === 'no_question') return <div className="quiz card small muted">{ko.quiz.noQuestion}</div>;
   if (error && !start) return <ErrorBox error={error} onRetry={() => load([])} />;
-  if (!start) return <Loading />;
+  if (!start) return <div className="quiz card" aria-busy="true"><Loading text={ko.quiz.preparing} /></div>;
   const q = start.question;
   const name = `quiz-${start.assessmentId}`;
 
   return (
-    <div className="quiz card" role="group" aria-label={ko.quiz.title} aria-busy={busy}>
+    <div className="quiz card" role="group" aria-label={checking ? ko.quiz.selfCheckTitle : ko.quiz.title} aria-busy={busy}>
       <div className="concept-head">
-        <strong>{ko.quiz.title}</strong>
+        <strong>{checking ? ko.quiz.selfCheckTitle : ko.quiz.title}</strong>
         <span className="pill pill-outline">{ko.quiz.format[q.format]}</span>
-        {q.reviewStatus === 'candidate' && <span className="pill pill-yellow">{ko.quiz.candidate}</span>}
+        {q.reviewStatus === 'candidate' && <span className="pill pill-outline">{ko.quiz.candidate}</span>}
       </div>
-      <p className="small muted">{ko.quiz.intro}</p>
+      <p className="small muted">{checking ? ko.quiz.selfCheckIntro : ko.quiz.intro}</p>
       {q.reviewStatus === 'candidate' && <p className="small muted">{ko.quiz.candidateNote}</p>}
       {!start.firstAttempt && !result && <div className="small muted">{ko.quiz.retry}</div>}
       <p className="quiz-prompt">{q.prompt}</p>
@@ -153,11 +159,14 @@ export function QuizCard({
         <div className="quiz-result" aria-live="polite">
           <div>
             <strong>{result.grade === 'correct' ? ko.quiz.correct : result.grade === 'incorrect' ? ko.quiz.incorrect : ko.quiz.unscorable}</strong>{' '}
-            <span className={`pill ${result.counted ? 'pill-blue' : 'pill-gray'}`}>{result.counted ? ko.quiz.counted : ko.quiz.practice}</span>
+            {/* 맞힌 응답만 어디에 기록됐는지 보여 준다. 틀린 응답은 원장에만 남긴다 */}
+            {result.grade === 'correct' && <span className={`pill ${result.counted ? 'pill-green' : 'pill-gray'}`}>{result.counted ? ko.quiz.counted : ko.quiz.practice}</span>}
           </div>
           {result.explanation && <p>{result.explanation}</p>}
           {result.optionFeedback && <p className="small">{result.optionFeedback}</p>}
           <div className="small muted">{result.scopeNote}</div>
+          {/* 정답을 확인한 문제만 문제 은행에 있으므로 건너뛴 문제에는 피드백을 받지 않는다 */}
+          {result.status !== 'skipped' && <QuestionReport key={`${q.questionId}@${q.version}`} questionId={q.questionId} version={q.version} learner={learner} />}
           <div className="quiz-actions">
             <button className="btn btn-small" onClick={() => load(seen, q.conceptIds[0])}>
               {ko.quiz.another}
@@ -171,5 +180,41 @@ export function QuizCard({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * '문제가 이상해요'. 보내면 이 문제의 응답은 내 지식 상태·정답 수에서 빠지고, 다음 문제를 만들 때 AI 에 사유를 알려 준다.
+ */
+export function QuestionReport({ questionId, version, learner }: { questionId: string; version: number; learner: LearnerActions }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<QuestionFeedbackReason | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  if (sent) return <p className="small muted" role="status">{ko.quiz.reportSent}</p>;
+  if (!open) return <button type="button" className="link small" onClick={() => setOpen(true)}>{ko.quiz.report}</button>;
+  const send = async () => {
+    if (!reason) return;
+    setBusy(true); setError(null);
+    try {
+      const r = await learner.withRevision((baseRevision) => apiPost<{ profile: LearnerProfile }>('/api/me/question-feedback', { baseRevision, questionId, questionVersion: version, reason, ...(note.trim() ? { note: note.trim() } : {}) }));
+      learner.profileChanged(r.profile);
+      setSent(true);
+    } catch (e) { setError(e as Error); } finally { setBusy(false); }
+  };
+  return (
+    <fieldset className="quiz-report" disabled={busy}>
+      <legend className="small">{ko.quiz.reportTitle}</legend>
+      {QUESTION_FEEDBACK_REASONS.map((r) => (
+        <label key={r} className="small">
+          <input type="radio" name={`report-${questionId}-${version}`} value={r} checked={reason === r} onChange={() => setReason(r)} /> {ko.quiz.reportReasons[r]}
+        </label>
+      ))}
+      <textarea rows={2} maxLength={500} placeholder={ko.quiz.reportNote} value={note} onChange={(e) => setNote(e.target.value)} />
+      <button type="button" className="btn btn-small" disabled={!reason || busy} onClick={() => void send()}>{ko.quiz.reportSend}</button>
+      {error && <ErrorBox error={error} />}
+    </fieldset>
   );
 }

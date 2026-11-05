@@ -90,7 +90,24 @@ export interface ResponseEvent extends LearnerEventBase {
   gradeNote?: string;
 }
 
-export type LearnerEvent = SelfReportEvent | ExposureEvent | CorrectionEvent | ResponseEvent | QuestionEvent | PreferenceEvent;
+/** '문제가 이상해요' 사유 */
+export const QUESTION_FEEDBACK_REASONS = ['wrong_answer', 'ambiguous', 'off_topic', 'other'] as const;
+export type QuestionFeedbackReason = (typeof QUESTION_FEEDBACK_REASONS)[number];
+
+/**
+ * 연습 문제가 이상하다는 사용자 피드백. 그 문제의 응답은 개념 상태·정답 수에 넣지 않는다.
+ * 개념·프로젝트는 서버가 문제 은행에서 찾아 채운다 (요청 값을 믿지 않음).
+ */
+export interface QuestionFeedbackEvent extends LearnerEventBase {
+  kind: 'question_feedback';
+  questionId: string;
+  questionVersion: number;
+  conceptIds: string[];
+  reason: QuestionFeedbackReason;
+  note?: string;
+}
+
+export type LearnerEvent = SelfReportEvent | ExposureEvent | CorrectionEvent | ResponseEvent | QuestionEvent | PreferenceEvent | QuestionFeedbackEvent;
 
 export interface ConceptEvidenceCounts {
   correct: number;

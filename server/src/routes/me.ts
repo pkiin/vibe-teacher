@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { Hono, type Context } from 'hono';
-import { AssessmentRequestSchema, AssessmentResponseRequestSchema, FeedbackRequestSchema, type WikiSnapshot } from '@vibe-teacher/shared';
+import { AssessmentRequestSchema, AssessmentResponseRequestSchema, FeedbackRequestSchema, QuestionFeedbackRequestSchema, type SolvedQuestionsResponse, type WikiSnapshot } from '@vibe-teacher/shared';
 import { z } from 'zod';
-import { ReaderPrefsRequestSchema, type KnowledgeTextStartResponse, type KnowledgeWikiResponse, type SavedKnowledgeResponse, type TextGenerator } from '@vibe-teacher/shared';
+import { ReaderPrefsRequestSchema, type KnowledgeTextStartResponse, type KnowledgeWikiResponse, type MyQuestionsResponse, type SavedKnowledgeResponse, type TextGenerator } from '@vibe-teacher/shared';
 import { textGate } from '../llm/gate';
 import { KnowledgeService } from '../learner/knowledge-service';
 import { KnowledgeTextService } from '../learner/knowledge-text';
 import { KnowledgeViewService } from '../learner/knowledge-view';
 import { reduceProfile, unknownConcept } from '../learner/reducer';
+import { queryScore } from '../memory/search';
 import { learnerIdFor, type EventDraft } from '../learner/service';
 import { WikiStorage } from '../storage/store';
 import { assertAccount, currentUser, HttpError, notFound, parseBody, requireJson, sessionSummaryFor, type AppDeps, type AppEnv } from './deps';
@@ -126,6 +127,48 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
     const allowedProjectIds = deps.index.getProjects().filter((p) => deps.auth.canAccessAccount(currentUser(c), p.accountId)).map((p) => p.id);
     return { ...(canonical ? { projectId: canonical } : {}), allowedProjectIds };
   };
+  // 내 기억 검색의 "내가 한 질문": 현재 계정 권한 안의 프로젝트에서 답을 받은 질문만, q 는 키워드 (AI 호출 없음)
+  app.get('/questions', async (c) => {
+    const scope = await memoryScope(c, c.req.query('projectId'));
+    const allowed = new Set(scope.allowedProjectIds);
+    const q = (c.req.query('q') ?? '').slice(0, 200);
+    const { items: all } = await deps.help.answered(me(c), scope.projectId ? [scope.projectId] : scope.allowedProjectIds, Number.MAX_SAFE_INTEGER);
+    const matched = all.filter(({ message: m }) => queryScore(q, `${m.question}\n${m.answer?.answer ?? ''}`) > 0);
+    const total = matched.length, items = matched.slice(0, 30);
+    const body: MyQuestionsResponse = {
+      total,
+      questions: items.map(({ message: m, projectId }) => {
+        const session = deps.index.getSummary(m.sessionKey);
+        return {
+          id: m.id, question: m.question, answer: m.answer?.answer ?? '', askedAt: m.askedAt, projectId, sessionKey: m.sessionKey,
+          ...(session && allowed.has(session.projectId) ? { sessionTitle: session.title } : {}),
+          focus: m.focus,
+          conceptIds: [...new Set([...(m.focus.kind === 'concept' && m.focus.id ? [m.focus.id] : []), ...(m.answer?.conceptIds ?? [])])],
+        };
+      }),
+    };
+    return c.json(body);
+  });
+  // 내 기억 검색의 "내가 풀어 본 문제": 문제 은행(정답이 공개된 문제)에서 현재 권한 범위만, q 는 키워드
+  app.get('/solved', async (c) => {
+    const scope = await memoryScope(c, c.req.query('projectId'));
+    const q = (c.req.query('q') ?? '').slice(0, 200);
+    const allowed = new Set(scope.allowedProjectIds.flatMap((id) => deps.index.getProjectIds(id)));
+    const selected = scope.projectId ? new Set(deps.index.getProjectIds(scope.projectId)) : null;
+    const [bank, events, remembered] = await Promise.all([deps.learner.questionBank(me(c)), deps.learner.events(me(c)), deps.learner.concepts(me(c))]);
+    const feedback = new Map(events.flatMap((e) => (e.kind === 'question_feedback' ? [[`${e.questionId}@${e.questionVersion}`, e.reason] as const] : [])));
+    const name = (id: string) => remembered[id]?.concept.name ?? id;
+    const matched = bank
+      // 프로젝트를 고르면 그 프로젝트에서 푼 문제만, 전체 보기에서는 권한 있는 프로젝트와 프로젝트 없이(전체 지식에서) 푼 문제
+      .filter((b) => (selected ? !!b.projectId && selected.has(b.projectId) : !b.projectId || allowed.has(b.projectId)))
+      .map((b) => {
+        const reason = feedback.get(`${b.questionId}@${b.version}`);
+        return { ...b, conceptNames: b.conceptIds.map(name), ...(reason ? { feedback: reason } : {}) };
+      })
+      .filter((b) => queryScore(q, [b.prompt, ...b.options.map((o) => o.text), b.explanation, ...b.conceptNames].join('\n')) > 0);
+    const body: SolvedQuestionsResponse = { total: matched.length, questions: matched.slice(0, 30) };
+    return c.json(body);
+  });
   // GET은 로컬 원장만 읽는다. 외부 검색·색인 갱신은 명시적 POST로 분리한다.
   app.get('/memory', async (c) => {
     const result = await deps.memory.search(me(c), await memoryScope(c, c.req.query('projectId')), { query: c.req.query('q') ?? '', limit: 12 });
@@ -185,6 +228,12 @@ export function meRoutes(deps: AppDeps): Hono<AppEnv> {
     const { base, level } = await knowledgeFor(c, req.sessionKey ? { sessionKey: req.sessionKey } : {});
     await deps.learner.rememberConcepts(me(c), Object.values(base.concepts ?? {}), projectId && req.sessionKey ? { projectId, sessionKey: req.sessionKey } : undefined);
     return c.json(await deps.assessments.start(me(c), projectId, req, snapshot, new Map(Object.entries(base.concepts ?? {})), level));
+  });
+
+  // '문제가 이상해요': 내 문제 은행에 있는 문제만 (AI 호출 없음)
+  app.post('/question-feedback', requireJson, async (c) => {
+    const req = await parseBody(c, QuestionFeedbackRequestSchema);
+    return c.json({ profile: await deps.assessments.feedback(me(c), req) });
   });
 
   app.post('/assessments/:assessmentId/responses', requireJson, async (c) => {

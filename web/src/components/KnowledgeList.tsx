@@ -13,12 +13,13 @@ import { ErrorBox, Loading, Notice } from './Notice';
 import { QuizCard } from './QuizCard';
 import { ConceptBody } from './WikiItemCard';
 import { LearningHistory } from './LearningHistory';
-import { conceptAnchor, sessionAnalysisPath } from '../lib/session-analysis';
+import { KnowledgeDashboard } from './KnowledgeDashboard';
+import { askConceptPath, conceptAnchor, sessionAnalysisPath } from '../lib/session-analysis';
 
 const STATE_PILL: Record<string, string> = { unknown: 'pill-gray', partial: 'pill-blue', demonstrated: 'pill-green', conflicting: 'pill-yellow' };
 const DEPTHS: ExplanationDepth[] = ['D0', 'D1', 'D2', 'D3'];
 
-type Open = 'quiz' | 'explain' | 'wrong' | null;
+type Open = 'check' | 'quiz' | 'explain' | 'wrong' | null;
 
 /** 개념 → 분석 문서의 해당 개념 → 프로젝트 위키. 접힌 나머지 출처도 모두 열 수 있다. */
 export function KnowledgeSourceLinks({ conceptId, sources }: { conceptId: string; sources: KnowledgeSource[] }) {
@@ -47,6 +48,16 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
   const s = entry.state;
   useEffect(() => { setDepth(s.teaching?.depth ?? 'D1'); }, [s.teaching?.depth]);
   const toggle = (o: Open) => setOpen((cur) => (cur === o ? null : o));
+  const askSource = entry.sources[0];
+  const showExplain = () => (focus ? focus.show({ kind: 'concept', id: entry.conceptId }, 'explain') : setOpen('explain'));
+  // "사실 아직 잘 몰라요"(정정)는 문제로 오른 상태가 보일 때만 뜻이 있다. 그 밖에는 "잘 모르겠어요"(자기보고)를 둔다
+  const canCorrect = !s.disputed && (s.state === 'partial' || s.state === 'demonstrated');
+  // 상태는 배지 하나로만. 확인 기록이 없는 상태(unknown)는 묶음 제목과 학습 기록이 이미 말해 주므로 표시하지 않는다
+  const status = [
+    s.disputed ? <span key="state" className="pill pill-yellow">{ko.knowledge.disputed}</span>
+      : s.state !== 'unknown' ? <span key="state" className={`pill ${STATE_PILL[s.state] ?? 'pill-gray'}`}>{ko.knowledge.state[s.state]}</span> : null,
+    s.selfReport ? <span key="self" className="pill pill-outline">{ko.knowledge.selfReport[s.selfReport]}</span> : null,
+  ].filter(Boolean);
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
@@ -62,14 +73,11 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
   return (
     <article className="knowledge-card">
       <div className="concept-head">
-        <h3>
-          {entry.name} <span className="muted">—</span> <span className="knowledge-state">{s.disputed ? ko.knowledge.disputed : ko.knowledge.state[s.state]}</span>
-        </h3>
-        <span className={`pill ${STATE_PILL[s.state] ?? 'pill-gray'}`}>{ko.knowledge.state[s.state]}</span>
-        {s.selfReport && <span className="pill pill-outline">{ko.knowledge.selfReport[s.selfReport]}</span>}
+        <h3>{entry.name}</h3>
+        {/* 제목 옆에는 개념의 분류만. 내 학습 상태는 아래 학습 기록 줄에 모은다 */}
         <span className="pill pill-outline">{entry.category}</span>
       </div>
-      <LearningHistory state={entry.scope?.state ?? s} scope={entry.scope?.kind} teaching={s.teaching} />
+      <LearningHistory state={entry.scope?.state ?? s} scope={entry.scope?.kind} teaching={s.teaching} nudge={ko.knowledge.nudge} status={status.length ? status : undefined} />
       <p className="knowledge-reason">{entry.reason || entry.previousReason || entry.summary}</p>
       {entry.previousReason && <p className="small muted">{ko.knowledge.previousReason}</p>}
       {!entry.reason && <p className="small muted" role="status">{writing ? ko.knowledge.writing : entry.reasonOrigin === 'error' ? ko.knowledge.aiError : ko.knowledge.aiMissing}</p>}
@@ -87,20 +95,40 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
         </details>
       )}
       <div className="wiki-buttons">
-        <button className="btn btn-small" disabled={busy || s.selfReport === 'known'} onClick={() => run(() => learner.selfReport(entry.conceptId, 'known'))}>
-          {ko.knowledge.known}
-        </button>
+        {/* '알고 있어요'는 바로 기록하지 않고 OX 확인 문제를 연다. 맞히면 서버가 기록한다 */}
+        {s.selfReport !== 'known' && (
+          <button className="btn btn-small" aria-expanded={open === 'check'} onClick={() => toggle('check')}>
+            {ko.knowledge.known}
+          </button>
+        )}
         <button className="btn btn-small" aria-expanded={open === 'quiz'} onClick={() => toggle('quiz')}>
           {ko.knowledge.quiz}
         </button>
-        <button className="btn btn-small" aria-expanded={open === 'explain'} onClick={() => (focus ? focus.show({ kind: 'concept', id: entry.conceptId }, 'explain') : toggle('explain'))}>
+        <button className="btn btn-small" aria-expanded={open === 'explain'} onClick={() => (focus ? showExplain() : toggle('explain'))}>
           {ko.knowledge.explain}
         </button>
-        <button className="btn btn-small" aria-expanded={open === 'wrong'} onClick={() => toggle('wrong')}>
-          {ko.knowledge.wrong}
-        </button>
+        {/* 질문은 세션 근거로 답한다. 분석 화면 안이면 도움 패널을, 밖이면 이 개념이 나온 분석 문서의 질문 탭을 연다 */}
+        {focus ? (
+          <button className="btn btn-small" onClick={() => focus.show({ kind: 'concept', id: entry.conceptId }, 'ask')}>
+            {ko.help.askAbout}
+          </button>
+        ) : askSource && (
+          <Link className="btn btn-small" to={askConceptPath(askSource.sessionKey, entry.conceptId)} title={ko.knowledge.askIn(askSource.sessionTitle)}>
+            {ko.help.askAbout}
+          </Link>
+        )}
+        {canCorrect ? (
+          <button className="btn btn-small" aria-expanded={open === 'wrong'} onClick={() => toggle('wrong')}>
+            {ko.knowledge.wrong}
+          </button>
+        ) : (
+          <button className="btn btn-small" disabled={busy || s.selfReport === 'unsure'} onClick={() => run(async () => { await learner.selfReport(entry.conceptId, 'unsure'); showExplain(); })}>
+            {ko.knowledge.unsure}
+          </button>
+        )}
       </div>
       {actionError && <ErrorBox error={actionError} />}
+      {open === 'check' && <QuizCard sessionKey={sessionKey} target={{ conceptId: entry.conceptId }} learner={learner} explanationSeen={false} purpose="self_check" onClose={() => setOpen(null)} />}
       {open === 'quiz' && <QuizCard sessionKey={sessionKey} target={{ conceptId: entry.conceptId }} learner={learner} explanationSeen={false} onClose={() => setOpen(null)} />}
       {open === 'explain' && concept && (
         <div className="knowledge-explain">
@@ -114,7 +142,7 @@ export function KnowledgeCard({ entry, concept, learner, sessionKey, writing = f
           <ConceptBody concept={concept} depth={depth} showExample={depth !== 'D0'} />
         </div>
       )}
-      {open === 'wrong' &&
+      {open === 'wrong' && (sent || canCorrect) &&
         (sent ? (
           <div className="small muted">{ko.knowledge.sent}</div>
         ) : (
@@ -156,6 +184,9 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
   const request = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  // 한 번 보는 동안 카드가 처음 놓인 묶음을 유지한다. 문제를 맞혀 상태가 오를 때 카드가 다른 묶음으로
+  // 옮겨지며 다시 그려지면 방금 본 채점 결과·해설이 사라지기 때문이다. 범위·수준이 바뀌면 다시 나눈다
+  const placed = useRef({ scope: '', groups: new Map<string, Group>() });
   const concepts = useMemo(() => new Map(Object.entries(data?.concepts ?? {})), [data?.concepts]);
   const query = new URLSearchParams({ ...(sessionKey ? { sessionKey } : {}), ...(projectId ? { projectId } : {}) }).toString();
   // 설명 문장은 읽는 사람 수준별로 저장된다. 수준이 바뀌면 다시 받고, 고르기 전에는 AI 작성을 시작하지 않는다
@@ -245,12 +276,18 @@ export function KnowledgeList({ sessionKey, projectId, onProfile, refreshKey, sh
   if (error && !data) return <ErrorBox error={error} onRetry={load} />;
   if (!data) return <Loading />;
   const groups: Record<Group, DisplayKnowledgeEntry[]> = { check: [], confirmed: [], background: [] };
-  for (const e of data.entries) groups[groupOf(e)].push(e);
+  if (placed.current.scope !== dataScope.current) placed.current = { scope: dataScope.current, groups: new Map() };
+  for (const e of data.entries) {
+    const g = placed.current.groups.get(e.conceptId) ?? groupOf(e);
+    placed.current.groups.set(e.conceptId, g);
+    groups[g].push(e);
+  }
 
   return (
     <div className="knowledge">
       {refreshing && <p className="small muted" role="status">{ko.knowledge.checkingSaved}</p>}
       {error && <ErrorBox error={error} onRetry={load} />}
+      {showMeta && <KnowledgeDashboard entries={data.entries} />}
       {showMeta && (
         <p className="small muted">
           {ko.knowledge.note} {ko.knowledge.scanned(data.scannedSessions, data.totalSessions)}

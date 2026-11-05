@@ -33,11 +33,33 @@ const resp = (over: Partial<ResponseEvent> = {}): ResponseEvent => ({
 const reduce = (events: LearnerEvent[]) => reduceProfile(events, 'l_1', 'p');
 const auth = (events: LearnerEvent[]) => conceptState(reduce(events), 'auth');
 
-describe('learner reducer (policy-0.2)', () => {
+describe('learner reducer (policy-0.3)', () => {
   it('defaults to unknown with no evidence (T01)', () => {
     const p = reduce([]);
     expect(p.revision).toBe(0);
     expect(conceptState(p, 'authorization').state).toBe('unknown');
+  });
+
+  it("lifts a confirmed '알고 있어요' with one first-try correct answer to partial, but never by self-report alone", () => {
+    const known = { ...base(), kind: 'self_report' as const, conceptId: 'auth', value: 'known' as const };
+    expect(auth([resp(), known]).state).toBe('partial');
+    expect(auth([resp()]).state).toBe('unknown');
+    expect(auth([known]).state).toBe('unknown');
+    expect(auth([resp({ assistance: 'assisted' }), known]).state).toBe('unknown');
+  });
+
+  it("leaves out answers to questions the learner flagged as broken, even when the flag comes later", () => {
+    const right = resp({ questionId: 'q-ai-1', format: 'single_choice', questionKind: 'application' });
+    const wrong = resp({ questionId: 'q-ai-2', format: 'single_choice', grade: 'incorrect' });
+    const flag = { ...base(), kind: 'question_feedback' as const, questionId: 'q-ai-2', questionVersion: 1, conceptIds: ['auth'], reason: 'wrong_answer' as const };
+    expect(auth([right, wrong]).state).toBe('conflicting');
+    const s = auth([right, wrong, flag]);
+    expect(s.state).toBe('partial');
+    expect(s.counts).toMatchObject({ correct: 1, incorrect: 0, practice: 0 });
+    expect(s.progress).toBe('practicing');
+    expect(s.activity?.find((a) => a.id === wrong.id)?.grade).toBeUndefined();
+    expect(s.activity?.at(-1)?.kind).toBe('question_feedback');
+    expect(reduce([right, wrong, flag]).revision).toBe(3);
   });
 
   it('stores self-report separately without promoting the state (T03)', () => {
@@ -74,10 +96,14 @@ describe('learner reducer (policy-0.2)', () => {
     expect(s.state).toBe('partial');
   });
 
-  it('keeps unreviewed questions and in-app assisted answers out of the estimate (T37)', () => {
+  it('counts first-try AI (candidate) questions but keeps in-app assisted answers as practice (T37)', () => {
     const s = auth([resp({ questionReview: 'candidate' }), resp({ questionId: 'q-auth-sc-1', format: 'single_choice', assistance: 'assisted' })]);
     expect(s.state).toBe('unknown');
-    expect(s.counts).toMatchObject({ correct: 0, practice: 2 });
+    expect(s.counts).toMatchObject({ correct: 1, practice: 1, practiceCorrect: 1 });
+    const choice = auth([resp({ questionReview: 'candidate', questionId: 'q-ai-sc', format: 'single_choice' })]);
+    expect(choice.state).toBe('partial');
+    const mastered = auth([resp({ questionReview: 'candidate' }), resp({ questionReview: 'candidate', questionId: 'q-ai-apply', format: 'single_choice', questionKind: 'application' })]);
+    expect(mastered.state).toBe('demonstrated');
   });
 
   it('reaches demonstrated only with two distinct correct answers including an application question, keeping assistance uncertain (T05)', () => {
@@ -85,7 +111,8 @@ describe('learner reducer (policy-0.2)', () => {
     expect(s.state).toBe('demonstrated');
     expect(s.assistance).toBe('unknown');
     expect(s.reviewStatus).toBe('auto_scored');
-    expect(s.assessmentScope).toContain('문항 2개');
+    expect(s.assessmentScope).toContain('문제 2개');
+    expect(s.assessmentScope).not.toContain('오답');
   });
 
   it('keeps conflicting evidence from both sides (T06) and does not label a lone wrong answer as a misconception', () => {
@@ -113,17 +140,24 @@ describe('learner reducer (policy-0.2)', () => {
     expect(p.revision).toBe(2);
   });
 
-  it('retains candidate outcomes as learning progress and adapts after difficulty without promoting mastery', () => {
+  it('adapts after difficulty and lets later correct answers lift an old wrong answer', () => {
     const correct = resp({ questionReview: 'candidate' });
     const incorrect = resp({ questionId: 'q-new', questionReview: 'candidate', grade: 'incorrect' });
     const s = auth([correct, incorrect]);
-    expect(s.state).toBe('unknown');
-    expect(s.counts).toMatchObject({ practice: 2, practiceCorrect: 1, practiceIncorrect: 1, correct: 0, incorrect: 0 });
+    expect(s.state).toBe('conflicting');
+    expect(s.counts).toMatchObject({ correct: 1, incorrect: 1, practice: 0 });
     expect(s.teaching).toMatchObject({ depth: 'D2', examples: true, reason: 'review' });
     expect(s.activity?.map((a) => a.id)).toEqual([correct.id, incorrect.id]);
-    const recovered = auth([correct, incorrect, resp({ questionId: 'q-newer', questionReview: 'candidate' })]);
-    expect(recovered.progress).toBe('improving');
-    expect(recovered.state).toBe('unknown');
+    // 오답 뒤 OX 하나만으로는 오르지 않는다
+    const oneMore = auth([correct, incorrect, resp({ questionId: 'q-newer', questionReview: 'candidate' })]);
+    expect(oneMore.progress).toBe('improving');
+    expect(oneMore.state).toBe('conflicting');
+    // 오답 뒤에 다시 맞힌 것만으로 규칙을 채우면 그 상태로 오른다
+    const relearned = auth([correct, incorrect, resp({ questionId: 'q-newer', questionReview: 'candidate' }), resp({ questionId: 'q-apply2', questionReview: 'candidate', format: 'single_choice', questionKind: 'application' })]);
+    expect(relearned.state).toBe('demonstrated');
+    expect(relearned.progress).toBe('improving');
+    // 정답이 오답보다 먼저였다면 다시 맞힌 것으로 보지 않는다
+    expect(auth([resp({ questionId: 'q-a', format: 'single_choice' }), resp({ questionId: 'q-b', format: 'single_choice', grade: 'incorrect' })]).state).toBe('conflicting');
   });
 
   it('uses repeated questions to change teaching, retains mastery and honors an explicit preference', () => {

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { HelpJobStatus, HelpMessage, HelpThreadsResponse, LearnerProfile, Project, SessionSummary, UnderstandingResponse } from '@vibe-teacher/shared';
+import type { HelpJobStatus, HelpMessage, HelpThreadsResponse, LearnerProfile, MyQuestionsResponse, Project, SessionSummary, UnderstandingResponse } from '@vibe-teacher/shared';
 import { allAdapters } from '../../src/adapters/registry';
 import { AnalysisService } from '../../src/analyzers/index';
 import { summarizeBuilt } from '../../src/analyzers/built/index';
@@ -188,6 +188,20 @@ describe('help API', () => {
     const memoryApi = await app.request(`/api/me/memory?projectId=${project.id}&q=권한`);
     expect(memoryApi.status).toBe(200);
     expect((await app.request('/api/me/memory?projectId=unknown-project')).status).toBe(404);
+
+    // 내 지식 대시보드: 답을 받은 내 질문을 최신순으로 (세션 제목·개념 포함, AI 호출 없음)
+    const callsBefore = calls.length;
+    const mine = (await (await app.request(`/api/me/questions?projectId=${project.id}`)).json()) as MyQuestionsResponse;
+    expect(mine.total).toBe(2);
+    expect(mine.questions.map((q) => q.id)).toEqual([next.message.id, message.id]);
+    expect(mine.questions[1]).toMatchObject({ question: body.question, answer: '권한 검사는 서버에서 해야 합니다.', sessionKey: session.key, sessionTitle: session.title, focus: { kind: 'concept', id: 'authorization' } });
+    expect(mine.questions[1]?.conceptIds).toContain('authorization');
+    expect(((await (await app.request('/api/me/questions')).json()) as MyQuestionsResponse).total).toBe(2);
+    expect(calls.length).toBe(callsBefore);
+    expect((await app.request('/api/me/questions?projectId=unknown-project')).status).toBe(404);
+    const filtered = (await (await app.request(`/api/me/questions?q=${encodeURIComponent('로그인 차이')}`)).json()) as MyQuestionsResponse;
+    expect(filtered.questions.map((q) => q.id)).toEqual([next.message.id]);
+    expect(((await (await app.request(`/api/me/questions?q=${encodeURIComponent('결제환불')}`)).json()) as MyQuestionsResponse).total).toBe(0);
   });
 
   it('reports unavailable AI without returning a canned answer', async () => {

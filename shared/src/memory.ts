@@ -1,7 +1,7 @@
 /** 검색용 기억은 원장에 연결된 개인 활동이다. 검색 점수는 숙련 확률이 아니다. */
 export interface MemoryRecord {
   id: string;
-  kind: 'question' | 'response' | 'self_report' | 'correction' | 'preference' | 'exposure';
+  kind: 'question' | 'response' | 'self_report' | 'correction' | 'preference' | 'exposure' | 'question_feedback';
   at: string;
   text: string;
   conceptIds: string[];
