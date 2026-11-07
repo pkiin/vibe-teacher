@@ -1,6 +1,6 @@
 import { useContext } from 'react';
 import { Link } from 'react-router';
-import type { RepoFeatureAiCall, RepoFeatureCode, RepoFeatureListResponse, RepoFeaturePromptPart, RepoFeaturePromptSegment, RepoFeatureQuestion, RepoFeatureResponse, RepoSource } from '@vibe-teacher/shared';
+import type { RepoFeatureAiCall, RepoFeatureCode, RepoFeatureListResponse, RepoFeaturePromptPart, RepoFeaturePromptSegment, RepoFeatureQuestion, RepoFeatureResponse, RepoFeatureTable, RepoSource } from '@vibe-teacher/shared';
 import { useApi } from '../hooks/useApi';
 import { ko } from '../i18n/ko';
 import { CodeBlock } from './CodeBlock';
@@ -125,6 +125,29 @@ function Questions({ questions }: { questions: RepoFeatureQuestion[] }) {
   );
 }
 
+/** 이 기능이 쓰는 데이터베이스 표 (레포 위키의 데이터베이스 표에서 거꾸로 모은 것) */
+function FeatureTables({ tables }: { tables?: RepoFeatureTable[] }) {
+  if (!tables?.length) return null;
+  return (
+    <section className="card repo-section" id="feature-tables">
+      <h3>{ko.feature.sections.tables}</h3>
+      <ul className="repo-list">
+        {tables.map((t) => (
+          <li key={t.id}>
+            <div className="db-where">
+              <strong className="mono">{t.name}</strong>
+              <span className="small muted">{ko.db.kind[t.kind]}</span>
+              <FileButton source={t.source} />
+            </div>
+            {t.usage ? <MiniMarkdown text={t.usage} /> : <div className="small muted">{ko.db.codeOnly}</div>}
+            {t.columns.length > 0 && <div className="small muted">{ko.feature.tableColumns(t.columns.join(', '))}</div>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** 주요 기능 페이지 본문. 자세한 분석 전에는 레포 위키가 고른 기본 정보만 보여 준다 */
 export function RepoFeatureView({ data }: { data: RepoFeatureResponse }) {
   const { feature, page } = data;
@@ -156,6 +179,7 @@ export function RepoFeatureView({ data }: { data: RepoFeatureResponse }) {
             <SourceChips sources={feature.sources} />
           </section>
         )}
+        <FeatureTables tables={feature?.tables} />
       </>
     );
   }
@@ -203,6 +227,7 @@ export function RepoFeatureView({ data }: { data: RepoFeatureResponse }) {
           </ul>
         </section>
       )}
+      <FeatureTables tables={feature?.tables} />
       <section className="card repo-section" id="feature-ai">
         <h3>{ko.feature.sections.ai}</h3>
         {page.aiCalls.length ? (

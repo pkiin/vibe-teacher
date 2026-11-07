@@ -460,6 +460,29 @@ button.quiz-report-trigger:hover { color: var(--red); border-color: var(--red); 
 .repo-toc { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
 .repo-history ul ul { margin: 2px 0 6px; }
 .repo-origin { margin-left: 8px; font-weight: normal; vertical-align: middle; }
+/* 줄이 많은 표 접기 (API 목록 등) */
+.repo-fold { margin-top: 8px; }
+.repo-fold > summary { cursor: pointer; font-weight: 600; padding: 6px 0; min-height: 32px; }
+.repo-fold > summary:focus-visible, .db-table > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* 데이터베이스 표: 요약 표(표 → 저장하는 내용 → 쓰는 기능)와 표별 컬럼 */
+.db-view { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.db-view > p { margin: 0; }
+.db-overview .markdown p, .db-columns .markdown p { margin: 0; }
+.db-overview td:first-child { white-space: nowrap; }
+.db-features { display: flex; flex-wrap: wrap; gap: 4px; }
+.db-features .pill { margin-left: 0; }
+.db-table { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); scroll-margin-top: 130px; }
+.db-table > summary { cursor: pointer; padding: 10px 12px; }
+.db-table-head { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; vertical-align: middle; }
+.db-table-head .pill { margin-left: 0; }
+.db-table-name { font-weight: 600; overflow-wrap: anywhere; }
+.db-table-body { padding: 4px 12px 12px; border-top: 1px solid var(--border); }
+.db-table-body h4 { margin: 14px 0 4px; font-size: var(--ui-font-size); }
+.db-rules { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.db-rules .pill { margin-left: 0; }
+.db-rules code, .db-columns td.mono { overflow-wrap: anywhere; }
+.db-where { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; }
+.db-link-answer { margin-top: 6px; padding: 8px 10px; border-left: 3px solid var(--border); background: var(--surface); border-radius: 4px; }
 /* 주요 기능 목록과 기능별 페이지 */
 .feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; margin: 10px 0; }
 .repo-wiki .feature-grid .card { margin: 0; }
@@ -593,7 +616,7 @@ summary::marker { color: var(--muted); }
   .brand-tagline { font-size: var(--font-small); }
   .content { padding: 14px 12px 80px; }
   .card, .repo-section { padding: var(--card-padding); }
-  .repo-section { scroll-margin-top: 24px; }
+  .repo-section, .db-table { scroll-margin-top: 24px; }
   .row-between { flex-wrap: wrap; }
   h1 { font-size: calc(var(--ui-font-size) * 1.6); }
   .reading-path { gap: 4px 12px; }

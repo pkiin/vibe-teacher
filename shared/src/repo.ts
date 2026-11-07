@@ -30,6 +30,76 @@ export interface RepoFlow {
 
 type FileSource = Extract<RepoSource, { kind: 'file' }>;
 
+/**
+ * 데이터베이스 표(테이블·뷰·컬렉션·ORM 모델)의 컬럼 하나.
+ * 이름·타입·제약은 저장소 코드에서 구문으로 읽은 원문이고, description 만 AI 가 쓴다.
+ */
+export interface RepoDbColumn {
+  name: string;
+  /** 코드에 적힌 타입 그대로 */
+  type: string;
+  primaryKey?: boolean;
+  /** 비어 있으면 안 되는 값 (NOT NULL, required, nullable=False 등) */
+  notNull?: boolean;
+  unique?: boolean;
+  /** 기본값 식 그대로 */
+  default?: string;
+  /** 참조하는 표(외래 키) 원문. 예: auth.users(id), User */
+  references?: string;
+  /** 들어갈 수 있는 값을 제한하는 원문 (CHECK·enum) */
+  check?: string;
+  /** 실제 컬럼이 아니라 다른 표와의 관계를 나타내는 필드 (Prisma 관계 필드, ORM relationship) */
+  relation?: boolean;
+  source: FileSource;
+  /** AI: 이 컬럼에 실제로 들어가는 값 */
+  description?: string;
+}
+
+/** 이 표를 쓰는 주요 기능. usage 가 없으면 AI 설명 없이 코드에서만 확인한 연결이다 (기능 파일에 표 이름이 보임) */
+export interface RepoDbFeatureUse { featureId: string; usage?: string; sources: RepoSource[] }
+
+export interface RepoDbTable {
+  /** 화면 앵커와 AI 입력에서 쓰는 id (영문 소문자·숫자·_·-) */
+  id: string;
+  name: string;
+  schema?: string;
+  /** model: 실제 표 이름을 프레임워크가 정하는 ORM 모델 (코드에 표 이름이 없음) */
+  kind: 'table' | 'view' | 'collection' | 'model';
+  /** 정의를 읽은 형식 (SQL, Prisma, Drizzle, SQLAlchemy …) */
+  via: string;
+  source: FileSource;
+  columns: RepoDbColumn[];
+  /** 컬럼이 많아 일부만 담았음 */
+  columnsLimited?: boolean;
+  /** 서버가 코드에서 찾은, 이 표를 쓰는 줄 (정의 파일 제외) */
+  usages: FileSource[];
+  usagesLimited?: boolean;
+  /** 이 표를 읽고 쓰는 SQL 함수(Supabase RPC 등)의 정의 위치. 코드에서 이 함수를 부르는 줄도 usages 에 들어 있다 */
+  routines?: { name: string; source: FileSource }[];
+  /** AI: 이 표에 무엇을 저장하는지 */
+  description?: string;
+  features?: RepoDbFeatureUse[];
+  /**
+   * AI: "이 표는 주요 기능 중 무엇과 관계가 있나요?"에 대한 짧은 답 (서버가 읽은 사용 줄 발췌 근거).
+   * 그래도 주요 기능과 잇지 못한 표에만 싣는다
+   */
+  linkAnswer?: { text: string; sources: RepoSource[] };
+  /**
+   * AI: 주요 기능이 아니라 로그인·잠금·기록 같은 공통 기반에서만 쓰는 표라면 그 기반과 이유 (근거 확인).
+   * 주요 기능과 이어진 표에는 싣지 않는다
+   */
+  base?: { text: string; sources: RepoSource[] };
+}
+
+export interface RepoDatabase {
+  tables: RepoDbTable[];
+  /** 표가 많거나 읽은 파일 수 상한에 걸려 일부만 담았음 */
+  limited: boolean;
+}
+
+/** 주요 기능이 쓰는 표 (레포 위키의 데이터베이스 표에서 거꾸로 모은 것) */
+export interface RepoFeatureTable { id: string; name: string; kind: RepoDbTable['kind']; usage?: string; columns: string[]; source: FileSource }
+
 /** 레포 위키를 쓸 때 AI가 고른 주요 기능. 읽는 사람 수준별 문장 레이어에 함께 저장한다. */
 export interface RepoFeature {
   /** 영문 소문자·숫자·하이픈. 다시 생성해도 같은 기능이면 같은 id 를 쓰도록 이전 목록을 AI 에 준다 */
@@ -39,6 +109,8 @@ export interface RepoFeature {
   files: FileSource[];
   sessions: Extract<RepoSource, { kind: 'session' }>[];
   sources: RepoSource[];
+  /** 이 기능이 쓰는 데이터베이스 표 */
+  tables?: RepoFeatureTable[];
 }
 
 export interface RepoFeatureFlowStep { title: string; detail: string; sources: RepoSource[] }
@@ -156,9 +228,11 @@ export type RepoBlock =
   | { kind: 'list'; items: RepoListItem[] }
   | { kind: 'code'; text: string; lang?: string }
   | { kind: 'flow'; graph: RepoFlow }
-  | { kind: 'table'; head: string[]; rows: string[][] }
+  /** role: 화면이 긴 표를 접을 때 붙이는 이름 (api: API 경로 목록, scripts: 실행 스크립트) */
+  | { kind: 'table'; head: string[]; rows: string[][]; role?: 'api' | 'scripts' }
   /** 주요 기능 목록(RepoWiki.features)에서 이 id 들을 기능 페이지 링크로 보여 준다 */
-  | { kind: 'features'; ids: string[] };
+  | { kind: 'features'; ids: string[] }
+  | { kind: 'database'; db: RepoDatabase };
 
 export interface RepoSection {
   id: string;
@@ -219,6 +293,8 @@ export interface RepoFacts {
   dirs: string[];
   deps: string[];
   findings: string[];
+  /** 데이터베이스 표와 컬럼 이름 (예전 판에는 없음) */
+  tables?: string[];
 }
 
 export interface RepoWikiHistoryEntry {

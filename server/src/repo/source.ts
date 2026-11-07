@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { RepoFileView } from '@vibe-teacher/shared';
 import { maskSecrets } from '../llm/digest';
 import { sha1 } from '../lib/hash';
+import { namedFunctions, type NamedFunction } from './db-calls';
 
 export const MAX_SOURCE_BYTES = 200_000;
 const EXAMPLE = /^\.env\.(example|sample|template|dist)$/i;
@@ -21,8 +22,12 @@ export function readableRepoPath(relative: string): boolean {
   return TEXT.test(name) || /^(README|Dockerfile)$/i.test(name);
 }
 
-/** 저장소 밖·심볼릭 링크·특수 파일은 읽지 않는다. 바이트 상한을 넘기지 않는다. */
-export async function readRepoText(root: string, relative: string): Promise<{ text: string; hash: string; truncated: boolean; masked: boolean } | null> {
+/**
+ * 저장소 밖·심볼릭 링크·특수 파일은 읽지 않는다. 바이트 상한을 넘기지 않는다.
+ * functions: JS·TS 파일의 함수 윤곽(이름·줄 범위·부르는 이름)을 원문에서 구문으로 만든다. 비밀값 마스킹이 `key = …` 같은 코드를
+ * 가려 구문이 깨지므로 원문으로 윤곽만 만들고, 원문 자체는 이 함수 밖으로 내보내지 않는다.
+ */
+export async function readRepoText(root: string, relative: string, opts: { functions?: boolean } = {}): Promise<{ text: string; hash: string; truncated: boolean; masked: boolean; functions?: NamedFunction[] } | null> {
   if (!readableRepoPath(relative)) return null;
   try {
     const base = await fsp.realpath(root);
@@ -53,7 +58,9 @@ export async function readRepoText(root: string, relative: string): Promise<{ te
       const text = namesOnly
         ? [...new Set([...raw.matchAll(/^\s*#?\s*([A-Z][A-Z0-9_]{1,63})\s*=/gm)].map((m) => m[1]!))].map((key) => `${key}=…`).join('\n')
         : maskSecrets(raw);
-      return { text, hash: sha1(text).slice(0, 16), truncated: bytesRead > MAX_SOURCE_BYTES, masked: namesOnly || text !== raw };
+      let functions: NamedFunction[] | undefined;
+      if (opts.functions && !namesOnly && /\.[cm]?[jt]sx?$/.test(relative)) { try { functions = namedFunctions(relative, raw); } catch { functions = []; } }
+      return { text, hash: sha1(text).slice(0, 16), truncated: bytesRead > MAX_SOURCE_BYTES, masked: namesOnly || text !== raw, ...(functions ? { functions } : {}) };
     } finally { await handle.close(); }
   } catch { return null; }
 }
