@@ -421,9 +421,28 @@ textarea { font-family: var(--mono); font-size: var(--font-small); }
 .my-questions .solved-options { list-style: disc; padding-left: 1.2rem; margin: 4px 0; }
 .my-questions .solved-options li { border: 0; padding: 2px 0; }
 .memory-technical { margin-top: 12px; }
-.quiz-report { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
-.quiz-report legend { padding: 0 4px; }
-.quiz-report button { align-self: flex-start; }
+/* 문제 신고: 카드 오른쪽 위 버튼 → 창에서 사유·이유 작성 → 제출 확인 */
+.quiz-report-trigger { margin-left: auto; }
+button.quiz-report-trigger { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+button.quiz-report-trigger:hover { color: var(--red); border-color: var(--red); }
+.quiz-report-modal { width: min(460px, calc(100vw - 24px)); }
+.quiz-report { padding: 14px 16px 16px; }
+.quiz-report form { display: flex; flex-direction: column; gap: 12px; }
+.quiz-report fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.quiz-report legend { font-weight: 600; margin-bottom: 6px; }
+.quiz-report-question { margin: 0 0 14px; padding: 8px 10px; background: var(--surface); border-radius: 8px; display: flex; flex-direction: column; gap: 2px; }
+.quiz-report-reason { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.quiz-report-reason:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.quiz-report-reason:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.quiz-report-reason input { margin: 0; }
+.quiz-report-note { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.quiz-report-note textarea { font: inherit; font-weight: normal; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.quiz-report .quiz-actions { margin-top: 4px; }
+.quiz-report-confirm { font-weight: 600; font-size: calc(var(--ui-font-size) * 1.05); margin: 0 0 10px; }
+.quiz-report-confirm:focus { outline: none; }
+.quiz-report-summary { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 10px; }
+.quiz-report-summary dt { color: var(--muted); }
+.quiz-report-summary dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .knowledge-explain { margin-top: 8px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 
 /* ---- 레포 위키 ---- */
