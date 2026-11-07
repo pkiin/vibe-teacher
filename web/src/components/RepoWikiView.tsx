@@ -13,6 +13,7 @@ import { MiniMarkdown } from './MiniMarkdown';
 import { ErrorBox, Loading, Notice, fmtDate } from './Notice';
 import { ReaderLevelLine, ReaderLevelOptions } from './ReaderLevelPicker';
 import { Tabs } from './Tabs';
+import { DatabaseView } from './RepoDatabaseView';
 import { RepoFlowView } from './RepoFlowView';
 import { RepoSourceViewer } from './RepoSourceViewer';
 import { sessionAnalysisPath } from '../lib/session-analysis';
@@ -21,6 +22,8 @@ type FileSource = Extract<RepoSource, { kind: 'file' }>;
 export const SourceContext = createContext<(source: FileSource) => void>(() => {});
 /** 위키의 주요 기능 목록(분석 여부 포함). '주요 기능' 탭과 사용자 페이지의 기능 블록이 같은 목록을 쓴다 */
 export const FeatureContext = createContext<{ projectId: string; features: RepoFeatureListItem[] }>({ projectId: '', features: [] });
+/** 줄이 이보다 많은 표(API 목록 등)는 접어 두고 펼쳐 보게 한다 */
+export const TABLE_FOLD_ROWS = 8;
 
 export function SourceChips({ sources }: { sources?: RepoSource[] }) {
   const open = useContext(SourceContext);
@@ -52,8 +55,9 @@ export function Block({ b }: { b: RepoBlock }) {
   if (b.kind === 'flow') return <RepoFlowView graph={b.graph} onOpen={open} />;
   if (b.kind === 'text') return <MiniMarkdown text={b.text} />;
   if (b.kind === 'code') return <CodeBlock code={b.text} {...(b.lang ? { lang: b.lang } : {})} />;
+  if (b.kind === 'database') return <DatabaseView db={b.db} />;
   if (b.kind === 'table') {
-    return (
+    const table = (
       <div className="repo-table-wrap">
         <table className="table repo-table">
           <thead>
@@ -76,6 +80,15 @@ export function Block({ b }: { b: RepoBlock }) {
           </tbody>
         </table>
       </div>
+    );
+    if (b.rows.length <= TABLE_FOLD_ROWS) return table;
+    // 예전 저장 형식에는 role 이 없어 서버가 붙이는 머리글로 API·스크립트 표를 알아본다
+    const role = b.role ?? (b.head[1] === '경로' ? 'api' : b.head[0] === '스크립트' ? 'scripts' : undefined);
+    return (
+      <details className="repo-fold">
+        <summary>{ko.repo.fold(role, b.rows.length)}</summary>
+        {table}
+      </details>
     );
   }
   return (
@@ -154,6 +167,7 @@ export function FeatureCards({ projectId, features }: { projectId: string; featu
           <MiniMarkdown text={f.summary} />
           <div className="small muted feature-card-meta">
             <span>{ko.feature.files(f.files.length)}</span>
+            {!!f.tables?.length && <span>{ko.feature.tables(f.tables.length)}</span>}
             {f.sessions.length > 0 && <span>{ko.feature.sessions(f.sessions.length)}</span>}
             <span className={`pill ${f.analyzedAt ? 'pill-green' : 'pill-gray'}`}>{f.analyzedAt ? ko.feature.analyzed(fmtDate(f.analyzedAt)) : ko.feature.basic}</span>
           </div>

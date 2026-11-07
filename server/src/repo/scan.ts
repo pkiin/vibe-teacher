@@ -5,6 +5,7 @@ import type { Readable } from '@vibe-teacher/shared';
 import { sha1 } from '../lib/hash';
 import { maskSecrets } from '../llm/digest';
 import { entryPaths, inspectCode, selectCode, type CodeFile } from './code';
+import { buildDatabase, DB_LIMITS, extractDbDefs, extractDbRoutines, isSchemaFile, type DbRoutineDef, type DbScan, type DbSourceFile, type DbTableDef } from './database';
 import { readRepoText } from './source';
 
 /**
@@ -12,6 +13,7 @@ import { readRepoText } from './source';
  * - 의존성·빌드 폴더는 건너뛰고, 심볼릭 링크는 따라가지 않는다.
  * - .env·키 파일은 열지 않는다. .env.example 류는 변수 이름만 읽는다.
  * - 파일 수·크기 상한이 있고, 넘으면 truncated 로 표시한다.
+ * - 데이터베이스 표 정의는 SQL·Prisma 파일과 이미 읽은 소스 코드에서 구문으로만 찾는다 (database.ts).
  */
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt', '.cache', 'coverage', '__pycache__', '.venv', 'venv', '.pytest_cache', '.turbo', '.parcel-cache', 'target', 'vendor', '.idea', '.vscode', '.svelte-kit', '.mypy_cache', '.gradle']);
@@ -62,6 +64,8 @@ export interface RepoScan {
   code?: CodeFile[];
   entries?: string[];
   codeLimited?: boolean;
+  /** 코드에서 읽은 데이터베이스 표 (없으면 생략) */
+  database?: DbScan;
 }
 
 async function readText(file: string, max: number): Promise<string | null> {
@@ -206,6 +210,20 @@ export async function scanRepo(root: string, opts: { light?: boolean } = {}): Pr
   }
   scan.docker = files.some((f) => /(^|\/)(Dockerfile|docker-compose\.ya?ml|compose\.ya?ml)$/.test(f.path));
 
+  // 데이터베이스 표: SQL 마이그레이션·Prisma 스키마를 먼저 읽고, 아래 소스 코드에서 ORM 정의와 사용처를 함께 찾는다
+  const dbDefs: DbTableDef[] = [];
+  const dbRoutines: DbRoutineDef[] = [];
+  const dbSources: DbSourceFile[] = [];
+  const hashes = new Map<string, string>();
+  const schemaFiles = files.filter((f) => isSchemaFile(f.path) && f.size <= MAX_SOURCE_BYTES).sort((a, b) => a.path.localeCompare(b.path));
+  for (const f of schemaFiles.slice(0, DB_LIMITS.schemaFiles)) {
+    const source = await readRepoText(root, f.path);
+    if (!source) continue;
+    hashes.set(f.path, source.hash);
+    dbDefs.push(...extractDbDefs(f.path, source.text));
+    dbRoutines.push(...extractDbRoutines(f.path, source.text));
+  }
+
   let scanned = 0;
   let routeCodeBudget = 40_000;
   const code: CodeFile[] = [];
@@ -217,7 +235,7 @@ export async function scanRepo(root: string, opts: { light?: boolean } = {}): Pr
     if (scanned >= MAX_SOURCE_SCAN) break;
     if (!(SOURCE_RE.test(f.path) || /(^|\/)index\.html$/.test(f.path)) || f.size > MAX_SOURCE_BYTES || SECRET_FILE_RE.test(path.basename(f.path)) || /(^|\/)(test|tests|__tests__|fixtures)\/|\.(?:test|spec)\.[jt]sx?$/.test(f.path)) continue;
     scanned += 1;
-    const source = await readRepoText(root, f.path);
+    const source = await readRepoText(root, f.path, { functions: true });
     if (source) {
       const routes = extractRoutes(f.path, source.text).slice(0, Math.max(0, 300 - scan.routes.length));
       const lines = source.text.split('\n');
@@ -234,8 +252,14 @@ export async function scanRepo(root: string, opts: { light?: boolean } = {}): Pr
         return { ...route, hash: source.hash, ...(excerpt.length ? { code: excerpt.join('\n'), endLine: start + excerpt.length } : {}) };
       }));
       code.push(inspectCode(f.path, source.text, source.hash, fileSet));
+      hashes.set(f.path, source.hash);
+      dbSources.push({ path: f.path, hash: source.hash, text: source.text, ...(source.functions ? { functions: source.functions } : {}) });
+      dbDefs.push(...extractDbDefs(f.path, source.text));
     }
   }
+  const database = buildDatabase({ defs: dbDefs, routines: dbRoutines, files: dbSources, hashes, imports: new Map(code.map((c) => [c.path, c.imports.map((i) => i.path)])),
+    limited: schemaFiles.length > DB_LIMITS.schemaFiles || scanned >= MAX_SOURCE_SCAN });
+  if (database) scan.database = database;
 
   scan.code = selectCode(code, scan.entries);
   scan.codeLimited = code.length > scan.code.length || scanned >= MAX_SOURCE_SCAN;

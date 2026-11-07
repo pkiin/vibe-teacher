@@ -421,9 +421,28 @@ textarea { font-family: var(--mono); font-size: var(--font-small); }
 .my-questions .solved-options { list-style: disc; padding-left: 1.2rem; margin: 4px 0; }
 .my-questions .solved-options li { border: 0; padding: 2px 0; }
 .memory-technical { margin-top: 12px; }
-.quiz-report { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
-.quiz-report legend { padding: 0 4px; }
-.quiz-report button { align-self: flex-start; }
+/* 문제 신고: 카드 오른쪽 위 버튼 → 창에서 사유·이유 작성 → 제출 확인 */
+.quiz-report-trigger { margin-left: auto; }
+button.quiz-report-trigger { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+button.quiz-report-trigger:hover { color: var(--red); border-color: var(--red); }
+.quiz-report-modal { width: min(460px, calc(100vw - 24px)); }
+.quiz-report { padding: 14px 16px 16px; }
+.quiz-report form { display: flex; flex-direction: column; gap: 12px; }
+.quiz-report fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.quiz-report legend { font-weight: 600; margin-bottom: 6px; }
+.quiz-report-question { margin: 0 0 14px; padding: 8px 10px; background: var(--surface); border-radius: 8px; display: flex; flex-direction: column; gap: 2px; }
+.quiz-report-reason { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.quiz-report-reason:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.quiz-report-reason:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.quiz-report-reason input { margin: 0; }
+.quiz-report-note { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.quiz-report-note textarea { font: inherit; font-weight: normal; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.quiz-report .quiz-actions { margin-top: 4px; }
+.quiz-report-confirm { font-weight: 600; font-size: calc(var(--ui-font-size) * 1.05); margin: 0 0 10px; }
+.quiz-report-confirm:focus { outline: none; }
+.quiz-report-summary { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 10px; }
+.quiz-report-summary dt { color: var(--muted); }
+.quiz-report-summary dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .knowledge-explain { margin-top: 8px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 
 /* ---- 레포 위키 ---- */
@@ -441,6 +460,29 @@ textarea { font-family: var(--mono); font-size: var(--font-small); }
 .repo-toc { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
 .repo-history ul ul { margin: 2px 0 6px; }
 .repo-origin { margin-left: 8px; font-weight: normal; vertical-align: middle; }
+/* 줄이 많은 표 접기 (API 목록 등) */
+.repo-fold { margin-top: 8px; }
+.repo-fold > summary { cursor: pointer; font-weight: 600; padding: 6px 0; min-height: 32px; }
+.repo-fold > summary:focus-visible, .db-table > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* 데이터베이스 표: 요약 표(표 → 저장하는 내용 → 쓰는 기능)와 표별 컬럼 */
+.db-view { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.db-view > p { margin: 0; }
+.db-overview .markdown p, .db-columns .markdown p { margin: 0; }
+.db-overview td:first-child { white-space: nowrap; }
+.db-features { display: flex; flex-wrap: wrap; gap: 4px; }
+.db-features .pill { margin-left: 0; }
+.db-table { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); scroll-margin-top: 130px; }
+.db-table > summary { cursor: pointer; padding: 10px 12px; }
+.db-table-head { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; vertical-align: middle; }
+.db-table-head .pill { margin-left: 0; }
+.db-table-name { font-weight: 600; overflow-wrap: anywhere; }
+.db-table-body { padding: 4px 12px 12px; border-top: 1px solid var(--border); }
+.db-table-body h4 { margin: 14px 0 4px; font-size: var(--ui-font-size); }
+.db-rules { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.db-rules .pill { margin-left: 0; }
+.db-rules code, .db-columns td.mono { overflow-wrap: anywhere; }
+.db-where { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; }
+.db-link-answer { margin-top: 6px; padding: 8px 10px; border-left: 3px solid var(--border); background: var(--surface); border-radius: 4px; }
 /* 주요 기능 목록과 기능별 페이지 */
 .feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; margin: 10px 0; }
 .repo-wiki .feature-grid .card { margin: 0; }
@@ -574,7 +616,7 @@ summary::marker { color: var(--muted); }
   .brand-tagline { font-size: var(--font-small); }
   .content { padding: 14px 12px 80px; }
   .card, .repo-section { padding: var(--card-padding); }
-  .repo-section { scroll-margin-top: 24px; }
+  .repo-section, .db-table { scroll-margin-top: 24px; }
   .row-between { flex-wrap: wrap; }
   h1 { font-size: calc(var(--ui-font-size) * 1.6); }
   .reading-path { gap: 4px 12px; }
