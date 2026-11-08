@@ -132,9 +132,9 @@ describe('model catalog', () => {
 describe('provider routing', () => {
   const cfg = { ...defaultConfig().llm, claudeCliPath: '/nonexistent/claude' };
   const env = (e: Record<string, string>) => ({ PATH: '', HOME: '/nonexistent-home', ...e });
-  it('defaults to GPT-5 Mini through OpenRouter, and never uses direct API keys', async () => {
-    expect(cfg.openrouterModel).toBe('openai/gpt-5-mini');
-    expect(modelFor('openai', cfg)).toBe('openai/gpt-5-mini');
+  it('defaults to GPT-6.1 Terra through OpenRouter, and never uses direct API keys', async () => {
+    expect(cfg.openrouterModel).toBe('openai/gpt-6.1-terra');
+    expect(modelFor('openai', cfg)).toBe('openai/gpt-6.1-terra');
     expect((await resolveLlm(cfg, '/tmp', { env: env({ OPENAI_API_KEY: 'unused', ANTHROPIC_API_KEY: 'unused' }) })).status.available).toBe(false);
     expect((await resolveLlm(cfg, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openrouter');
     expect((await resolveLlm({ ...cfg, provider: 'openai' }, '/tmp', { env: env({ OPENROUTER_API_KEY: 'k' }) })).status.resolvedProvider).toBe('openrouter');

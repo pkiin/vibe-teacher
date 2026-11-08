@@ -45,7 +45,7 @@ export interface LlmSettings {
   maxBudgetUsd: number;
   timeoutMs: number;
   effort: LlmEffort;
-  /** OpenRouter 모델 ID (기본 openai/gpt-5-mini) */
+  /** OpenRouter 모델 ID (기본 openai/gpt-6.1-terra) */
   openrouterModel: string;
   /** 이전 설정 파일과의 호환용 필드. API 호출에는 openrouterModel을 사용한다 */
   openaiModel: string;

@@ -20,7 +20,7 @@ AI 제공자와 전송 범위, 생성 결과의 저장 위치, 회원 모드의 
 | `openrouter` | 모든 생성을 OpenRouter API로 실행 |
 | `none` | 새 AI 생성을 중지. 저장된 AI 결과와 원본 기록은 열람 가능 |
 
-AI 문장 생성·외부 문서 검색 API는 **OpenRouter**를 사용하며 기본 모델은 **`openai/gpt-5-mini`**입니다. 기존 `openai`·`anthropic-sdk` 제공자 설정은 OpenRouter로 이관됩니다. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`로 직접 API를 호출하지 않습니다. 예전 기본값 `openrouter/free`는 `openai/gpt-5-mini`로 바뀝니다. mem0 기억 정리·임베딩도 같은 OpenRouter 키를 사용합니다. 기억 API 호출은 설명 제공자와 별도로 `VIBE_TEACHER_MEMORY_BACKEND=local`로 끌 수 있습니다.
+AI 문장 생성·외부 문서 검색 API는 **OpenRouter**를 사용하며 기본 모델은 **`openai/gpt-6.1-terra`**입니다. 기존 `openai`·`anthropic-sdk` 제공자 설정은 OpenRouter로 이관됩니다. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`로 직접 API를 호출하지 않습니다. 설정 파일에 예전 기본값(`openrouter/free`, `openai/gpt-5-mini`)이 남아 있으면 `openai/gpt-6.1-terra`로 읽습니다. 직접 고른 다른 모델은 그대로 둡니다. mem0 기억 정리·임베딩도 같은 OpenRouter 키를 사용합니다. 기억 API 호출은 설명 제공자와 별도로 `VIBE_TEACHER_MEMORY_BACKEND=local`로 끌 수 있습니다.
 
 로컬 사용자는 `.env`에 API 키와 제공자를 설정합니다. 관리자가 OpenRouter 키를 제공했다면 그 키를 사용하고, 제공받지 못했다면 본인이 발급한 키를 사용합니다. Supabase 노트북 설치와 [Windows 설치 묶음](windows.md)은 `.env`에 키를 넣지 않고 로그인 후 화면에서 저장할 수도 있습니다([화면에서 저장한 OpenRouter 키](configuration.md#화면에서-저장한-openrouter-키)). `.env` 값이 있으면 그 값이 우선합니다.
 
@@ -134,7 +134,7 @@ docker compose stop memory-db
 OPENROUTER_API_KEY=사용할_OpenRouter_키
 VIBE_TEACHER_MEMORY_BACKEND=mem0
 VIBE_TEACHER_MEMORY_DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME
-# VIBE_TEACHER_MEMORY_MODEL=openai/gpt-5-mini
+# VIBE_TEACHER_MEMORY_MODEL=openai/gpt-6.1-terra
 ```
 
 **Supabase PostgreSQL에 SQL로 연결**하려면 `.env.admin`에 다음 설정을 사용합니다. 프로젝트의 **Connect → Connection string → Session pooler**에서 포트 5432 URI를 복사하고, `[YOUR-PASSWORD]` 부분에 프로젝트의 **DB 비밀번호**를 넣습니다. 암호의 특수문자는 URL 인코딩하세요.
