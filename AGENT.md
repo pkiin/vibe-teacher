@@ -1,40 +1,44 @@
 # AGENT.md
 
 이 저장소에서 일하는 AI 코딩 에이전트(Claude Code, Codex, Copilot 등)를 위한 작업 지침입니다.
-사람이 읽는 사용 설명서는 [README.md](README.md) 이고, 이 문서는 **코드를 바꾸는 쪽**을 위한 규칙입니다.
+사람이 읽는 설치 안내는 [README.md](README.md), 상세 사용 설명서는 `docs/`에 있고, 이 문서는 **코드를 바꾸는 쪽**을 위한 규칙입니다.
 
 ## 1. 매 작업 끝에 반드시 할 일
 
 작업(기능 추가, 버그 수정, 리팩터링, 설정 변경)을 마칠 때마다 아래를 순서대로 확인합니다.
 
-1. **README.md 갱신** — 아래 2절 표를 보고 해당하는 부분을 고칩니다. 바뀐 게 없으면 그대로 두되, *확인은 매번* 합니다.
+1. **README.md와 관련 문서 확인·갱신** — 아래 2절 표를 보고 해당 문서를 고칩니다. README의 소개·빠른 시작·환경변수·문서 링크는 매번 확인하고, 바뀐 게 없으면 그대로 둡니다.
 2. **AGENT.md 갱신** — 새 규칙, 새 디렉터리, 새 레시피가 생겼으면 이 문서에도 반영합니다.
 3. `npm run typecheck` 통과
 4. `npm test` 통과 (버그 수정이면 회귀 테스트를 함께 추가)
-5. 사용자에게 무엇을 바꿨고 README 의 어느 절을 고쳤는지 짧게 보고합니다.
+5. 사용자에게 무엇을 바꿨고 README 또는 어떤 상세 문서를 고쳤는지 짧게 보고합니다.
 
 커밋과 푸시는 사용자가 요청할 때만 합니다.
 새 기능 작업은 최신 `main`에서 새 작업 브랜치를 만들어 진행합니다.
 
-## 2. README.md 갱신 기준
+## 2. README.md와 상세 문서 갱신 기준
 
-README 는 한국어로, 사용자가 **그대로 복사해 실행할 수 있는** 명령과 예시 위주로 씁니다. 코드와 README 가 어긋나면 README 가 틀린 것으로 보고 고칩니다.
+README와 상세 문서는 한국어로, 사용자가 **그대로 복사해 실행할 수 있는** 명령과 예시 위주로 씁니다. 코드와 문서가 어긋나면 문서가 틀린 것으로 보고 고칩니다.
 
-| 이런 걸 바꿨다면 | README 에서 고칠 곳 |
+README는 저장소를 클론해 **자기 노트북에서 사용하는 사람**을 기준으로 소개·`npm run build && npm start`·필수 환경변수·포트 변경·문서 링크를 중심으로 짧게 유지합니다. 코드 개발자는 `docs/development.md`에서 `npm run dev`와 개발 설정을, 공용 서버 접속 사용자·운영자는 `docs/deployment.md`에서 `shared`·`ssh` 설정과 회원별 키 관리를 안내합니다. 로그인·기능별 세부 설명은 해당 문서로 연결합니다. 새 사용자 문서를 만들면 README의 문서 표에 추가하고, 문서 안의 상대 경로와 절 링크도 확인합니다.
+
+OpenRouter 키는 관리자가 제공한 키가 있으면 사용하고, 제공받지 못한 경우 본인이 발급한 키를 사용한다고 안내합니다. 사용자가 반드시 직접 발급해야 한다고 단정하지 않습니다.
+
+| 이런 걸 바꿨다면 | 고칠 문서와 위치 |
 |---|---|
-| 환경변수 추가·삭제·기본값 변경 | "포트와 주소 지정" 표, 해당 기능 절 |
-| CLI 인자 (`scripts/dev.mjs`, `server/src/config/env.ts`) | "포트와 주소 지정" 예시 블록 (`dev.mjs` 의 `usage()` 도 같이) |
-| 설정 파일 필드 (`server/src/config/schema.ts`) | "설정 파일" JSON 예시와 설명 목록 |
-| 새 어댑터 / 기본 경로 변경 | "읽는 위치 (기본값)" 표, 첫 문단의 지원 도구 목록 |
-| AI 제공자·모델·전송 범위, AI 가 쓰는 문장과 규칙 대체 조건 | "AI 제공자와 외부 문서 검색" 표와 설명 |
-| 로그인·권한·바인딩 규칙 | "로그인", "원격 접근", "다중 계정 운영" 절 |
-| `scripts/grant-read-acl.sh` | "다중 계정 운영" 명령 블록 |
-| Supabase 마이그레이션·표 추가 (`supabase/migrations/`) | "Supabase 최초 설정" 단계, 해당 기능 절(예: "AI 호출 기록"), "구조" 절 |
-| npm 스크립트 추가·변경 | "빠른 시작", 검사와 테스트 블록 |
-| 디렉터리 구조 변경 | "구조" 절 |
-| 사용자 눈에 보이는 새 기능 | 첫 문단 요약 불릿 또는 새 절 |
+| 환경변수 추가·삭제·기본값 변경 | [설정](docs/configuration.md)의 환경변수 표, `.env.example`·`.env.admin.example`. 첫 실행에 필요하면 README "환경변수"도 갱신 |
+| CLI 인자 (`scripts/dev.mjs`, `server/src/config/env.ts`) | [개발 서버 관리](docs/development.md)의 "포트와 주소 변경" (`dev.mjs`의 `usage()`도 같이) |
+| 설정 파일 필드 (`server/src/config/schema.ts`) | [설정](docs/configuration.md)의 "설정 파일" JSON 예시와 설명 목록 |
+| 새 어댑터 / 기본 경로 변경 | [설정](docs/configuration.md)의 "읽는 위치 (기본값)" 표, README의 지원 도구 목록 |
+| AI 제공자·모델·전송 범위, AI가 쓰는 문장과 규칙 대체 조건 | [AI와 데이터 저장](docs/ai.md)의 "AI 제공자와 외부 문서 검색" 표와 설명 |
+| 로그인·권한·바인딩 규칙 | [로그인](docs/authentication.md), [서버 운영](docs/deployment.md)의 해당 절 |
+| `scripts/grant-read-acl.sh` | [서버 운영](docs/deployment.md)의 "다중 계정 운영" 명령 블록 |
+| Supabase 마이그레이션·표 추가 (`supabase/migrations/`) | [로그인](docs/authentication.md)의 "Supabase 최초 설정", [AI 호출 기록](docs/ai.md), [Supabase 저장 분석](docs/supabase-storage.md)의 해당 표 |
+| npm 스크립트 추가·변경 | [개발 서버 관리](docs/development.md)의 실행·검사 명령. 첫 실행에 영향이 있으면 README "빠른 시작"도 갱신 |
+| 디렉터리 구조 변경 | [개발 서버 관리](docs/development.md)의 "프로젝트 구조", 이 문서의 구조 |
+| 사용자 눈에 보이는 새 기능 | [주요 기능](docs/features.md)의 해당 절. 프로젝트 소개가 바뀌면 README 요약도 갱신 |
 
-README 에 쓰지 않는 것: 내부 구현 세부, 작업 로그, 변경 이력(그건 커밋 메시지에), 실제 사용자명·경로·토큰.
+README에 쓰지 않는 것: 내부 구현 세부, 작업 로그, 변경 이력(그건 커밋 메시지에), 실제 사용자명·경로·토큰. 내부 작업 규칙은 이 문서에 두며 사용자 문서에 실제 비밀값을 넣지 않습니다.
 
 ## 3. 프로젝트 한눈에 보기
 
@@ -85,14 +89,16 @@ web/               Vite + React 19 + react-router UI (한국어)
   src/pages/FeaturePage.tsx             주요 기능 페이지 (/projects/:id/features/:featureId). 본문은 components/RepoFeatureView.tsx, 기능 카드는 RepoWikiView 의 FeatureCards
 scripts/           dev.mjs(웹+API 동시 실행), memory-db.mjs(로컬 PostgreSQL 준비), check-memory-db.ts(Supabase·PostgreSQL 접속 검사), setup-accounts.ts(관리자 회원 스키마 준비), postgres-init.sql(pgvector 확장), grant-read-acl.sh(다중 계정 읽기 ACL)
                    inspect-cloud.ts(관리자 읽기 전용 DB 행 수·통계 확인, 개인 데이터 출력 금지)
-docs/              supabase-storage.md(테이블 연결·저장 조건·조사 수치)
+docs/              configuration.md(환경변수·기록 경로·설정) · development.md(개발 서버·검사·구조)
+                   deployment.md(서버 운영·SSH·ACL) · authentication.md(로그인·회원 관리)
+                   features.md(주요 기능) · ai.md(AI·데이터 저장·기존 mem0) · supabase-storage.md(저장 분석)
 compose.yaml       프로젝트 전용 PostgreSQL + pgvector, loopback 바인딩과 이름 있는 볼륨
 supabase/migrations/ 회원·관리자 승인·본인 데이터 RLS·기기 간 쓰기 잠금 SQL, AI 호출 기록 표 (관리자가 순서대로 1회 적용, scripts/setup-accounts.ts 의 MIGRATIONS 목록)
 ```
 
 ## 4. 명령어
 
-Node.js 20 이상이 필요합니다 (루트 `package.json` 의 `engines`). 개발 서버(pkiin 머신)에서는 PATH 앞쪽의 `/usr/local/bin/node` 가 v15 라서 npm 자체가 실패하므로, 명령 앞에 `export PATH=/usr/bin:$PATH` 를 붙여 `/usr/bin/node`(v22)를 씁니다.
+루트 `package.json`의 `engines`는 Node.js 20 이상이지만, 현재 Vite·Vitest를 함께 실행하려면 Node.js 22.12 이상을 사용합니다. 개발 서버(pkiin 머신)에서는 PATH 앞쪽의 `/usr/local/bin/node`가 v15라서 npm 자체가 실패하므로, 명령 앞에 `export PATH=/usr/bin:$PATH`를 붙여 `/usr/bin/node`(v22)를 씁니다.
 
 ```bash
 npm install
@@ -154,7 +160,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 
 - **SSH 터널 서버는 연결을 연 OS 계정으로 기록 범위를 정한다.** `VIBE_TEACHER_DEPLOYMENT=ssh`는 Supabase 회원 모드 전용이며 리눅스·loopback 바인딩만 허용한다 (`server/src/index.ts`, `cloudConfig`). 볼 수 있는 OS 계정은 `vt_members.account_ids`가 아니라 커널이 기록한 상대편 소켓의 uid 하나다 (`lib/peer.ts` → `AuthService.withSshAccount`). Supabase 관리자도 범위가 넓어지지 않는다. uid를 확인하지 못하면 빈 범위로 둔다. 서비스 계정 이름이나 첫 로그인으로 대체하지 않는다. `x-vibe-teacher-peer-uid` 헤더는 연결을 연 쪽이 서버와 같은 uid일 때만 믿는다 (`trustedPeerUid`, vite 개발 프록시용). vite 프록시는 이 헤더를 항상 덮어쓴다. 설치 설정(소스 설정 탭: 스캔 범위·기록 위치·AI 설정·다시 읽기)은 서버 실행 계정 uid로 접속한 설치 관리자만 다룬다 (`AuthService.canManageInstallation` → `requireInstallationAdmin(c, deps)`, 화면은 `me.canManageInstallation`만 본다). 다른 계정으로 접속한 Supabase 관리자는 회원 관리(`requireAdmin`)만 한다. AI 키·승인은 `shared`와 같다.
 
-- **공용 서버 AI 키는 인증 UUID로 선택한다.** `llm/credentials.ts`는 `shared`·`ssh` 요청에 `VIBE_TEACHER_USER_OPENROUTER_KEYS`의 본인 UUID 키만 전달합니다. 일반 회원은 관리자 키·서버의 공통 키·CLI로 우회하지 못합니다. 관리자 계정만 본인 매핑이 없을 때 개발용 키를 사용할 수 있습니다. 승인 검사는 별도로 유지합니다. 키 목록과 관리자 전용 변수는 하위 제공자 환경에서 지우고 응답·로그에 노출하지 않습니다. `CloudRuntime`은 사용자별 환경을 분리하고 키·관리자 상태가 바뀌면 제공자 캐시를 무효화합니다. 로컬 사용자는 `.env`의 본인 키를 사용하며 관리자 개발용 키는 관리자에게만 적용합니다.
+- **공용 서버 AI 키는 인증 UUID로 선택한다.** `llm/credentials.ts`는 `shared`·`ssh` 요청에 `VIBE_TEACHER_USER_OPENROUTER_KEYS`의 본인 UUID 키만 전달합니다. 일반 회원은 관리자 키·서버의 공통 키·CLI로 우회하지 못합니다. 관리자 계정만 본인 매핑이 없을 때 개발용 키를 사용할 수 있습니다. 승인 검사는 별도로 유지합니다. 키 목록과 관리자 전용 변수는 하위 제공자 환경에서 지우고 응답·로그에 노출하지 않습니다. `CloudRuntime`은 사용자별 환경을 분리하고 키·관리자 상태가 바뀌면 제공자 캐시를 무효화합니다. 로컬 사용자는 `.env`에 설정한 키(관리자 제공 또는 본인 발급)를 사용하며 관리자 개발용 키는 관리자에게만 적용합니다.
 
 - **인증 메일 재발송은 접수와 전달을 구분한다.** 로그인 화면·인증 실패 화면은 `ResendConfirmation`을 사용한다. 공개 키로 `/auth/v1/resend`에 가입용 재발송만 요청하며 가입과 같은 복귀 주소 검사를 적용한다. 계정 존재·인증 여부를 공개 조회하거나 메일 전달을 보장하지 않는다. 가입·재발송 후 60초 대기는 UI 안내이며 Supabase 발송 제한은 별도로 유지한다. 알려진 발송 한도·수신 주소 제한·미인증 오류 코드만 안전한 문구로 바꾸고 외부 오류 원문은 노출하지 않는다. 관리자가 삭제한 `vt_members`는 자동 복구하지 않는다.
 
@@ -176,7 +182,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 2. `adapters/registry.ts` 의 `adapters` 배열에 등록합니다.
 3. provider 이름을 세 곳에 추가합니다: `shared/src/domain.ts` (`Provider`, `PROVIDERS`), `server/src/config/schema.ts` (`ProviderSchema`), `web/src/i18n/ko.ts` (`provider`).
 4. `server/test/fixtures/<provider>/` 에 **합성** 픽스처를 만들고 `server/test/adapters/` 에 테스트를 씁니다.
-5. README "읽는 위치" 표와 첫 문단을 고칩니다.
+5. `docs/configuration.md`의 "읽는 위치" 표와 README의 지원 도구 목록을 고칩니다.
 
 ### 개념과 위키 생성 변경
 - 고정 개념 목록을 추가하지 않는다. `wiki/ai.ts`에서 AI가 필요한 개념·주장·주의사항·카드를 함께 작성하고 출처를 검사한다.
@@ -186,13 +192,13 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 ### 설정 필드 추가
 - `server/src/config/schema.ts` 에 zod 로 정의하고 **반드시 `.default()`** 를 줍니다 (기존 사용자의 `config.json` 이 그대로 읽혀야 함).
 - 호환되지 않는 변경이면 `version` 을 올리고 마이그레이션을 씁니다.
-- README "설정 파일" 절을 고칩니다.
+- `docs/configuration.md`의 "설정 파일" 절을 고칩니다.
 
 ### 환경변수 / CLI 인자 추가
 - `server/src/config/env.ts` 와 `scripts/dev.mjs` (`usage()` 포함), 필요하면 `web/vite.config.ts` 까지 맞춥니다. 우선순위는 **CLI 인자 > 환경변수 > .env > 설정 파일 > 기본값**.
 - 사용자가 설정할 만한 값이면 `.env.example` 에도 주석과 함께 추가합니다. 관리자 비밀값 예제는 `.env.admin.example`에 둡니다. `.env` 는 `server/src/config/dotenv.ts` 와 `scripts/dev.mjs` 가 읽고 `.env.admin`은 API 서버·DB 관리 스크립트만 읽습니다. 우선순위는 셸 > `.env` > `.env.admin`입니다. 실제 값이 든 환경 파일은 절대 커밋하지 않습니다.
-- 환경 예제에는 회원 모드의 필수값과 자주 바꾸는 옵션만 둡니다. 일반 로컬 사용자는 `.env.example`을 복사한 `.env`에 본인의 `OPENROUTER_API_KEY`를 넣습니다. `.env.admin.example`은 관리자·개발 서버 전용이며 `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY`·`VIBE_TEACHER_USER_OPENROUTER_KEYS`·관리자 DB 주소를 둡니다. 두 예제의 활성 변수를 중복하지 않습니다. 기존 모드·장기 기억·고급 옵션은 README의 해당 절에 두고 파일별 배치와 복사 명령을 일치시킵니다.
-- README 표와 예시를 고칩니다.
+- 환경 예제의 기본값은 개인 노트북의 `local`·loopback 바인딩·`npm start` 포트 `3318`로 맞춥니다. 웹 포트 `3317`은 개발 서버 전용임을 명시하며 인증 복귀 주소는 기본 미설정으로 두어 사용·개발 주소를 따라가게 합니다. 일반 로컬 사용자·개발자는 `.env.example`을 복사한 `.env`의 `OPENROUTER_API_KEY`에 관리자가 제공한 키를 넣고, 제공받지 못했다면 본인이 발급한 키를 넣습니다. `.env.admin.example`은 관리자 설정이 필요할 때만 쓰며 관리자 키 빈 값·회원별 키 `{}`를 기본으로 둡니다. `shared`·`ssh`로 바꿀 값, 회원별 UUID 키, 프록시·터널 포트는 `docs/deployment.md`에 안내합니다. 두 예제의 활성 변수를 중복하지 않습니다. 기존 모드·장기 기억·고급 옵션은 `docs/ai.md`와 `docs/configuration.md`의 해당 절에 두고 파일별 배치와 복사 명령을 일치시킵니다.
+- `docs/configuration.md`의 표와 예시를 고치고, 첫 실행에 영향이 있으면 README의 표와 빠른 시작도 고칩니다.
 
 ### API 라우트 추가
 - `server/src/routes/<name>.ts` 에 만들고 `server/src/app.ts` 에 등록합니다. 요청/응답 타입은 `shared/src/api.ts`.
@@ -224,7 +230,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 내 지식 설명 문장 프롬프트·사실 형식을 바꾸면 `server/src/learner/knowledge-text.ts` 의 `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 올린다.
 - 레포 위키의 원문 자료(스캔 결과·draft 블록·`RepoFacts`) 형식을 바꾸면 `server/src/repo/wiki.ts` 의 `REPO_WIKI_VERSION` 을 올린다. 판(revision) 지문에 들어가므로 새 판의 문장 레이어가 따로 생기고, 예전 위키는 업데이트 전까지 예전 문장과 업데이트 안내를 보여 준다.
 - 주요 기능 페이지의 프롬프트·출력 스키마·저장 형식(`RepoFeaturePage`)을 바꾸면 `server/src/repo/feature.ts` 의 `FEATURE_PAGE_VERSION` 을 올린다. 레포 위키 출력의 `features` 형식을 바꾸면 `repo/service.ts` 의 `REPO_TEXT_VERSION` 을 올린다. 레포 위키는 시스템 프롬프트와 입력 전체가 지문(`inputHash`)에 들어간다. 공통 문체나 문장 형식이 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올려 기존 문장 레이어를 갱신 대상으로 돌린다.
-- 읽는 사람 문체 지침(`server/src/llm/reader.ts`)을 바꾸면 `ENRICH_PROMPT_VERSION`, `WIKI_AI_PROMPT_VERSION`, `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 함께 올린다 (이 셋은 지문에 시스템 프롬프트 본문이 들어가지 않는다). 수준을 추가하면 `READER_LEVELS`, `reader.ts` 의 지침, `web/src/i18n/ko.ts` 의 `reader.levels`, README "읽는 사람 수준" 표를 함께 고친다.
+- 읽는 사람 문체 지침(`server/src/llm/reader.ts`)을 바꾸면 `ENRICH_PROMPT_VERSION`, `WIKI_AI_PROMPT_VERSION`, `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 함께 올린다 (이 셋은 지문에 시스템 프롬프트 본문이 들어가지 않는다). 수준을 추가하면 `READER_LEVELS`, `reader.ts` 의 지침, `web/src/i18n/ko.ts` 의 `reader.levels`, `docs/features.md`의 "읽는 사람 수준과 화면 설정"을 함께 고친다.
 - 위키용 개념 필드를 바꾸면 `server/src/wiki/catalog.ts` 의 `CATALOG_VERSION`, 상태 전이 규칙을 바꾸면 `POLICY_VERSION`, 원장 형식을 바꾸면 `shared/src/wiki.ts` 의 `WIKI_SCHEMA_VERSION` 을 올린다.
 
 ### 화면과 한국어 설명
@@ -253,7 +259,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 
 ### AI 호출 추가
 - 새 기능에서 `provider.complete()`를 부르면 작업 함수를 `withAiRun(this.opts.storage, { feature, projectId, sessionKey, readerLevel }, signal, async (run) => …)`로 감싸고 모든 요청에 `trace: run.trace`를 넘긴다. 결과를 저장한 직후 `run.result(file, value)`를 부른다(저장하지 않는 결과는 `run.result(undefined, value)`).
-- 새 기능 종류는 `AiFeature`에 추가하고 README "AI 호출 기록"의 `feature` 목록을 고친다. 서비스는 `deps.storage`를 받아야 회원 모드에서 기록된다.
+- 새 기능 종류는 `AiFeature`에 추가하고 `docs/ai.md`의 "AI 호출 기록"에 있는 `feature` 목록을 고친다. 서비스는 `deps.storage`를 받아야 회원 모드에서 기록된다.
 - 검사: 가짜 `AiLog`를 가진 저장소(`StorageBackend.aiLog`)로 실행 기록·결과물을 확인한다 (`server/test/llm/ai-log.test.ts`, `server/test/cloud-ai-log.test.ts` 참고).
 
 ### Supabase 표 추가
@@ -289,8 +295,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 ## 11. 하지 말 것
 
 - 스캔 대상 홈에 파일 쓰기, 권한 변경, 잠금 파일 만들기
-- root 로 실행해야만 동작하는 기능 (다중 계정은 ACL 로 해결합니다 — README "다중 계정 운영")
+- root 로 실행해야만 동작하는 기능 (다중 계정은 ACL 로 해결합니다 — `docs/deployment.md`의 "다중 계정 운영")
 - 원본 기록이나 도구 출력을 LLM·로그·외부 서비스로 보내기
 - 보안 기본값 완화 (바인딩, 토큰, 404 숨김, 로그인 실패 잠금)
 - `web/dist/`, `node_modules/`, `.env*`, `*.local.json` 커밋
-- README 를 확인하지 않고 작업 끝내기
+- README와 관련 상세 문서를 확인하지 않고 작업 끝내기

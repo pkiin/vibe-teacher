@@ -1,5 +1,7 @@
 # Supabase 저장 분석
 
+[README로 돌아가기](../README.md) · [서버 운영](deployment.md#supabase-저장소-확인) · [AI 호출 기록](ai.md#ai-호출-기록-supabase-회원-모드)
+
 2026-11-03 연결된 DB를 `BEGIN READ ONLY`로 조사했다. 아래 수치는 조사 시점의 스냅샷이며 계속 바뀐다. `.env`로 선택된 실행 방식은 `supabase` 회원 로그인 + `local` 설치다. DB에 합성 활동을 쓰거나 마이그레이션을 적용하지 않았다. 테스트는 별도의 합성 HTTP 저장소에서 실행했다.
 
 ## 어느 경로로 연결하는가
