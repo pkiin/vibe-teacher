@@ -134,7 +134,7 @@ Supabase 노트북 설치(`local`)에서는 로그인한 설치 소유자가 시
   "scan": { "mode": "current", "homes": [], "homeRoots": ["/home"] },
   "sources": [{ "id": "…", "provider": "claude-code", "path": "/mnt/backup/.claude/projects", "label": "백업", "enabled": true }],
   "disabledDefaultSourceIds": [],
-  "llm": { "provider": "auto", "claudeCliPath": null, "model": null, "maxBudgetUsd": 0.5, "timeoutMs": 180000, "effort": "medium", "openrouterModel": "openai/gpt-5-mini", "openaiModel": "gpt-5-mini", "autoText": true },
+  "llm": { "provider": "auto", "claudeCliPath": null, "model": null, "maxBudgetUsd": 0.5, "timeoutMs": 180000, "effort": "medium", "openrouterModel": "openai/gpt-6.1-terra", "openaiModel": "openai/gpt-6.1-terra", "autoText": true },
   "server": { "host": "127.0.0.1", "port": 3318 },
   "wiki": { "briefTokenBudget": 900, "maxPrerequisiteDepth": 2, "maxPrerequisitesPerBundle": 4, "maxOptionalQuestions": 2, "suggestQuestions": true }
 }

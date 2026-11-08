@@ -10,6 +10,7 @@ import { SupermemoryBackend, type MemoryBackend } from './supermemory';
 import { Mem0Backend } from './mem0';
 import { MemoryDatabaseError, memoryDatabaseSettings, memoryDatabaseError } from './database';
 import { mapConcurrent } from '../lib/concurrent';
+import { DEFAULT_OPENROUTER_MODEL } from '../llm/models';
 
 export interface MemoryScope { projectId?: string; allowedProjectIds: string[] }
 interface RemoteIndex { documents: Record<string, { id: string; fingerprint: string }>; notice?: string }
@@ -41,7 +42,7 @@ export class MemoryService {
     if (this.opts.backend || this.mode !== 'mem0') return this.currentBackend;
     const database = memoryDatabaseSettings(this.env);
     if (!this.env.OPENROUTER_API_KEY || !database) return undefined;
-    const model = this.env.VIBE_TEACHER_MEMORY_MODEL || this.opts.model?.() || 'openai/gpt-5-mini';
+    const model = this.env.VIBE_TEACHER_MEMORY_MODEL || this.opts.model?.() || DEFAULT_OPENROUTER_MODEL;
     const configuration = shortId(JSON.stringify([model, database]), 20);
     if (this.currentConfiguration !== configuration) {
       try {

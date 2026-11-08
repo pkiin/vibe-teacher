@@ -818,7 +818,7 @@ export const ko = {
       'anthropic-sdk': { label: 'Anthropic API 키', desc: (model: string) => `이전 설정입니다. API 호출은 OpenRouter로 처리합니다. 모델: ${model}` },
       openrouter: { label: 'OpenRouter', desc: (model: string) => `OPENROUTER_API_KEY 로 OpenRouter 의 여러 모델 중 하나를 씁니다. 모델: ${model}` },
       openai: { label: 'OpenAI', desc: (model: string) => `이전 설정입니다. API 호출은 OpenRouter로 처리합니다. 모델: ${model}` },
-      auto: { label: '자동 (Claude CLI 우선)', desc: 'Claude CLI를 먼저 사용하고, 검색이나 CLI가 처리하지 못한 작업은 OpenRouter로 실행합니다. API 기본 모델은 openai/gpt-5-mini입니다.' },
+      auto: { label: '자동 (Claude CLI 우선)', desc: 'Claude CLI를 먼저 사용하고, 검색이나 CLI가 처리하지 못한 작업은 OpenRouter로 실행합니다. API 기본 모델은 openai/gpt-6.1-terra입니다.' },
       none: { label: 'AI 사용 안 함', desc: '새 설명을 생성하지 않습니다. 저장된 AI 결과와 원본 작업 기록을 볼 수 있습니다.' },
     },
     llmAvailable: '사용 가능',

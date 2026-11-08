@@ -27,7 +27,7 @@ export function SourcesPage() {
   const [homes, setHomes] = useState('');
   const [homeRoots, setHomeRoots] = useState('/home');
   const [llmProvider, setLlmProvider] = useState<LlmProviderSetting>('auto');
-  const [openrouterModel, setOpenrouterModel] = useState('openrouter/free');
+  const [openrouterModel, setOpenrouterModel] = useState('openai/gpt-6.1-terra');
   const [llmModel, setLlmModel] = useState('');
   const [llmBudget, setLlmBudget] = useState('0.5');
   const [llmCliPath, setLlmCliPath] = useState('');

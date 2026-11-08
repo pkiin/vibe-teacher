@@ -31,9 +31,16 @@ describe('config store', () => {
     for (const provider of ['openai', 'anthropic-sdk']) {
       const cfg = ConfigSchema.parse({ llm: { provider, openrouterModel: 'openrouter/free' }, scan: { mode: 'list', homes: ['/tmp/fixture'] } });
       expect(cfg.llm.provider).toBe('openrouter');
-      expect(cfg.llm.openrouterModel).toBe('openai/gpt-5-mini');
+      expect(cfg.llm.openrouterModel).toBe('openai/gpt-6.1-terra');
       expect(cfg.scan.homes).toEqual(['/tmp/fixture']);
     }
+  });
+  it('저장된 예전 기본 모델은 지금 기본값으로 읽고, 직접 고른 모델은 그대로 둔다', () => {
+    for (const old of ['openai/gpt-5-mini', 'gpt-5-mini', 'openrouter/free']) {
+      expect(ConfigSchema.parse({ llm: { openrouterModel: old } }).llm.openrouterModel).toBe('openai/gpt-6.1-terra');
+    }
+    expect(ConfigSchema.parse({ llm: { openrouterModel: 'openai/gpt-6-luna' } }).llm.openrouterModel).toBe('openai/gpt-6-luna');
+    expect(ConfigSchema.parse({}).llm).toMatchObject({ openrouterModel: 'openai/gpt-6.1-terra', openaiModel: 'openai/gpt-6.1-terra' });
   });
   it('resolves home from env', () => {
     expect(resolveHome({ VIBE_TEACHER_HOME: '/x/y' })).toBe('/x/y');

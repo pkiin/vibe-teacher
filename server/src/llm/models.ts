@@ -6,7 +6,9 @@ import type { LlmModelInfo } from '@vibe-teacher/shared';
  */
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-export const DEFAULT_OPENROUTER_MODEL = 'openai/gpt-5-mini';
+export const DEFAULT_OPENROUTER_MODEL = 'openai/gpt-6.1-terra';
+/** 예전 기본값. 설정 파일에 남아 있으면 지금 기본값으로 읽는다 (직접 고른 다른 모델은 그대로 둔다). */
+export const LEGACY_DEFAULT_MODELS: readonly string[] = ['openrouter/free', 'gpt-5-mini', 'openai/gpt-5-mini'];
 /** 예전 설정 응답과의 호환용. 모든 API 요청은 OpenRouter를 사용한다. */
 export const DEFAULT_OPENAI_MODEL = DEFAULT_OPENROUTER_MODEL;
 
@@ -51,7 +53,7 @@ export function parseOpenRouterModels(raw: unknown): LlmModelInfo[] {
       ...(m.description ? { description: m.description.slice(0, 300) } : {}),
     });
   }
-  // 기본 무료 라우터 → 무료 모델 → 나머지 (이름순)
+  // 기본 모델 → 무료 모델 → 나머지 (이름순)
   return models.sort(
     (a, b) => Number(b.id === DEFAULT_OPENROUTER_MODEL) - Number(a.id === DEFAULT_OPENROUTER_MODEL) || Number(b.free) - Number(a.free) || a.name.localeCompare(b.name),
   );
