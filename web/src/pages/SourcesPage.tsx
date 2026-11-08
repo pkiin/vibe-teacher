@@ -5,6 +5,7 @@ import type { Account, HealthResponse, LlmProviderSetting, Provider, RescanRespo
 import { apiDelete, apiPatch, apiPost, apiPut } from '../api/client';
 import { Breadcrumb } from '../components/Layout';
 import { LlmProviderChoice } from '../components/LlmProviderPicker';
+import { OpenRouterKeySetup } from '../components/OpenRouterKeySetup';
 import { ErrorBox, Loading, Notice } from '../components/Notice';
 import { SourceCard } from '../components/SourceCard';
 import { useApi } from '../hooks/useApi';
@@ -240,6 +241,7 @@ export function SourcesPage() {
             {settings.data.llmStatus.cliPath && <div className="mono small">{settings.data.llmStatus.cliPath}</div>}
           </Notice>
         )}
+        {me?.openRouterKey && <div className="form-grid"><h3>{ko.openRouterKey.title}</h3><OpenRouterKeySetup source={me.openRouterKey} onChange={settings.reload} /></div>}
         <div className="form-grid">
           {settings.data && (
             <LlmProviderChoice

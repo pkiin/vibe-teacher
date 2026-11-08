@@ -14,6 +14,7 @@ import type { WikiAiService } from '../wiki/ai-service';
 import type { WikiService } from '../wiki/service';
 import type { MemoryService } from '../memory/service';
 import type { WikiStorage } from '../storage/store';
+import type { OpenRouterKeyStore } from '../llm/key-store';
 
 export interface AppDeps {
   store: ConfigStore;
@@ -30,6 +31,8 @@ export interface AppDeps {
   prefs: PrefsService;
   memory: MemoryService;
   storage?: WikiStorage;
+  /** Supabase 노트북 설치(local)에서 화면으로 저장한 OpenRouter 키. 다른 실행 방식에는 없다 */
+  openRouterKey?: OpenRouterKeyStore;
   version: string;
 }
 

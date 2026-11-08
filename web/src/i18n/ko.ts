@@ -777,6 +777,21 @@ export const ko = {
     enrichFor: { admins: 'AI 분석: 관리자만', everyone: 'AI 분석: 모든 사용자' } as Record<string, string>,
     warnSelfLock: '로그인 모드를 켜기 전에 관리자 계정의 토큰 파일을 먼저 만들어 두세요. 그렇지 않으면 다시 로그인할 수 없습니다.',
   },
+  openRouterKey: {
+    title: 'OpenRouter 키',
+    startTitle: 'AI 설명을 쓰려면 OpenRouter 키를 넣어 주세요',
+    label: 'OpenRouter 키 붙여 넣기',
+    replaceLabel: '다른 키로 바꾸기',
+    note: '관리자가 준 키가 있으면 그 키를, 받지 못했다면 본인이 발급한 키를 넣으세요. 키는 이 노트북의 Vibe Teacher 저장 폴더에만 두고 화면에 다시 보여 주지 않습니다.',
+    getKey: '키 발급 페이지 열기',
+    keysUrl: 'https://openrouter.ai/keys',
+    save: '키 저장',
+    remove: '저장한 키 지우기',
+    saved: '키를 저장했습니다.',
+    removed: '저장한 키를 지웠습니다.',
+    savedNote: 'OpenRouter 키 저장됨 (설정에서 바꿀 수 있어요)',
+    fromEnv: '환경변수나 .env 파일의 OPENROUTER_API_KEY 를 쓰고 있습니다. 바꾸려면 그 값을 고친 뒤 앱을 다시 시작하세요.',
+  },
   sources: {
     title: '소스 설정',
     subtitle: '채팅 기록을 읽어올 위치입니다. 기본 경로는 자동으로 찾고, 다른 경로는 직접 추가할 수 있습니다.',
@@ -810,7 +825,7 @@ export const ko = {
     llmUnavailable: '지금은 사용 불가',
     llmNoKey: {
       'anthropic-sdk': 'OpenRouter로 이관되었습니다. OPENROUTER_API_KEY를 설정하세요.',
-      openrouter: '키 없음 — .env 에 OPENROUTER_API_KEY 를 넣고 서버를 다시 시작하세요 (https://openrouter.ai/keys 에서 발급, 무료 모델도 키 필요).',
+      openrouter: '키 없음 — 노트북 설치는 설정의 "OpenRouter 키"에 입력하고, 그 밖에는 .env 에 OPENROUTER_API_KEY 를 넣고 서버를 다시 시작하세요 (https://openrouter.ai/keys 에서 발급, 무료 모델도 키 필요).',
       openai: 'OpenRouter로 이관되었습니다. OPENROUTER_API_KEY를 설정하세요.',
     } as Record<string, string>,
     models: {

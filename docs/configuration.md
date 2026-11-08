@@ -19,6 +19,8 @@
 | HTTPS 공용 서버 운영 | `npm run build && npm start` | `shared`, HTTPS 주소, 내부 포트 설정 | 회원별 AI 키, 선택적 관리자 키·DB 주소 |
 | SSH 터널 서버 운영 | `npm run build && npm start` | `ssh`, loopback 주소, 서버 쪽 포트 설정 | 회원별 AI 키, 선택적 관리자 키·DB 주소 |
 | 공용 서버·SSH 터널 접속 사용자 | 브라우저 접속 또는 SSH 터널 | 필요 없음 | 필요 없음 |
+| [Windows 설치 묶음](windows.md) 참가자 | `start.bat` | 필요 없음. 포트를 바꿀 때만 묶음 폴더에 만듦 | 읽지 않음 |
+| Windows 설치 묶음 만들기 (관리자) | `npm run package` | 대신 `.env.release`에 Supabase 주소·publishable 키만 | 필요 없음 |
 
 예제는 **개인 노트북에서 빌드한 앱을 실행**하는 기본값입니다. 일반 로컬 사용자·개발자는 [`.env.example`](../.env.example)을 `.env`로 복사해 실행 설정과 사용할 OpenRouter 키를 넣습니다. 관리자가 키를 제공했다면 그 키를 사용하고, 제공받지 못했다면 본인이 발급한 키를 사용합니다. 운영자는 실행 방식에 맞춰 값을 바꾸고, [`.env.admin.example`](../.env.admin.example)도 복사합니다. API 키가 들어 있는 실제 `.env`와 `.env.admin`은 모두 공유하지 않습니다.
 
@@ -31,7 +33,7 @@ chmod 600 .env.admin
 
 관리자 본인의 개발용 키는 `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY`, 공용 서버 사용자별 키는 `VIBE_TEACHER_USER_OPENROUTER_KEYS`입니다. 일반 `.env`의 `OPENROUTER_API_KEY`가 빈 값이어도 관리자용 변수와 이름이 달라 값을 가리지 않습니다. 기존 `.env.admin`에 `OPENROUTER_API_KEY`로 넣어 두었던 관리자 키는 `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY`로 변수 이름을 바꿉니다.
 
-API 서버는 저장소 루트의 `.env` → `.env.admin` 순서로 읽고, 이미 셸에 있는 변수가 가장 우선합니다. 같은 변수는 먼저 읽은 값이 우선하므로, 두 파일에 같은 변수를 중복하지 마세요. 먼저 설정한 빈 문자열도 나중 값을 가릴 수 있습니다. `npm run dev`는 `.env`를 먼저 읽어 웹·API에 전달하고, `.env.admin`은 API에서만 읽습니다. `npm run dev:web`만 실행할 때는 이 실행기를 거치지 않으므로 필요한 포트·프록시 값을 직접 전달합니다.
+API 서버는 저장소 루트의 `.env` → `.env.admin` 순서로 읽고, 이미 셸에 있는 변수가 가장 우선합니다. Windows 설치 묶음은 묶음 폴더의 `.env` → `app/release.env` 순서로 읽고 `.env.admin`은 읽지 않습니다. 같은 변수는 먼저 읽은 값이 우선하므로, 두 파일에 같은 변수를 중복하지 마세요. 먼저 설정한 빈 문자열도 나중 값을 가릴 수 있습니다. `npm run dev`는 `.env`를 먼저 읽어 웹·API에 전달하고, `.env.admin`은 API에서만 읽습니다. `npm run dev:web`만 실행할 때는 이 실행기를 거치지 않으므로 필요한 포트·프록시 값을 직접 전달합니다.
 
 환경파일을 바꾸면 서버를 재시작합니다. 포트·키 등 서버 환경변수 변경만으로 웹을 다시 빌드할 필요는 없습니다. 나머지 옵션은 [고급 환경변수](#고급-환경변수)를 참고하세요.
 
@@ -71,13 +73,19 @@ API 주소·포트는 `~/.vibe-teacher/config.json`의 `server.host`·`server.po
 | `VIBE_TEACHER_WEB_HOST` | `.env` | 개발 웹 바인딩 주소, 예제·기본값 `127.0.0.1` |
 | `VIBE_TEACHER_WEB_PORT` | `.env` | 개발 웹 포트, 예제·기본값 `3317` |
 | `VIBE_TEACHER_API_URL` | `.env` | 선택·주석 유지. 개발 웹의 API 프록시 대상. 생략하면 `VIBE_TEACHER_PORT`를 사용 |
-| `OPENROUTER_API_KEY` | `.env` | 관리자가 제공한 OpenRouter 키. 제공받지 못했다면 본인이 발급한 키 |
+| `OPENROUTER_API_KEY` | `.env` | 관리자가 제공한 OpenRouter 키. 제공받지 못했다면 본인이 발급한 키. 노트북 설치는 비워 두고 [화면에서 저장](#화면에서-저장한-openrouter-키)해도 됨 |
 | `VIBE_TEACHER_LLM_PROVIDER` | `.env` | 예제는 `openrouter`. 로컬 Claude CLI 로그인은 `auto`, AI 중지는 `none` |
 | `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY` | `.env.admin` | 관리자 본인의 개발용 키. 일반 로컬 사용자에게 필요하지 않음 |
 | `VIBE_TEACHER_USER_OPENROUTER_KEYS` | `.env.admin` | 공용 서버의 Supabase 사용자 UUID → OpenRouter 키 JSON 객체 |
 | `VIBE_TEACHER_SUPABASE_DATABASE_URL` | `.env.admin` | 선택. `accounts:setup` 또는 기존 mem0 SQL 접속용 Session pooler URI |
 
 인증 후 복귀 주소는 `VIBE_TEACHER_PUBLIC_URL`을 지정했다면 그 주소, 미설정이면 가입한 웹 주소를 사용합니다. 주소·포트를 바꾸면 **실제 브라우저 접속 주소**를 Supabase Redirect URLs에 등록하고, 고정한 `VIBE_TEACHER_PUBLIC_URL`도 맞춥니다. 로컬 사용은 기본 `3318`, 개발은 웹 포트 `3317`, SSH는 PC 쪽 터널 포트, 공용 서버는 외부 HTTPS 주소입니다. `local`·`ssh`는 loopback, `shared`는 HTTPS 주소를 사용합니다. 공개 키는 기존 `anon` JWT도 지원합니다. `sb_secret_...`·`service_role` 키는 현재 회원 모드 설정에 필요하지 않습니다.
+
+### 화면에서 저장한 OpenRouter 키
+
+Supabase 노트북 설치(`local`)에서는 로그인한 설치 소유자가 시작 화면이나 **소스 설정 → 설명을 작성할 AI**에서 OpenRouter 키를 저장할 수 있습니다. 키는 `<VIBE_TEACHER_HOME>/secrets/openrouter.json`(기본 `~/.vibe-teacher/secrets/openrouter.json`)에 본인만 읽는 권한(`0600`)으로 저장하고, 화면·API 응답에는 키의 출처만 보여 줍니다. Windows는 사용자 폴더 권한을 따릅니다.
+
+셸 환경변수나 `.env`의 `OPENROUTER_API_KEY`가 있으면 그 값이 우선하며, 화면에서는 바꿀 수 없다고 안내합니다. 저장·삭제는 서버를 다시 시작하지 않아도 다음 요청부터 적용됩니다. 공용 서버(`shared`·`ssh`)는 회원별 키를 운영자가 관리하므로 화면 저장을 받지 않습니다.
 
 ### 고급 환경변수
 

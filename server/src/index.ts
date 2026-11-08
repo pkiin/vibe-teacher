@@ -15,14 +15,20 @@ import { cloudConfig } from './cloud/client';
 import { SupabaseAuth } from './auth/supabase';
 import { userLlmEnvironment } from './llm/credentials';
 import { procNetAvailable } from './lib/peer';
+import { resolveLayout } from './config/layout';
+import { OpenRouterKeyStore, withSavedKey } from './llm/key-store';
+import { isAppRunning, openUrl } from './lib/open-url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = '0.1.0';
 
 async function main() {
-  const dotenv = loadDotEnv(path.resolve(here, '../../.env'));
-  loadDotEnv(path.resolve(here, '../../.env.admin'));
-  if (dotenv.loaded) console.log(`[vibe-teacher] .env 를 읽었습니다 (${dotenv.keys.length ? dotenv.keys.join(', ') : '새 값 없음 — 셸 환경변수가 우선'})`);
+  // 저장소 실행은 .env → .env.admin, 배포 묶음은 묶음 폴더의 .env → app/release.env 순서로 읽는다 (앞의 값이 우선).
+  const layout = resolveLayout(here);
+  for (const file of layout.envFiles) {
+    const dotenv = loadDotEnv(file);
+    if (dotenv.loaded && !file.endsWith('.env.admin')) console.log(`[vibe-teacher] ${path.basename(file)} 를 읽었습니다 (${dotenv.keys.length ? dotenv.keys.join(', ') : '새 값 없음 — 셸 환경변수가 우선'})`);
+  }
   const args = parseServerArgs(process.argv.slice(2));
   const paths = resolvePaths(args.home ?? resolveHome());
   const store = new ConfigStore(paths);
@@ -43,6 +49,13 @@ async function main() {
     );
     process.exit(2);
   }
+  const appUrl = `http://127.0.0.1:${env.port}/`;
+  if (layout.packaged && await isAppRunning(appUrl)) {
+    // 실행 파일을 두 번 눌렀을 때: 새로 띄우지 않고 이미 실행 중인 화면만 연다.
+    console.log(`[vibe-teacher] 이미 실행 중입니다. 브라우저에서 ${appUrl} 을 엽니다.`);
+    if (!(await openUrl(appUrl))) console.log(`[vibe-teacher] 브라우저 주소창에 ${appUrl} 을 입력하세요.`);
+    return;
+  }
 
   const index = new SessionIndex({
     adapters: allAdapters(),
@@ -52,14 +65,17 @@ async function main() {
     log: (m) => console.log(m),
   });
   const analysis = new AnalysisService();
-  const enrich = new EnrichService({ store, paths, env: userLlmEnvironment({ isAdmin: true }, cloud?.deployment ?? 'local', cfg.llm.provider) });
+  // 노트북 설치는 화면에서 저장한 OpenRouter 키를 쓸 수 있다. 셸·.env 의 키가 우선한다.
+  const openRouterKey = cloud?.deployment === 'local' ? OpenRouterKeyStore.at(paths.home) : undefined;
+  await openRouterKey?.load();
+  const enrich = new EnrichService({ store, paths, env: userLlmEnvironment({ isAdmin: true }, cloud?.deployment ?? 'local', cfg.llm.provider, withSavedKey(process.env, openRouterKey)) });
   const auth = new AuthService({ store, paths, index, serviceUser: currentUser().username, serviceUid: currentUser().uid, bearerToken: env.token, isLoopback: env.isLoopback, cookieSecure: process.env.VIBE_TEACHER_COOKIE_SECURE === '1', ...(cloud ? { cloud: new SupabaseAuth(cloud, paths.home) } : {}) });
   await auth.init();
   const { wiki, learner, assessments, wikiAi, help, prefs, memory } = createWikiServices(paths.home, store, () => enrich.resolveProvider(), (id) => index.getProjectIds(id));
 
   const app = createApp({
-    deps: { store, index, paths, analysis, enrich, auth, wiki, learner, assessments, wikiAi, help, prefs, memory, version: VERSION },
-    distDir: path.resolve(here, '../../web/dist'),
+    deps: { store, index, paths, analysis, enrich, auth, wiki, learner, assessments, wikiAi, help, prefs, memory, ...(openRouterKey ? { openRouterKey } : {}), version: VERSION },
+    distDir: layout.distDir,
   });
 
   const first = await index.rescan();
@@ -69,6 +85,18 @@ async function main() {
   const server = serve({ fetch: app.fetch, hostname: env.host, port: env.port }, (info) => {
     console.log(`[vibe-teacher] http://${info.address === '::' ? 'localhost' : info.address}:${info.port}  (설정: ${paths.configFile})`);
     console.log(`[vibe-teacher] 로그인 모드: ${auth.mode()}${cloud ? ` · ${cloud.deployment} · Supabase 사용자별 저장${cloud.deployment === 'ssh' ? ' · 접속한 SSH 계정의 기록만 표시' : ''}` : ''}${cfg.auth.mode === 'home-token' ? ` · 관리자: ${[currentUser().username, ...cfg.auth.admins].join(', ')}` : ''}`);
+    if (layout.packaged) {
+      console.log('[vibe-teacher] 이 창을 닫으면 Vibe Teacher 가 종료됩니다. 쓰는 동안에는 창을 열어 두세요.');
+      void openUrl(appUrl).then((opened) => { if (!opened) console.log(`[vibe-teacher] 브라우저 주소창에 ${appUrl} 을 입력하세요.`); });
+    }
+  });
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[vibe-teacher] ${env.port} 포트를 다른 프로그램이 쓰고 있습니다. 그 프로그램을 끄거나 VIBE_TEACHER_PORT 로 다른 포트를 지정하세요${layout.packaged ? ' (묶음 폴더의 .env 파일에 VIBE_TEACHER_PORT=3328 처럼 적습니다)' : ''}.`);
+    } else {
+      console.error(err);
+    }
+    process.exit(1);
   });
   let stopping = false;
   const shutdown = () => {

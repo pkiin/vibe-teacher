@@ -5,6 +5,7 @@ import { tokenSetupCommand } from '../auth/token-file';
 import { learnerIdFor } from '../learner/service';
 import { HttpError, parseBody, requireJson, type AppDeps, type AppEnv } from './deps';
 import type { CloudRuntime } from '../cloud/runtime';
+import { openRouterKeySource } from '../llm/key-store';
 
 const LoginSchema = z.object({ username: z.string().min(1).max(64), token: z.string().min(1).max(512) });
 
@@ -33,6 +34,7 @@ export function authRoutes(deps: AppDeps, runtime?: CloudRuntime): Hono<AppEnv> 
       ...(user?.cloud ? { email: user.cloud.email, approved: user.cloud.approved, localOwner: user.cloud.localOwner } : {}),
       ...(deps.auth.cloud ? { deployment: deps.auth.cloud.config.deployment } : {}),
       ...(user?.cloud && deps.auth.cloud?.config.deployment === 'ssh' ? { osUser: user.cloud.osUser ?? null } : {}),
+      ...(user && deps.openRouterKey && deps.auth.cloud?.config.deployment === 'local' && deps.auth.canManageInstallation(user) ? { openRouterKey: openRouterKeySource(process.env, deps.openRouterKey) } : {}),
     };
     return c.json(body);
   });

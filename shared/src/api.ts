@@ -1,4 +1,5 @@
 import type { ReaderLevel, ReaderPrefs } from './reader';
+import type { OpenRouterKeySource } from './onboarding';
 import type {
   Account,
   BuiltSummary,
@@ -136,6 +137,8 @@ export interface AuthMeResponse {
   localOwner?: boolean;
   /** 소스 설정(스캔 범위·기록 위치·AI 설정)을 다룰 수 있는지. SSH 터널 서버는 서버 실행 계정으로 접속한 관리자만 */
   canManageInstallation?: boolean;
+  /** 노트북 설치에서 설치를 관리하는 사용자에게만: OpenRouter 키의 출처 (키 자체는 보내지 않음) */
+  openRouterKey?: OpenRouterKeySource;
 }
 
 export interface LoginRequest {

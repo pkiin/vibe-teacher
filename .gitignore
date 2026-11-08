@@ -1,10 +1,12 @@
 node_modules/
 web/dist/
+release/
 .data/
 *.local.json
 .env
 .env.*
 !.env.example
 !.env.admin.example
+!.env.release.example
 *.log
 .DS_Store

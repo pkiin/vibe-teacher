@@ -11,7 +11,7 @@ Claude Code, Codex CLI, Copilot CLI, VS Code Copilot Chat을 지원합니다.
 
 ## 빠른 시작
 
-**이 저장소를 클론해 자기 노트북에서 사용하려는 사람**을 위한 안내입니다. Node.js 22.12 이상과 npm을 준비하세요. 코드를 수정하려면 [개발자 가이드](docs/development.md), 여러 사람이 사용하는 서버에 접속하거나 설치하려면 [공용 서버 가이드](docs/deployment.md)를 참고하세요.
+**이 저장소를 클론해 자기 노트북에서 사용하려는 사람**을 위한 안내입니다. Node.js 22.12 이상과 npm을 준비하세요. Windows 노트북에서 Node.js 설치 없이 쓰려면 관리자에게 받은 [Windows 설치 묶음](docs/windows.md)을 사용합니다. 코드를 수정하려면 [개발자 가이드](docs/development.md), 여러 사람이 사용하는 서버에 접속하거나 설치하려면 [공용 서버 가이드](docs/deployment.md)를 참고하세요.
 
 기본 예제는 Supabase 이메일 로그인을 사용합니다. 관리자가 안내한 Supabase URL·공개 키가 필요하며, 직접 프로젝트를 준비한다면 [Supabase 최초 설정](docs/authentication.md#supabase-최초-설정-관리자-1회)을 먼저 진행합니다. `local`은 내 기기의 기록을 읽는 실행 방식이며, 회원 데이터는 Supabase에 저장합니다.
 
@@ -31,7 +31,7 @@ SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_KEY
 OPENROUTER_API_KEY=사용할_OpenRouter_키
 ```
 
-Supabase URL·공개 키는 관리자에게 받습니다. **OpenRouter 키도 관리자가 제공했다면 그 키를 사용하고, 제공받지 못했다면 본인이 발급한 키를 사용합니다.** 실제 키가 들어 있는 `.env`와 `.env.admin`은 공유하거나 커밋하지 않습니다.
+Supabase URL·공개 키는 관리자에게 받습니다. **OpenRouter 키도 관리자가 제공했다면 그 키를 사용하고, 제공받지 못했다면 본인이 발급한 키를 사용합니다.** `OPENROUTER_API_KEY`를 비워 두고 로그인 후 시작 화면이나 **소스 설정 → 설명을 작성할 AI**에서 입력해도 됩니다(`.env` 값이 있으면 그 값이 우선). 실제 키가 들어 있는 `.env`와 `.env.admin`은 공유하거나 커밋하지 않습니다.
 
 **3. 화면을 빌드하고 앱을 실행합니다.**
 
@@ -51,7 +51,7 @@ npm run build && npm start
 |---|---|---|
 | `SUPABASE_URL` | 필수 | 관리자가 안내한 Supabase 프로젝트 URL |
 | `SUPABASE_PUBLISHABLE_KEY` | 필수 | 같은 프로젝트의 공개 키. 관리자용 secret·service_role 키는 사용하지 않음 |
-| `OPENROUTER_API_KEY` | OpenRouter AI 사용 시 | 관리자가 제공한 키. 제공받지 못했다면 본인이 발급한 키 |
+| `OPENROUTER_API_KEY` | OpenRouter AI 사용 시 | 관리자가 제공한 키. 제공받지 못했다면 본인이 발급한 키. 비워 두면 로그인 후 화면에서 입력 가능 |
 | `VIBE_TEACHER_AUTH_MODE` | 예제 유지 | `supabase`: 이메일 회원가입·로그인 |
 | `VIBE_TEACHER_LLM_PROVIDER` | 예제 유지 | `openrouter`: API 사용. Claude CLI 로그인은 `auto`, AI 중지는 `none` |
 | `VIBE_TEACHER_DEPLOYMENT` | 예제 유지 | `local`: 내 노트북의 기록 조회 |
@@ -82,7 +82,8 @@ VIBE_TEACHER_PORT=3338
 | [주요 기능과 사용 방법](docs/features.md) | 세션 분석, 레포 위키, 주요 기능 페이지, 내 지식·퀴즈, 화면 설정 |
 | [환경변수와 설정](docs/configuration.md) | 환경파일 우선순위, 전체 옵션, 기록 경로, `config.json` |
 | [개발자 가이드](docs/development.md) | 개발용 환경 설정, `npm run dev`, 웹·API 포트 변경, 검사·테스트, 프로젝트 구조 |
-| [로그인과 회원 관리](docs/authentication.md) | Supabase 최초 설정, 이메일 인증, 관리자 권한, 기존 홈 토큰 로그인 |
+| [Windows 설치 묶음](docs/windows.md) | Node.js 없이 Windows에서 실행하는 zip: 참가자 실행 순서, 관리자의 `npm run package` |
+| [로그인과 회원 관리](docs/authentication.md) | Supabase 최초 설정, 이메일 인증, 많은 인원의 동시 가입, 관리자 권한, 기존 홈 토큰 로그인 |
 | [공용 서버 가이드](docs/deployment.md) | 접속 사용자와 운영자 안내, `shared`·`ssh` 환경 설정, 회원별 AI 키, 다중 계정 ACL |
 | [AI와 데이터 저장](docs/ai.md) | 제공자·모델, 전송 범위, 결과 저장, AI 호출 기록, 기존 mem0 설정 |
 | [Supabase 저장 분석](docs/supabase-storage.md) | 테이블별 저장 경로, 통계와 성능 분석 |

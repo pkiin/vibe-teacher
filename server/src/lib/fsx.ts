@@ -88,10 +88,11 @@ export async function readJsonSafe<T = unknown>(p: string): Promise<T | null> {
   }
 }
 
-export async function writeJsonAtomic(p: string, value: unknown): Promise<void> {
+/** `mode` 를 주면 임시 파일부터 그 권한으로 만든다 (비밀값 파일은 0o600). Windows 는 사용자 폴더 권한을 따른다. */
+export async function writeJsonAtomic(p: string, value: unknown, opts: { mode?: number } = {}): Promise<void> {
   await ensureDir(path.dirname(p));
   const tmp = `${p}.${process.pid}.${Date.now()}.tmp`;
-  await fsp.writeFile(tmp, JSON.stringify(value, null, 2), 'utf8');
+  await fsp.writeFile(tmp, JSON.stringify(value, null, 2), { encoding: 'utf8', ...(opts.mode !== undefined ? { mode: opts.mode } : {}) });
   await fsp.rename(tmp, p);
 }
 
