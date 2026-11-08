@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { LlmModelsResponse, SettingsResponse, SettingsUpdateRequest } from '@vibe-teacher/shared';
+import { OPENROUTER_KEY_PATTERN, OpenRouterKeyRequestSchema, type LlmModelsResponse, type OpenRouterKeyResponse, type SettingsResponse, type SettingsUpdateRequest } from '@vibe-teacher/shared';
 import { LlmSchema } from '../config/schema';
 import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENROUTER_MODEL } from '../llm/models';
-import { HttpError, requireInstallationAdmin, type AppDeps, type AppEnv } from './deps';
+import { openRouterKeySource, type OpenRouterKeyStore } from '../llm/key-store';
+import { HttpError, parseBody, requireInstallationAdmin, requireJson, type AppDeps, type AppEnv } from './deps';
 
 const UpdateSchema = z.object({
   scan: z
@@ -72,6 +73,32 @@ export function settingsRoutes(deps: AppDeps): Hono<AppEnv> {
     } catch (err) {
       throw new HttpError(409, 'models_unavailable', (err as Error).message);
     }
+  });
+
+  /**
+   * 노트북 설치(Supabase local)에서 화면으로 OpenRouter 키를 저장한다. 공용 서버(shared·ssh)는 회원별 키를
+   * 운영자가 관리하므로 받지 않는다. 응답에는 키의 출처만 담는다.
+   */
+  const keyStore = (c: Parameters<typeof requireInstallationAdmin>[0]): OpenRouterKeyStore => {
+    requireInstallationAdmin(c, deps);
+    if (deps.auth.cloud?.config.deployment !== 'local' || !deps.openRouterKey) {
+      throw new HttpError(404, 'not_found', '노트북 설치에서만 화면으로 OpenRouter 키를 저장할 수 있습니다');
+    }
+    return deps.openRouterKey;
+  };
+  const keyResponse = (store: OpenRouterKeyStore): OpenRouterKeyResponse => ({ source: openRouterKeySource(process.env, store) });
+  app.get('/openrouter-key', (c) => c.json(keyResponse(keyStore(c))));
+  app.put('/openrouter-key', requireJson, async (c) => {
+    const store = keyStore(c);
+    const { key } = await parseBody(c, OpenRouterKeyRequestSchema);
+    if (!OPENROUTER_KEY_PATTERN.test(key)) throw new HttpError(422, 'invalid_openrouter_key', 'OpenRouter 키 형식이 아닙니다. sk-or- 로 시작하는 키 전체를 붙여 넣으세요');
+    await store.set(key);
+    return c.json(keyResponse(store));
+  });
+  app.delete('/openrouter-key', async (c) => {
+    const store = keyStore(c);
+    await store.clear();
+    return c.json(keyResponse(store));
   });
 
   app.put('/', async (c) => {

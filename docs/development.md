@@ -9,6 +9,7 @@
 - [실행·종료·재시작](#실행종료재시작)
 - [포트와 주소 변경](#포트와-주소-변경)
 - [빌드한 웹 실행](#빌드한-웹-실행)
+- [Windows 설치 묶음 만들기](#windows-설치-묶음-만들기)
 - [검사와 테스트](#검사와-테스트)
 - [프로젝트 구조](#프로젝트-구조)
 
@@ -107,6 +108,24 @@ npm start
 npm start -- --port 3338 --host 127.0.0.1
 ```
 
+## Windows 설치 묶음 만들기
+
+```bash
+cp .env.release.example .env.release   # SUPABASE_URL·SUPABASE_PUBLISHABLE_KEY 만 적음
+npm run package                        # release/vibe-teacher-<버전>-windows-x64.zip
+```
+
+`scripts/package.ts`가 화면을 빌드하고, esbuild로 서버를 `app/server.mjs` 하나로 묶습니다. 이어서 공식 Node.js Windows 배포본(`scripts/release-lib.ts`의 `NODE_VERSION`)을 SHASUMS256으로 확인해 넣습니다. 내려받은 파일은 `release/cache/`에 남겨 다시 쓰고, 풀어 둔 묶음은 `release/build/windows-x64/vibe-teacher/`에 있습니다. `release/`는 커밋하지 않습니다.
+
+묶음의 서버는 `app/release.env`가 있으면 묶음 실행으로 판단합니다(`server/src/config/layout.ts`). 이때 묶음 폴더의 `.env` → `app/release.env`를 읽고, 브라우저를 열며, 이미 실행 중이면 새로 띄우지 않습니다. mem0·SQLite 네이티브 모듈은 묶지 않습니다. 리눅스·macOS에서 같은 파일을 시험하려면 다음처럼 실행합니다.
+
+```bash
+cd release/build/windows-x64/vibe-teacher
+VIBE_TEACHER_HOME=/tmp/vt-package-test VIBE_TEACHER_PORT=3398 node app/server.mjs
+```
+
+참가자 실행 순서와 공개 설정 규칙은 [Windows 설치 묶음](windows.md)에 있습니다.
+
 ## 검사와 테스트
 
 ```bash
@@ -132,7 +151,7 @@ npm workspaces 기반의 TypeScript 모노레포입니다.
 shared/    도메인 타입, API DTO, LLM 출력 스키마 (zod)
 server/    Hono API: 도구별 기록 파서, 세션 인덱스, AI 분석·위키·학습·인증·저장소
 web/       Vite + React 19 UI (한국어), 화면 렌더링 테스트
-scripts/   개발 서버 실행, DB 준비, 관리자 통계 조회, 다중 계정 ACL
+scripts/   개발 서버 실행, DB 준비, 관리자 통계 조회, 다중 계정 ACL, Windows 설치 묶음(package·release-lib·zip)
 docs/      설정·개발·로그인·서버 운영·기능·AI·Supabase 저장 문서
 supabase/  migrations(회원·승인·RLS·AI 호출 기록), tests(RLS 검증 SQL)
 ```

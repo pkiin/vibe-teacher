@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { ko } from '../i18n/ko';
 import { ReaderLevelSetup } from '../components/ReaderLevelPicker';
+import { OpenRouterKeySetup } from '../components/OpenRouterKeySetup';
 
 export function StartPage() {
   const { me, refresh } = useAuth();
@@ -45,7 +46,9 @@ export function StartPage() {
       {me.deployment === 'ssh' && <span>{me.osUser ? t.sshAccount(me.osUser) : t.sshUnknown}</span>}
       {!me.approved && <span>{t.pending} <button className="link" onClick={() => void refresh().catch((e: Error) => setError(e.message))}>{t.checkApproval}</button></span>}
       {me.deployment === 'local' && !me.localOwner && <span>{t.otherLocalOwner}</span>}
+      {me.openRouterKey === 'saved' && <span>{ko.openRouterKey.savedNote}</span>}
     </div>}
+    {me?.openRouterKey === 'none' && <section className="card form-grid"><h2>{ko.openRouterKey.startTitle}</h2><OpenRouterKeySetup source="none" /></section>}
     {editing ? <form onSubmit={submit} className="form-grid">
       <fieldset className="stage-fieldset"><legend>{t.stageLabel}</legend><div className="stage-grid">{(Object.keys(t.stages) as StartStage[]).map((id, index) => <label key={id} className={`card stage-card ${stage === id ? 'selected' : ''}`}>
         <input type="radio" name="stage" value={id} checked={stage === id} onChange={() => setStage(id)} required />

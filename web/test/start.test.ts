@@ -40,6 +40,28 @@ describe('처음 시작하는 화면', () => {
     }
   });
 
+  it('노트북 설치에 OpenRouter 키가 없으면 시작 화면에서 키를 받고, 저장한 키는 다시 보여 주지 않는다', () => {
+    const before = state.me;
+    try {
+      state.me = { ...before, openRouterKey: 'none' };
+      let html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(StartPage)));
+      expect(html).toContain('AI 설명을 쓰려면 OpenRouter 키를 넣어 주세요');
+      expect(html).toContain('type="password"');
+      expect(html).toContain('관리자가 준 키가 있으면 그 키를');
+      expect(html).toContain('href="https://openrouter.ai/keys"');
+      state.me = { ...before, openRouterKey: 'saved' };
+      html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(StartPage)));
+      expect(html).toContain('OpenRouter 키 저장됨');
+      expect(html).not.toContain('OpenRouter 키를 넣어 주세요');
+      // 키를 관리하지 않는 사용자(출처 정보 없음)에게는 입력 칸을 보이지 않는다.
+      state.me = { ...before };
+      html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(StartPage)));
+      expect(html).not.toContain('OpenRouter 키');
+    } finally {
+      state.me = before;
+    }
+  });
+
   it('이메일 로그인과 회원가입 진입을 표시하며 서버 토큰 파일을 요구하지 않는다', () => {
     const html = renderToStaticMarkup(createElement(LoginPage));
     expect(html).toContain('type="email"');

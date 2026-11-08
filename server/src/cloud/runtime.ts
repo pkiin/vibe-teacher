@@ -6,6 +6,7 @@ import { createWikiServices } from '../wiki/service';
 import type { AppDeps } from '../routes/deps';
 import { CloudStorage } from './storage';
 import { userLlmEnvironment } from '../llm/credentials';
+import { withSavedKey } from '../llm/key-store';
 
 /** 사용자마다 작업 큐·캐시·저장소를 분리한다. 데이터 API 요청은 항상 그 사용자의 토큰을 사용한다. */
 export class CloudRuntime {
@@ -16,7 +17,9 @@ export class CloudRuntime {
     if (!user.cloud || !this.base.auth.cloud) return this.base;
     const { userId, accessToken } = user.cloud;
     const deployment = this.base.auth.cloud.config.deployment;
-    const env = userLlmEnvironment({ userId, isAdmin: user.isAdmin }, deployment, this.base.store.get().llm.provider);
+    // 노트북 설치는 화면에서 저장한 키도 쓴다 (셸·.env 키가 우선). 키가 바뀌면 아래에서 제공자 캐시를 비운다.
+    const source = deployment === 'local' ? withSavedKey(process.env, this.base.openRouterKey) : process.env;
+    const env = userLlmEnvironment({ userId, isAdmin: user.isAdmin }, deployment, this.base.store.get().llm.provider, source);
     const existing = this.users.get(userId);
     if (existing) {
       existing.backend.client.accessToken = accessToken;

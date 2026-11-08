@@ -104,7 +104,8 @@ export class AuthService {
   /** 사용자가 볼 수 있는 계정 id 집합 ('all' 은 전체) */
   allowedAccountIds(user: AuthUser): Set<string> | 'all' {
     if (user.cloud) {
-      if (this.cloud?.config.deployment === 'local') return new Set(user.cloud.localOwner ? this.opts.index.getAccounts().filter((a) => a.username === this.serviceUser).map((a) => a.id) : []);
+      // Windows 는 로그인 이름과 C:\Users\<폴더> 이름이 다를 수 있으므로 앱을 실행한 사용자의 현재 홈도 본인 계정으로 본다.
+      if (this.cloud?.config.deployment === 'local') return new Set(user.cloud.localOwner ? this.opts.index.getAccounts().filter((a) => a.isCurrent || a.username === this.serviceUser).map((a) => a.id) : []);
       return new Set(user.cloud.accountIds);
     }
     if (user.isAdmin) return 'all';

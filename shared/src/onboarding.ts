@@ -30,3 +30,10 @@ export interface EmailConfirmationResponse { confirmed: true }
 export const ResendConfirmationSchema = EmailLoginSchema.pick({ email: true });
 export const EMAIL_RESEND_COOLDOWN_SECONDS = 60;
 export interface ResendConfirmationResponse { requested: true; retryAfterSeconds: number }
+
+/** 노트북 설치(local)가 쓰는 OpenRouter 키의 출처. 셸·.env(env)가 화면에서 저장한 키(saved)보다 우선한다. 키 자체는 화면으로 돌려주지 않는다. */
+export type OpenRouterKeySource = 'env' | 'saved' | 'none';
+export interface OpenRouterKeyResponse { source: OpenRouterKeySource }
+/** OpenRouter 키 모양 (sk-or-v1-…). 공백·줄바꿈이 섞인 붙여 넣기는 받지 않는다 */
+export const OPENROUTER_KEY_PATTERN = /^sk-or-[A-Za-z0-9_-]{16,300}$/;
+export const OpenRouterKeyRequestSchema = z.object({ key: z.string().trim().max(400) });

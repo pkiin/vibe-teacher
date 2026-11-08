@@ -19,6 +19,7 @@ import { WikiStorage } from '../src/storage/store';
 import { createWikiServices } from '../src/wiki/service';
 import { accountIdFor } from '../src/index/accounts';
 import { PEER_UID_HEADER, procNetAvailable } from '../src/lib/peer';
+import { OpenRouterKeyStore } from '../src/llm/key-store';
 
 const ALICE = '11111111-1111-4111-8111-111111111111';
 const BOB = '22222222-2222-4222-8222-222222222222';
@@ -102,13 +103,16 @@ interface FixtureOptions {
   socketUid?: (c: Context) => Promise<number | null>;
   passwd?: () => Promise<Map<string, { username: string; uid: number }>>;
   serviceUid?: number;
+  /** 노트북 설치의 화면 키 저장소를 붙인다 (index.ts 는 local 일 때만 붙임) */
+  openRouterKey?: boolean;
+  provider?: 'none' | 'openrouter';
 }
 
 async function fixture(remote = fakeCloud(), deployment: Deployment = 'shared', opts: FixtureOptions = {}) {
   const home = await temp();
   const paths = resolvePaths(home);
   const store = new ConfigStore(paths); await store.load();
-  await store.update((cfg) => { cfg.llm.provider = 'none'; cfg.auth.enrichFor = 'everyone'; });
+  await store.update((cfg) => { cfg.llm.provider = opts.provider ?? 'none'; cfg.auth.enrichFor = 'everyone'; });
   const accounts = opts.accounts ?? [
     { id: 'alice-account', username: 'service', homePath: '/synthetic/alice', readable: 'ok', sessionCount: 0 },
     { id: 'bob-account', username: 'bob', homePath: '/synthetic/bob', readable: 'ok', sessionCount: 0 },
@@ -125,9 +129,10 @@ async function fixture(remote = fakeCloud(), deployment: Deployment = 'shared', 
   });
   const enrich = new EnrichService({ store, paths, providerOverride: null });
   const services = createWikiServices(home, store, () => enrich.resolveProvider());
-  const app = createApp({ quiet: true, deps: { store, paths, index, auth, enrich, analysis: new AnalysisService(), ...services, version: 'test' } });
+  const openRouterKey = opts.openRouterKey ? OpenRouterKeyStore.at(home) : undefined;
+  const app = createApp({ quiet: true, deps: { store, paths, index, auth, enrich, analysis: new AnalysisService(), ...services, ...(openRouterKey ? { openRouterKey } : {}), version: 'test' } });
   const req = (route: string, token = 'alice-token', body?: unknown, method = body ? 'PUT' : 'GET') => app.request(route, { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
-  return { app, req, auth, cloud, home, remote };
+  return { app, req, auth, cloud, home, remote, openRouterKey };
 }
 
 describe('Supabase 로그인과 사용자 저장소', () => {
@@ -437,5 +442,64 @@ describe('Supabase 설치 설정', () => {
     expect(cloudConfig({ ...env, VIBE_TEACHER_DEPLOYMENT: 'ssh' })).toMatchObject({ deployment: 'ssh', secure: false });
     // 회원 로그인 없이 SSH 터널 서버를 띄우면 모든 접속자가 서버 실행 계정으로 보이므로 거절한다.
     expect(() => cloudConfig({ VIBE_TEACHER_DEPLOYMENT: 'ssh' })).toThrow('VIBE_TEACHER_AUTH_MODE=supabase');
+  });
+});
+
+describe('노트북 설치의 화면 OpenRouter 키', () => {
+  // 합성 키. 저장소 비밀값 검사가 실제 키로 오인하지 않도록 이어 붙여 만든다.
+  const KEY = ['sk', 'or', 'v1', 'synthetic'.repeat(6)].join('-');
+  const saved = process.env.OPENROUTER_API_KEY;
+  afterEach(() => { if (saved === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = saved; });
+
+  it('설치 소유자만 저장하고, 응답·화면에는 키 대신 출처만 주며, 저장한 키로 AI 를 쓸 수 있게 한다', async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const remote = fakeCloud();
+    // 소유자도 Supabase 관리자도 아닌 회원 (노트북 설치에서는 관리자도 설치 설정을 다룰 수 있다)
+    remote.members.set(BOB, { ...remote.members.get(BOB)!, is_admin: false });
+    const f = await fixture(remote, 'local', { openRouterKey: true, provider: 'openrouter' });
+    const before = await (await f.req('/api/auth/me')).json() as AuthMeResponse;
+    expect(before).toMatchObject({ localOwner: true, openRouterKey: 'none' });
+    expect(before.llmStatus?.available).toBe(false);
+    // 다른 회원은 이 노트북의 소유자가 아니므로 키를 바꾸거나 출처를 볼 수 없다.
+    expect((await f.req('/api/settings/openrouter-key', 'bob-token', { key: KEY })).status).toBe(403);
+    expect(await (await f.req('/api/auth/me', 'bob-token')).json()).not.toHaveProperty('openRouterKey');
+
+    expect((await f.req('/api/settings/openrouter-key', 'alice-token', { key: 'sk-or-짧은 값' })).status).toBe(422);
+    const put = await f.req('/api/settings/openrouter-key', 'alice-token', { key: `  ${KEY}\n` });
+    expect(put.status).toBe(200);
+    const body = await put.text();
+    expect(JSON.parse(body)).toEqual({ source: 'saved' });
+    expect(body).not.toContain('sk-or-');
+    const after = await (await f.req('/api/auth/me')).json() as AuthMeResponse;
+    expect(after.openRouterKey).toBe('saved');
+    expect(after.llmStatus?.available).toBe(true);
+    expect(JSON.stringify(after)).not.toContain(KEY);
+    const file = path.join(f.home, 'secrets', 'openrouter.json');
+    expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual({ version: 1, key: KEY });
+    if (process.platform !== 'win32') expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
+
+    const removed = await f.req('/api/settings/openrouter-key', 'alice-token', undefined, 'DELETE');
+    expect(await removed.json()).toEqual({ source: 'none' });
+    expect((await (await f.req('/api/auth/me')).json() as AuthMeResponse).llmStatus?.available).toBe(false);
+    await expect(fs.stat(file)).rejects.toThrow();
+  });
+
+  it('셸·.env 의 키가 우선하고, 공용 서버에서는 화면 키 저장을 받지 않는다', async () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or-v1-from-environment-synthetic-0000';
+    const local = await fixture(fakeCloud(), 'local', { openRouterKey: true });
+    expect(await (await local.req('/api/settings/openrouter-key')).json()).toEqual({ source: 'env' });
+    const shared = await fixture(fakeCloud(), 'shared');
+    expect((await shared.req('/api/settings/openrouter-key', 'bob-token')).status).toBe(404);
+    expect(await (await shared.req('/api/auth/me', 'bob-token')).json()).not.toHaveProperty('openRouterKey');
+  });
+
+  it('Windows 처럼 로그인 이름과 홈 폴더 이름이 달라도 노트북 소유자는 현재 홈의 기록을 본다', async () => {
+    const accounts = [
+      { id: 'current-home', username: 'Kim Folder', homePath: 'C:\\Users\\Kim Folder', isCurrent: true, readable: 'ok', sessionCount: 0 },
+      { id: 'other-home', username: 'other', homePath: 'C:\\Users\\other', isCurrent: false, readable: 'ok', sessionCount: 0 },
+    ] as Account[];
+    const f = await fixture(fakeCloud(), 'local', { accounts });
+    expect((await (await f.req('/api/accounts')).json() as Account[]).map((a) => a.id)).toEqual(['current-home']);
+    expect(await (await f.req('/api/accounts', 'bob-token')).json()).toEqual([]);
   });
 });

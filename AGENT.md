@@ -37,6 +37,8 @@ OpenRouter 키는 관리자가 제공한 키가 있으면 사용하고, 제공�
 | npm 스크립트 추가·변경 | [개발 서버 관리](docs/development.md)의 실행·검사 명령. 첫 실행에 영향이 있으면 README "빠른 시작"도 갱신 |
 | 디렉터리 구조 변경 | [개발 서버 관리](docs/development.md)의 "프로젝트 구조", 이 문서의 구조 |
 | 사용자 눈에 보이는 새 기능 | [주요 기능](docs/features.md)의 해당 절. 프로젝트 소개가 바뀌면 README 요약도 갱신 |
+| Windows 설치 묶음 (`scripts/package.ts`·`release-lib.ts`·`zip.ts`, `server/src/config/layout.ts`, 묶음의 실행 안내 글) | [Windows 설치 묶음](docs/windows.md), [개발자 가이드](docs/development.md)의 "Windows 설치 묶음 만들기", `.env.release.example` |
+| 화면에서 저장하는 OpenRouter 키 (`llm/key-store.ts`, `/api/settings/openrouter-key`) | [설정](docs/configuration.md)의 "화면에서 저장한 OpenRouter 키", [AI와 데이터 저장](docs/ai.md), README 빠른 시작의 키 안내 |
 
 README에 쓰지 않는 것: 내부 구현 세부, 작업 로그, 변경 이력(그건 커밋 메시지에), 실제 사용자명·경로·토큰. 내부 작업 규칙은 이 문서에 두며 사용자 문서에 실제 비밀값을 넣지 않습니다.
 
@@ -53,14 +55,15 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
   src/adapters/    도구별 기록 파서. 도구마다 index(어댑터) · paths(기본 경로) · records(원본 레코드 타입) · parse(정규화)
   src/index/       계정 탐색, 소스, 세션 인덱스, 인덱스 디스크 캐시
   src/analyzers/   user-messages(내 메시지) · built/(파일·명령·패키지·커밋 원문 수집)
-  src/llm/         AI: digest(전송용 요약 + 비밀값 마스킹) · gate(AI 문장을 쓸 수 있는지와 못 쓰는 사유) · reader(읽는 사람 수준별 문체 지침, withReader) · claude-cli · openai-compat(OpenRouter 전용, fetch) · concepts(개념 ID·링크 검사) · models(모델 목록) · select(제공자 선택) · credentials(로컬 개인 키·공용 서버 UUID별 키 선택) · log(AI 호출·작업 기록 형식, withAiRun) · jobs · cache
+  src/llm/         AI: key-store(노트북 설치에서 화면으로 저장한 OpenRouter 키, 0600 파일, 셸·.env 우선) · digest(전송용 요약 + 비밀값 마스킹) · gate(AI 문장을 쓸 수 있는지와 못 쓰는 사유) · reader(읽는 사람 수준별 문체 지침, withReader) · claude-cli · openai-compat(OpenRouter 전용, fetch) · concepts(개념 ID·링크 검사) · models(모델 목록) · select(제공자 선택) · credentials(로컬 개인 키·공용 서버 UUID별 키 선택) · log(AI 호출·작업 기록 형식, withAiRun) · jobs · cache
   src/auth/        홈 디렉터리 토큰 로그인·Supabase 이메일 회원가입/로그인·HttpOnly 세션 갱신, 쿠키, 미들웨어
   src/cloud/       공개 Supabase 설정·사용자 토큰 Data API, RLS 문서/추가 전용 원장 저장소, 사용자별 서비스·작업 큐, ai-log(vt_ai_calls·vt_ai_runs 추가 전용 AI 호출 기록)
-  src/config/      설정 스키마(zod)·저장소·환경변수/CLI 인자
+  src/config/      설정 스키마(zod)·저장소·환경변수/CLI 인자 · layout(저장소 실행과 Windows 묶음 실행의 .env·화면 위치)
   src/routes/      API 라우트. 공통 의존성과 HttpError 는 routes/deps.ts
   src/lib/         fsx(안전한 파일 IO) · jsonl · shell(셸 명령 파서) · text · hash
                    · concurrent(순서를 보존하는 동시 IO 상한) · progress(AsyncLocalStorage로 작업별 실제 IO·AI 단계 추적)
                    · peer(loopback 연결을 연 OS 계정 uid를 /proc/net/tcp에서 찾기, web/vite.config.ts 프록시도 사용)
+                   · open-url(묶음 실행에서 127.0.0.1 앱 주소만 기본 브라우저로 열기, 이미 실행 중인지 확인)
   src/wiki/        프로젝트 위키: build(AI 입력 snapshot) · validate(출처 검사·격리) · plan(설명 계획) · graph(선행관계) · catalog · service
   src/learner/     내 이해 정보(사용자 전체): reducer(원장 → 개념 상태) · service(원장 쓰기, revision 충돌, 예전 프로젝트별 원장 병합)
                    · knowledge(AI 개념이 나온 곳·명시적 이해 증거) · knowledge-service(내 세션 모으기·캐시)
@@ -89,7 +92,11 @@ web/               Vite + React 19 + react-router UI (한국어)
   src/pages/FeaturePage.tsx             주요 기능 페이지 (/projects/:id/features/:featureId). 본문은 components/RepoFeatureView.tsx, 기능 카드는 RepoWikiView 의 FeatureCards
 scripts/           dev.mjs(웹+API 동시 실행), memory-db.mjs(로컬 PostgreSQL 준비), check-memory-db.ts(Supabase·PostgreSQL 접속 검사), setup-accounts.ts(관리자 회원 스키마 준비), postgres-init.sql(pgvector 확장), grant-read-acl.sh(다중 계정 읽기 ACL)
                    inspect-cloud.ts(관리자 읽기 전용 DB 행 수·통계 확인, 개인 데이터 출력 금지)
-docs/              configuration.md(환경변수·기록 경로·설정) · development.md(개발 서버·검사·구조)
+                   package.ts(Windows 설치 묶음: 웹 빌드 · esbuild 로 서버 하나로 묶기 · 공식 Node 배포본 SHASUMS256 확인 · zip)
+                   release-lib.ts(.env.release 공개 설정 검사, start.bat·README.txt 글) · zip.ts(외부 도구 없는 zip 쓰기·읽기)
+release/           npm run package 결과(zip·풀어 둔 묶음·Node 내려받기 캐시). 커밋하지 않음
+docs/              configuration.md(환경변수·기록 경로·설정) · development.md(개발 서버·검사·구조·묶음 만들기)
+                   windows.md(Windows 설치 묶음: 참가자 실행·관리자 만들기)
                    deployment.md(서버 운영·SSH·ACL) · authentication.md(로그인·회원 관리)
                    features.md(주요 기능) · ai.md(AI·데이터 저장·기존 mem0) · supabase-storage.md(저장 분석)
 compose.yaml       프로젝트 전용 PostgreSQL + pgvector, loopback 바인딩과 이름 있는 볼륨
@@ -110,6 +117,7 @@ npm run dev                         # API :3318 + 웹 :3317 (웹의 /api 는 API
 npm run dev:server                  # API 만
 npm run dev:web                     # 웹만
 npm run build && npm start          # web/dist 빌드 후 API 가 UI 까지 한 포트로 서빙
+npm run package                     # 관리자: .env.release 의 공개 설정으로 Windows 설치 묶음 zip (release/)
 npm run typecheck                   # shared → server → web 순서로 tsc --noEmit
 npm test                            # vitest run (server/test/**, shared/test/**)
 npx vitest run server/test/lib/shell.test.ts   # 파일 하나만
@@ -162,6 +170,8 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 
 - **공용 서버 AI 키는 인증 UUID로 선택한다.** `llm/credentials.ts`는 `shared`·`ssh` 요청에 `VIBE_TEACHER_USER_OPENROUTER_KEYS`의 본인 UUID 키만 전달합니다. 일반 회원은 관리자 키·서버의 공통 키·CLI로 우회하지 못합니다. 관리자 계정만 본인 매핑이 없을 때 개발용 키를 사용할 수 있습니다. 승인 검사는 별도로 유지합니다. 키 목록과 관리자 전용 변수는 하위 제공자 환경에서 지우고 응답·로그에 노출하지 않습니다. `CloudRuntime`은 사용자별 환경을 분리하고 키·관리자 상태가 바뀌면 제공자 캐시를 무효화합니다. 로컬 사용자는 `.env`에 설정한 키(관리자 제공 또는 본인 발급)를 사용하며 관리자 개발용 키는 관리자에게만 적용합니다.
 
+- **Windows 설치 묶음에는 공개 설정만 넣는다.** `.env.release`에는 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`만 받는다. `release-lib.ts`의 `releaseEnvText`가 다른 이름·`sb_secret_`·`service_role` JWT·HTTPS가 아닌 주소를 거절하고, 오류 문구에 값을 넣지 않는다. 묶음의 `app/release.env`는 `local`·`127.0.0.1`·OpenRouter로 고정한다. 묶음 실행(`layout.packaged`)은 `.env.admin`을 읽지 않는다. 묶음 폴더의 사용자 `.env`만 공개 설정보다 우선한다. 저장소가 공개되어 있으므로 `.env.release`와 zip을 커밋하지 않고 관리자가 직접 전달한다. Node 런타임은 공식 배포본을 SHASUMS256과 대조한 것만 넣고 바꾸지 않는다(서명 유지). 브라우저 열기는 `http://127.0.0.1:<포트>/` 형식만 셸에 넘긴다.
+- **화면 OpenRouter 키는 노트북 설치 소유자만 다룬다.** `/api/settings/openrouter-key`는 Supabase `local`에서 `requireInstallationAdmin`을 통과한 사용자만 쓰고, `shared`·`ssh`는 404다(회원별 키는 운영자가 관리). 키는 `<VIBE_TEACHER_HOME>/secrets/openrouter.json`에 `0600`(폴더 `0700`)으로 쓰며 응답·`/api/auth/me`·로그에는 출처(`env`·`saved`·`none`)만 넣는다. 셸·`.env`의 `OPENROUTER_API_KEY`가 우선한다(`withSavedKey`). `CloudRuntime`이 요청마다 키를 비교해 바뀌면 제공자 캐시를 비운다. 스캔 대상 홈이나 Supabase에는 키를 쓰지 않는다.
 - **인증 메일 재발송은 접수와 전달을 구분한다.** 로그인 화면·인증 실패 화면은 `ResendConfirmation`을 사용한다. 공개 키로 `/auth/v1/resend`에 가입용 재발송만 요청하며 가입과 같은 복귀 주소 검사를 적용한다. 계정 존재·인증 여부를 공개 조회하거나 메일 전달을 보장하지 않는다. 가입·재발송 후 60초 대기는 UI 안내이며 Supabase 발송 제한은 별도로 유지한다. 알려진 발송 한도·수신 주소 제한·미인증 오류 코드만 안전한 문구로 바꾸고 외부 오류 원문은 노출하지 않는다. 관리자가 삭제한 `vt_members`는 자동 복구하지 않는다.
 
 ## 6. 코드 규칙
@@ -272,6 +282,12 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 화면 문구는 `web/src/i18n/ko.ts` 의 `sources.llmChoice`·`llmNoKey`, 키는 `.env.example` 에 주석과 함께 추가한다.
 - 응답은 항상 zod 스키마로 다시 검사한다 (`LlmProvider.complete`). 네트워크는 테스트에서 fetch 를 주입해 막는다.
 
+### Windows 설치 묶음 변경
+- 서버가 실행 중 읽는 파일 위치는 `config/layout.ts`의 `resolveLayout`으로 정한다. 묶음에서는 `import.meta.url`이 `app/server.mjs`를 가리키므로 `../../` 같은 저장소 기준 상대 경로를 새로 만들지 않는다.
+- esbuild 묶음은 ESM이며, CommonJS 의존성을 위해 앞부분(banner)에서 `require`·`__filename`·`__dirname`을 만든다. 새 의존성이 네이티브 모듈이면 `external`에 넣고, 회원 모드에서 부르지 않는 동적 import 인지 확인한다.
+- Node 버전은 `scripts/release-lib.ts`의 `NODE_VERSION` 하나만 바꾼다. 바꾼 뒤 `npm run package`로 만든 `release/build/windows-x64/vibe-teacher/app/server.mjs`를 `VIBE_TEACHER_HOME=<임시 폴더>`로 실행해 화면·`/api/auth/me`·두 번째 실행을 확인한다. 실제 Windows 실행은 관리자 노트북에서 확인한다.
+- 묶음의 `start.bat`은 CRLF이며 한글은 `chcp 65001` 다음에만 쓴다. 파일 이름은 ASCII로 둔다(Windows 탐색기 압축 풀기 호환).
+
 ### 버전 올리기
 - 루트 `package.json` 의 `version` 과 `server/src/index.ts` 의 `VERSION` 을 함께 바꿉니다.
 
@@ -298,5 +314,5 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - root 로 실행해야만 동작하는 기능 (다중 계정은 ACL 로 해결합니다 — `docs/deployment.md`의 "다중 계정 운영")
 - 원본 기록이나 도구 출력을 LLM·로그·외부 서비스로 보내기
 - 보안 기본값 완화 (바인딩, 토큰, 404 숨김, 로그인 실패 잠금)
-- `web/dist/`, `node_modules/`, `.env*`, `*.local.json` 커밋
+- `web/dist/`, `node_modules/`, `.env*`(`.env.release` 포함), `*.local.json`, `release/` 커밋
 - README와 관련 상세 문서를 확인하지 않고 작업 끝내기
