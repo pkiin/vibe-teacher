@@ -76,7 +76,7 @@ API 주소·포트는 `~/.vibe-teacher/config.json`의 `server.host`·`server.po
 | `OPENROUTER_API_KEY` | `.env` | 관리자가 제공한 OpenRouter 키. 제공받지 못했다면 본인이 발급한 키. 노트북 설치는 비워 두고 [화면에서 저장](#화면에서-저장한-openrouter-키)해도 됨 |
 | `VIBE_TEACHER_LLM_PROVIDER` | `.env` | 예제는 `openrouter`. 로컬 Claude CLI 로그인은 `auto`, AI 중지는 `none` |
 | `VIBE_TEACHER_ADMIN_OPENROUTER_API_KEY` | `.env.admin` | 관리자 본인의 개발용 키. 일반 로컬 사용자에게 필요하지 않음 |
-| `VIBE_TEACHER_USER_OPENROUTER_KEYS` | `.env.admin` | 공용 서버의 Supabase 사용자 UUID → OpenRouter 키 JSON 객체 |
+| `VIBE_TEACHER_USER_OPENROUTER_KEYS` | `.env.admin` | 공용 서버의 Supabase 사용자 UUID → OpenRouter 키 JSON 객체. `ssh`에서는 OS 계정 이름(예: `user99`)으로도 미리 등록 가능 ([SSH 터널 서버](deployment.md#os-계정-이름으로-미리-등록하기-ssh)) |
 | `VIBE_TEACHER_SUPABASE_DATABASE_URL` | `.env.admin` | 선택. `accounts:setup` 또는 기존 mem0 SQL 접속용 Session pooler URI |
 
 인증 후 복귀 주소는 `VIBE_TEACHER_PUBLIC_URL`을 지정했다면 그 주소, 미설정이면 가입한 웹 주소를 사용합니다. 주소·포트를 바꾸면 **실제 브라우저 접속 주소**를 Supabase Redirect URLs에 등록하고, 고정한 `VIBE_TEACHER_PUBLIC_URL`도 맞춥니다. 로컬 사용은 기본 `3318`, 개발은 웹 포트 `3317`, SSH는 PC 쪽 터널 포트, 공용 서버는 외부 HTTPS 주소입니다. `local`·`ssh`는 loopback, `shared`는 HTTPS 주소를 사용합니다. 공개 키는 기존 `anon` JWT도 지원합니다. `sb_secret_...`·`service_role` 키는 현재 회원 모드 설정에 필요하지 않습니다.

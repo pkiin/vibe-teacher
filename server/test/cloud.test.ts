@@ -395,6 +395,50 @@ describe('SSH 터널 서버', () => {
     expect(await (await unknown.req('/api/accounts')).json()).toEqual([]);
   });
 
+  it('터널을 연 OS 계정이 확인된 회원은 승인된 것으로 보되, 회원 표의 승인 값은 바꾸지 않는다', async () => {
+    // alice 는 회원 표에서 승인 전이다.
+    const tunnel = await sshFixture(1099);
+    const me = await (await tunnel.req('/api/auth/me')).json() as AuthMeResponse;
+    expect(me).toMatchObject({ osUser: 'user99', approved: true, canEnrich: true });
+    expect(me.enrichReason).toBeUndefined();
+    expect(tunnel.remote.members.get(ALICE)?.approved).toBe(false);
+    expect(tunnel.remote.calls.some((call) => call.url.pathname.includes('/rpc/'))).toBe(false);
+    // 접속 계정을 확인하지 못한 연결은 회원 표의 승인 값을 따른다.
+    for (const uid of [null, 4242]) {
+      expect(await (await (await sshFixture(uid)).req('/api/auth/me')).json()).toMatchObject({ approved: false, canEnrich: false, enrichReason: expect.stringContaining('승인') });
+    }
+    // 공용 서버(shared)와 노트북 설치(local)는 지금처럼 관리자 승인이 필요하다.
+    for (const deployment of ['shared', 'local'] as const) {
+      expect(await (await (await fixture(fakeCloud(), deployment)).req('/api/auth/me')).json()).toMatchObject({ approved: false, canEnrich: false });
+    }
+  });
+
+  it('OS 계정 이름으로 미리 등록한 AI 키는 그 계정으로 터널을 연 회원만 쓴다', async () => {
+    const KEY = ['sk', 'or', 'v1', 'user99'.repeat(8)].join('-');
+    const saved = process.env.VIBE_TEACHER_USER_OPENROUTER_KEYS;
+    process.env.VIBE_TEACHER_USER_OPENROUTER_KEYS = JSON.stringify({ user99: KEY });
+    try {
+      const sshWithAi = (uid: number | null) => fixture(fakeCloud(), 'ssh', { accounts: sshAccounts, socketUid: async () => uid, passwd: async () => SSH_HOMES, serviceUid: 1000, provider: 'openrouter' });
+      // alice 는 UUID 로 키를 등록하지 않았다.
+      const tunnel = await sshWithAi(1099);
+      const body = await (await tunnel.req('/api/auth/me')).text();
+      const me = JSON.parse(body) as AuthMeResponse;
+      expect(me).toMatchObject({ osUser: 'user99', llmStatus: { available: true }, canEnrich: true });
+      expect(body).not.toContain(KEY);
+      // 같은 회원이라도 다른 OS 계정으로 연 연결이나 확인하지 못한 연결에는 그 키를 주지 않는다.
+      for (const uid of [1000, 4242, null]) {
+        const other = await sshWithAi(uid);
+        expect((await (await other.req('/api/auth/me')).json() as AuthMeResponse).llmStatus).toMatchObject({ available: false, reason: expect.stringContaining('키 등록') });
+      }
+      // 개발 프록시 헤더를 흉내 내도 user99 가 아닌 계정이 연 연결에는 주지 않는다.
+      const spoofed = await sshWithAi(4242);
+      const res = await spoofed.app.request('/api/auth/me', { headers: { authorization: 'Bearer alice-token', [PEER_UID_HEADER]: '1099' } });
+      expect((await res.json() as AuthMeResponse).llmStatus?.available).toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env.VIBE_TEACHER_USER_OPENROUTER_KEYS; else process.env.VIBE_TEACHER_USER_OPENROUTER_KEYS = saved;
+    }
+  });
+
   it('개발 프록시의 접속자 헤더는 서버와 같은 계정이 연 연결에서만 믿는다', async () => {
     const headers = (value: string) => ({ authorization: 'Bearer alice-token', [PEER_UID_HEADER]: value });
     const viaProxy = await sshFixture(1000);

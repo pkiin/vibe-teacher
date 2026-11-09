@@ -40,6 +40,7 @@ function MemberCard({ member, accounts, ssh, onSaved }: { member: Member; accoun
     <p className="muted small">{ko.members.keyUserId} <code>{member.user_id}</code></p>
     {member.is_admin && <span className="pill pill-blue">{ko.login.admin}</span>}
     <label><input type="checkbox" checked={approved} onChange={(e) => setApproved(e.target.checked)} /> {ko.members.approve}</label>
+    {ssh && <p className="muted small">{ko.members.sshApprove}</p>}
     {ssh ? <p className="muted small">{ko.members.sshAccounts}</p> : <fieldset><legend>{ko.members.accounts}</legend>
       {!accounts.length && <p className="muted small">{ko.members.noAccounts}</p>}
       {accounts.map((a) => <label className="member-account" key={a.id}><input type="checkbox" checked={ids.includes(a.id)} onChange={(e) => setIds(e.target.checked ? [...ids, a.id] : ids.filter((id) => id !== a.id))} />{a.username} <span className="muted small">{a.homePath}</span></label>)}

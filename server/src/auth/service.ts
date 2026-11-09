@@ -153,13 +153,18 @@ export class AuthService {
     return trustedPeerUid(socketUid, c.req.header(PEER_UID_HEADER), this.opts.serviceUid ?? process.getuid?.() ?? -1);
   }
 
-  /** SSH 터널 서버: 회원이 볼 OS 계정은 관리자 연결 목록이 아니라 이 연결을 연 OS 계정 하나로 정한다. */
+  /**
+   * SSH 터널 서버: 회원이 볼 OS 계정은 관리자 연결 목록이 아니라 이 연결을 연 OS 계정 하나로 정한다.
+   * 터널은 서버 OS 계정과 SSH 키가 있어야 열 수 있는 제한된 경로라, 접속 계정을 확인한 회원은 AI 사용을 승인된 것으로 본다.
+   * vt_members.approved 는 바꾸지 않으므로 같은 회원의 노트북·공용 서버는 지금처럼 관리자 승인이 필요하다.
+   * 일반 회원이 AI 를 쓰려면 UUID 또는 OS 계정에 등록된 키도 있어야 하므로, 이 서버에서 멈추려면 키 목록에서 뺀다.
+   */
   private async withSshAccount(c: Context, user: AuthUser): Promise<AuthUser> {
     if (!user.cloud) return user;
     const uid = await this.peerUid(c);
     let os: { username: string; home: string } | undefined;
     if (uid !== null) for (const [home, v] of await this.passwdHomes()) if (v.uid === uid) { os = { username: v.username, home }; break; }
-    return { ...user, cloud: { ...user.cloud, accountIds: os ? [accountIdFor(os.home)] : [], osUser: os?.username ?? null, osUid: uid } };
+    return { ...user, cloud: { ...user.cloud, approved: user.cloud.approved || !!os, accountIds: os ? [accountIdFor(os.home)] : [], osUser: os?.username ?? null, osUid: uid } };
   }
 
   private bearerUser(c: Context): AuthUser | null {
