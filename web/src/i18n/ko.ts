@@ -111,6 +111,7 @@ export const ko = {
     forbidden: 'Supabase 관리자만 회원을 관리할 수 있습니다.', approve: 'AI 사용 승인', accounts: '공용 서버에서 볼 수 있는 OS 계정',
     noAccounts: '발견한 OS 계정이 없습니다. 서버의 스캔 설정을 확인하세요.', save: '저장',
     sshAccounts: 'SSH 터널 서버에서는 회원이 SSH로 접속한 OS 계정의 기록이 자동으로 보입니다. 여기서 계정을 연결하지 않습니다.',
+    sshApprove: 'SSH 터널 서버에서는 접속한 OS 계정이 확인된 회원이 이 승인 없이 AI를 쓸 수 있습니다. 이 체크는 같은 회원이 노트북 설치·공용 서버에서 쓸 때 적용됩니다. 이 서버에서 AI 사용을 멈추려면 서버의 회원별 키 목록에서 그 회원의 키를 빼세요.',
   },
   provider: {
     'claude-code': 'Claude Code',

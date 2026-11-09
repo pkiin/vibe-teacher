@@ -87,11 +87,68 @@ describe('설치 방식과 인증 사용자별 AI 키', () => {
   });
 
   it('잘못된 사용자 키 JSON은 실패하며 키 원문을 오류에 싣지 않는다', () => {
-    for (const raw of ['{"broken":"synthetic-secret"', '{"not-a-uuid":"synthetic-secret"}', JSON.stringify({ [ALICE]: '' }), '[]', 'null']) {
-      try { userOpenRouterKeys({ VIBE_TEACHER_USER_OPENROUTER_KEYS: raw }); throw new Error('검증이 누락됨'); }
+    const broken = [
+      '{"broken":"synthetic-secret"', JSON.stringify({ [ALICE]: '' }), JSON.stringify({ [ALICE]: 7 }), '[]', 'null', '"synthetic-secret"',
+      // 잘못 친 UUID(36자)·공백·경로 문자는 OS 계정 이름으로도 읽지 않는다.
+      JSON.stringify({ '11111111-1111-4111-8111-11111111111g': 'synthetic-secret' }), JSON.stringify({ 'user 99': 'synthetic-secret' }), JSON.stringify({ '../user99': 'synthetic-secret' }),
+      // 대소문자만 다른 같은 UUID
+      JSON.stringify({ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': 'synthetic-secret', 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA': 'synthetic-secret' }),
+    ];
+    for (const raw of broken) {
+      try { userOpenRouterKeys({ VIBE_TEACHER_USER_OPENROUTER_KEYS: raw }, 'ssh'); throw new Error('검증이 누락됨'); }
       catch (error) { expect((error as Error).message).toContain('Supabase 사용자 UUID'); expect((error as Error).message).not.toContain('synthetic-secret'); }
     }
-    expect(userOpenRouterKeys({})).toEqual({});
+    expect(userOpenRouterKeys({})).toEqual({ users: new Map(), osAccounts: new Map() });
+  });
+
+  it('공용 서버(shared)는 OS 계정 이름 항목을 받지 않고 이름·키를 오류에 싣지 않는다', () => {
+    const raw = JSON.stringify({ [ALICE]: 'synthetic-alice-key', user99: 'synthetic-user99-key' });
+    for (const run of [() => userOpenRouterKeys({ VIBE_TEACHER_USER_OPENROUTER_KEYS: raw }, 'shared'), () => userLlmEnvironment({ userId: ALICE, isAdmin: false }, 'shared', 'auto', { VIBE_TEACHER_USER_OPENROUTER_KEYS: raw })]) {
+      try { run(); throw new Error('검증이 누락됨'); }
+      catch (error) {
+        expect((error as Error).message).toContain('VIBE_TEACHER_DEPLOYMENT=ssh');
+        expect((error as Error).message).not.toMatch(/user99|synthetic-/);
+      }
+    }
+  });
+});
+
+describe('SSH 터널 서버의 OS 계정별 미리 등록한 키', () => {
+  const CAROL = '33333333-3333-4333-8333-333333333333';
+  const keys = (value: Record<string, string>): NodeJS.ProcessEnv => ({ ...source, VIBE_TEACHER_USER_OPENROUTER_KEYS: JSON.stringify(value) });
+  const registered = keys({ user01: 'synthetic-user01-key', user99: 'synthetic-user99-key', [ALICE]: 'synthetic-alice-key' });
+
+  it('가입 전에 OS 계정 이름으로 등록해 둔 키를 그 계정으로 터널을 연 회원이 쓴다', () => {
+    const parsed = userOpenRouterKeys(registered, 'ssh');
+    expect([...parsed.osAccounts.keys()]).toEqual(['user01', 'user99']);
+    expect([...parsed.users.keys()]).toEqual([ALICE]);
+    const carol = userLlmEnvironment({ userId: CAROL, isAdmin: false, osAccount: 'user99' }, 'ssh', 'claude-cli', registered);
+    expect(carol.OPENROUTER_API_KEY).toBe('synthetic-user99-key');
+    expect(carol.VIBE_TEACHER_LLM_PROVIDER).toBe('openrouter');
+    expect(carol.VIBE_TEACHER_USER_OPENROUTER_KEYS).toBeUndefined();
+    expect(userLlmEnvironment({ userId: CAROL, isAdmin: false, osAccount: 'user01' }, 'ssh', 'auto', registered).OPENROUTER_API_KEY).toBe('synthetic-user01-key');
+  });
+
+  it('UUID 등록이 OS 계정 등록보다 우선한다', () => {
+    expect(userLlmEnvironment({ userId: ALICE, isAdmin: false, osAccount: 'user99' }, 'ssh', 'auto', registered).OPENROUTER_API_KEY).toBe('synthetic-alice-key');
+  });
+
+  it('접속 계정을 확인하지 못했거나 등록되지 않은 계정이면 다른 계정 키·관리자 키를 쓰지 않는다', () => {
+    for (const osAccount of [null, undefined, 'user02', 'USER99', 'user9']) {
+      expect(userLlmEnvironment({ userId: CAROL, isAdmin: false, osAccount }, 'ssh', 'auto', registered).OPENROUTER_API_KEY).toBe('');
+    }
+    // Object.prototype 의 이름과 같은 계정도 등록된 키만 찾는다.
+    for (const osAccount of ['constructor', 'toString', '__proto__']) {
+      expect(userLlmEnvironment({ userId: CAROL, isAdmin: false, osAccount }, 'ssh', 'auto', registered).OPENROUTER_API_KEY).toBe('');
+    }
+    // 관리자는 지금처럼 UUID → 접속 OS 계정 → 관리자 개발용 키 순서다.
+    expect(userLlmEnvironment({ userId: CAROL, isAdmin: true, osAccount: 'user99' }, 'ssh', 'auto', registered).OPENROUTER_API_KEY).toBe('synthetic-user99-key');
+    expect(userLlmEnvironment({ userId: CAROL, isAdmin: true, osAccount: 'ubuntu' }, 'ssh', 'auto', registered).OPENROUTER_API_KEY).toBe('synthetic-admin-key');
+  });
+
+  it('공용 서버에는 접속 OS 계정을 넘겨도 쓰지 않는다', () => {
+    const uuidOnly = keys({ [ALICE]: 'synthetic-alice-key' });
+    expect(userLlmEnvironment({ userId: CAROL, isAdmin: false, osAccount: 'user99' }, 'shared', 'auto', uuidOnly).OPENROUTER_API_KEY).toBe('');
   });
 });
 

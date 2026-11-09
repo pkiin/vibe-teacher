@@ -19,7 +19,8 @@ export class CloudRuntime {
     const deployment = this.base.auth.cloud.config.deployment;
     // 노트북 설치는 화면에서 저장한 키도 쓴다 (셸·.env 키가 우선). 키가 바뀌면 아래에서 제공자 캐시를 비운다.
     const source = deployment === 'local' ? withSavedKey(process.env, this.base.openRouterKey) : process.env;
-    const env = userLlmEnvironment({ userId, isAdmin: user.isAdmin }, deployment, this.base.store.get().llm.provider, source);
+    // ssh 의 osUser 는 요청 헤더가 아니라 연결을 연 쪽 소켓의 uid 로 정한 값이다 (AuthService.withSshAccount).
+    const env = userLlmEnvironment({ userId, isAdmin: user.isAdmin, osAccount: user.cloud.osUser ?? null }, deployment, this.base.store.get().llm.provider, source);
     const existing = this.users.get(userId);
     if (existing) {
       existing.backend.client.accessToken = accessToken;
