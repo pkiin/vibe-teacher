@@ -27,6 +27,7 @@ Supabase `local`은 저장 위치가 로컬이라는 뜻이 아니다. 원본 �
 | `projects/<p>/repo/current.json`, `materials.json`, `history.json` | 레포 위키 생성·업데이트의 자료와 이력 |
 | `projects/<p>/repo/text/<level>.json` | 읽는 수준별 레포 설명. 생성 실패 사유도 문서로 남김 |
 | `projects/<p>/repo/features/<feature>.<level>.json`, `index.<level>.json` | 주요 기능 분석과 분석 완료 시각 |
+| `projects/<p>/repo/usage.<level>.json` | 레포 위키 '어떻게 사용하나요?' 안내 (읽는 수준별) |
 | `enrich/<hash>.json` | 세션 AI 요약·개념 분석. 레포 위키와 별도의 생성 기능 |
 | `projects/<p>/sessions/<hash>.json`, `snapshots/<revision>.json`, `ai/<revision>.<level>.json` | 세션 위키의 현재 판·내용·AI 문장 |
 | `learners/<id>/events.jsonl` | 이해 상태·설명 방식 선택·학습 활동. `vt_events`로 추가 |

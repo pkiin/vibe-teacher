@@ -46,6 +46,9 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
             {ko.start.nav}
           </NavLink>
+          <NavLink to="/guide" className={({ isActive }) => (isActive ? 'active' : '')}>
+            {ko.nav.guide}
+          </NavLink>
           <NavLink to="/accounts" className={({ isActive }) => (isActive ? 'active' : '')}>
             {ko.nav.accounts}
           </NavLink>

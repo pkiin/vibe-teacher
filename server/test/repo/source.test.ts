@@ -20,6 +20,7 @@ beforeAll(async () => {
   await write('src/service.ts', "export function answer() {\n  return '안녕하세요';\n}\n");
   await write('src/private-key.ts', `export const key = '${SECRET}';`);
   await write('src/fake.ts', "throw new Error('실행하면 안 됩니다');");
+  await write('src/Page.vue', `<template>\n  <button @click="save">저장</button>\n</template>\n<script>\nconst token = '${SECRET}';\n</script>\n`);
   await write('.env', `API_KEY=${SECRET}`);
   await write('.env.example', `API_KEY=${SECRET}\n# DATABASE_URL=postgres://private\n`);
   await write('.aws/config.json', `{"token":"${SECRET}"}`);
@@ -36,6 +37,14 @@ describe('repository evidence reader', () => {
     expect(readableRepoPath('README.md')).toBe(true);
     expect(readableRepoPath('src/main.ts')).toBe(true);
     expect(readableRepoPath('node_modules/lib/code.js')).toBe(false);
+  });
+  it('reads UI templates such as .vue with secrets masked and line numbers kept', async () => {
+    const page = await readRepoText(root, 'src/Page.vue');
+    expect(page?.text.split('\n')[1]).toBe('  <button @click="save">저장</button>');
+    expect(page?.text).not.toContain(SECRET);
+    expect(page?.text.split('\n')).toHaveLength(7);
+    expect(readableRepoPath('src/App.svelte')).toBe(true);
+    expect(readableRepoPath('src/pages/index.astro')).toBe(true);
   });
   it('masks keys and preserves line numbers, and shows example variable names only', async () => {
     const file = await repoFileView(root, 'src/main.ts', 3);

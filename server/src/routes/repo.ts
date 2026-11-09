@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { learnerIdFor } from '../learner/service';
 import { FeatureAnalysisService } from '../repo/feature';
 import { RepoWikiService } from '../repo/service';
+import { UsageGuideService } from '../repo/usage';
 import { repoFileView } from '../repo/source';
 import { WikiStorage } from '../storage/store';
 import { assertAccount, currentUser, HttpError, notFound, parseBody, requireJson, type AppDeps, type AppEnv } from './deps';
@@ -15,6 +16,7 @@ export function repoRoutes(deps: AppDeps): Hono<AppEnv> {
   const storage = deps.storage ?? new WikiStorage(deps.paths.home, (id) => deps.index.getProjectIds(id));
   const service = new RepoWikiService({ storage, store: deps.store, index: deps.index, analysis: deps.analysis, wiki: deps.wiki, enrich: deps.enrich });
   const features = new FeatureAnalysisService({ storage, store: deps.store, index: deps.index, enrich: deps.enrich, repo: service });
+  const usage = new UsageGuideService({ storage, store: deps.store, index: deps.index, enrich: deps.enrich, repo: service });
 
   const project = async (c: Context<AppEnv>) => {
     await deps.index.ensureFresh();
@@ -81,5 +83,18 @@ export function repoRoutes(deps: AppDeps): Hono<AppEnv> {
   };
   app.get('/:id/repo-wiki/feature-jobs/:jobId', async (c) => c.json(await featureJob(c)));
   app.delete('/:id/repo-wiki/feature-jobs/:jobId', async (c) => c.json(features.jobs.cancel((await featureJob(c)).id)));
+
+  // 어떻게 사용하나요? (쓰는 사람 입장의 사용 방법). GET 은 저장한 것만 돌려주고, 분석은 POST 로만 시작한다
+  app.get('/:id/repo-wiki/usage', async (c) => c.json(await usage.get(await project(c), await level(c), allowed(c))));
+  app.get('/:id/repo-wiki/usage/preview', async (c) => c.json(await usage.preview(await project(c), await level(c), allowed(c))));
+  app.post('/:id/repo-wiki/usage/analyze', requireJson, async (c) => c.json(await usage.analyze(await project(c), await level(c), allowed(c)), 202));
+  const usageJob = async (c: Context<AppEnv>) => {
+    const p = await project(c);
+    const job = usage.jobs.get(c.req.param('jobId') ?? '');
+    if (!job || !job.sessionKey.startsWith(`usage:${p.id}:`)) throw notFound('작업');
+    return job;
+  };
+  app.get('/:id/repo-wiki/usage-jobs/:jobId', async (c) => c.json(await usageJob(c)));
+  app.delete('/:id/repo-wiki/usage-jobs/:jobId', async (c) => c.json(usage.jobs.cancel((await usageJob(c)).id)));
   return app;
 }

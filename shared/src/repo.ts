@@ -217,6 +217,80 @@ export interface RepoFeaturePreview {
   limits: typeof REPO_FEATURE_LIMITS;
 }
 
+/** '어떻게 사용하나요?' 안내의 버튼·메뉴·명령 하나 */
+export interface RepoUsageItem {
+  /** 사용자가 화면에서 보는 이름 */
+  name: string;
+  /** 근거 코드에 그대로 적혀 있음을 서버가 확인한 화면 문구 (확인하지 못하면 없음) */
+  label?: string;
+  /** 하는 일 */
+  what: string;
+  /** 이럴 때 쓰면 좋아요 */
+  tip?: string;
+  sources: RepoSource[];
+}
+export interface RepoUsagePart { title?: string; items: RepoUsageItem[] }
+export interface RepoUsageSection {
+  /** 코드가 붙인 id (u1, u2…) */
+  id: string;
+  /** 화면·메뉴·명령 이름 */
+  title: string;
+  /** 어디서 여는지 */
+  where: string;
+  intro: string;
+  parts: RepoUsagePart[];
+}
+export interface RepoUsageStep { title: string; text: string; sources: RepoSource[] }
+export interface RepoUsageFaq { q: string; a: string; sources: RepoSource[] }
+
+/** 레포 위키 '어떻게 사용하나요?': wiki/projects/<p>/repo/usage.<수준>.json */
+export interface RepoUsagePage {
+  version: number;
+  level: ReaderLevel;
+  /** 분석할 때의 레포 위키 판 */
+  revision: string;
+  at: string;
+  generator: { provider?: LlmProviderId; model?: string; durationMs: number; costUsd?: number; calls: number; rounds: number };
+  intro: string[];
+  introSources: RepoSource[];
+  /** 처음이라면 이 순서로 */
+  steps: RepoUsageStep[];
+  sections: RepoUsageSection[];
+  faq: RepoUsageFaq[];
+  /** 분석 중 AI 가 만든 질문과, 서버가 읽어 준 코드에 근거한 답 */
+  questions: RepoFeatureQuestion[];
+  limits: string[];
+  warnings: string[];
+  /** 읽은 코드 범위와 내용 지문. 파일이 바뀌면 다시 분석하라고 알린다 */
+  read: { path: string; hash: string; startLine: number; endLine: number }[];
+}
+
+export const REPO_USAGE_LIMITS = { rounds: 4, questionsPerRound: 8, maxChars: 160_000 } as const;
+
+export interface RepoUsageResponse {
+  page: RepoUsagePage | null;
+  stale: boolean;
+  staleReasons: string[];
+  /** 분석을 실행할 수 없는 사유 (권한·제공자·레포 위키 없음) */
+  unavailable?: string;
+  /** 진행 중인 분석 작업 */
+  jobId?: string;
+  limits: typeof REPO_USAGE_LIMITS;
+}
+
+export type RepoUsageAnalyzeResponse = { status: 'running' | 'queued'; jobId: string };
+export type RepoUsageJobStatus = BaseJobStatus<{ sections: number; items: number; files: number }>;
+
+/** 분석을 시작하기 전 AI 에 처음 보내는 질문 계획 요청 (GET 은 AI 를 부르지 않는다) */
+export interface RepoUsagePreview {
+  llmStatus: LlmStatus;
+  fallbackReason?: string;
+  system: string;
+  user: string;
+  chars: number;
+  limits: typeof REPO_USAGE_LIMITS;
+}
+
 export interface RepoListItem {
   text: string;
   detail?: string;

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router';
 import { AccountsPage } from './pages/AccountsPage';
 import { FeaturePage } from './pages/FeaturePage';
+import { GuidePage } from './pages/GuidePage';
 import { KnowledgePage } from './pages/KnowledgePage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { SessionPage } from './pages/SessionPage';
@@ -18,6 +19,7 @@ export function AppRoutes() {
       <Route path="/accounts/:accountId" element={<ProjectsPage />} />
       <Route path="/sources" element={<SourcesPage />} />
       <Route path="/knowledge" element={<KnowledgePage />} />
+      <Route path="/guide" element={<GuidePage />} />
       <Route path="/projects/:projectId" element={<SessionsPage />} />
       <Route path="/projects/:projectId/features/:featureId" element={<FeaturePage />} />
       <Route path="/sessions/:sessionKey" element={<SessionPage />} />
