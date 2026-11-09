@@ -5,7 +5,7 @@ import { LlmError } from './types';
 import { artifactSaved } from '../lib/progress';
 
 /** 사용자 작업 하나의 종류. 실제 API 요청 여러 개(재시도·보조 확인 포함)를 묶는다. */
-export type AiFeature = 'session_enrich' | 'session_wiki' | 'repo_wiki' | 'repo_feature' | 'knowledge_text' | 'help_answer' | 'practice_question' | 'memory_extract';
+export type AiFeature = 'session_enrich' | 'session_wiki' | 'repo_wiki' | 'repo_feature' | 'repo_usage' | 'knowledge_text' | 'help_answer' | 'practice_question' | 'memory_extract';
 
 export interface AiTrace {
   runId?: string;

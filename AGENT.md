@@ -36,7 +36,8 @@ OpenRouter 키는 관리자가 제공한 키가 있으면 사용하고, 제공�
 | Supabase 마이그레이션·표 추가 (`supabase/migrations/`) | [로그인](docs/authentication.md)의 "Supabase 최초 설정", [AI 호출 기록](docs/ai.md), [Supabase 저장 분석](docs/supabase-storage.md)의 해당 표 |
 | npm 스크립트 추가·변경 | [개발 서버 관리](docs/development.md)의 실행·검사 명령. 첫 실행에 영향이 있으면 README "빠른 시작"도 갱신 |
 | 디렉터리 구조 변경 | [개발 서버 관리](docs/development.md)의 "프로젝트 구조", 이 문서의 구조 |
-| 사용자 눈에 보이는 새 기능 | [주요 기능](docs/features.md)의 해당 절. 프로젝트 소개가 바뀌면 README 요약도 갱신 |
+| 사용자 눈에 보이는 새 기능 | [주요 기능](docs/features.md)의 해당 절, 앱의 사용 방법 탭(`web/src/i18n/guide.ts`). 프로젝트 소개가 바뀌면 README 요약도 갱신 |
+| 버튼·탭·화면 문구의 추가·이름 변경·동작 변경 | 사용 방법 탭(`web/src/i18n/guide.ts`)의 해당 절 |
 | Windows 설치 묶음 (`scripts/package.ts`·`release-lib.ts`·`zip.ts`, `server/src/config/layout.ts`, 묶음의 실행 안내 글) | [Windows 설치 묶음](docs/windows.md), [개발자 가이드](docs/development.md)의 "Windows 설치 묶음 만들기", `.env.release.example` |
 | 화면에서 저장하는 OpenRouter 키 (`llm/key-store.ts`, `/api/settings/openrouter-key`) | [설정](docs/configuration.md)의 "화면에서 저장한 OpenRouter 키", [AI와 데이터 저장](docs/ai.md), README 빠른 시작의 키 안내 |
 
@@ -72,6 +73,7 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
                    · prefs(사용자 설정: 읽는 사람 수준, prefs.json)
   src/repo/        레포 위키: scan(저장소 읽기 전용 스캔) · database(SQL·Prisma·ORM 표 정의, SQL 함수가 쓰는 표, 코드에서 쓰는 줄을 구문으로 읽기) · db-link(기능과 이어지지 않은 표마다 관계있는 주요 기능을 짧게 묻기) · ref-fix(확인하지 못한 근거 표시를 보낸 표시 중에서 다시 고르게 묻기) · db-calls(공용 모듈 함수를 부르는 기능 코드 찾기) · session-made(세션별 '만들어진 것' 규칙 요약) · feature-pick(주요 기능만 먼저 따로 묻기) · source(근거 파일 안전 읽기) · code(TS 구문 분석·내부 파일 연결) · wiki(사실 초안 조립, 판 비교) · inspect(AI 질문·필요한 코드만 추가 확인) · ai(AI 가 문장·주요 기능 목록 쓰기, 표·코드 유지, 근거 표시 검사)
                    · service(저장·갱신 필요 판단, AI 작업과 실패 상태) · feature(주요 기능별 페이지: AI가 질문을 만들며 여러 단계로 코드 확인, 프롬프트 원문·모델 근거 검사) · prompt-text(AI가 가리킨 코드에서 실제 프롬프트만 구문 분석으로 꺼내기)
+                   · usage(어떻게 사용하나요?: 화면·문구 파일 후보 → AI 질문 → 코드 확인 → 쓰는 사람 입장의 사용 방법, 근거·화면 문구 검사)
   src/assessment/  bank(문항 형식 검사) · service(AI 출제·서버 채점)
   src/help/        도움 패널 질문: answer(대상별 근거 고르기·프롬프트·답 검사) · service(개인 기록·작업)
   src/memory/      개인 장기 기억: search(원장 사건의 검색 표현·한국어 키워드 검색) · service(권한 범위별 조회·POST 후 자동 색인) · mem0(PostgreSQL pgvector·OpenRouter 추출/임베딩) · database(Supabase 우선 설정·비공개 스키마·연결 검사) · supermemory(선택적 클라우드 어댑터)
@@ -80,6 +82,8 @@ server/            Hono API (tsx 로 직접 실행, 빌드 단계 없음)
 web/               Vite + React 19 + react-router UI (한국어)
   test/           화면 렌더링 검사 (vitest, Node 환경에서 서버 렌더링)
   src/i18n/ko.ts   화면 문자열 모음
+  src/i18n/guide.ts 사용 방법 탭 내용(화면별 버튼 이름 → 하는 일 → 쓰면 좋은 때, 처음 순서, 자주 묻는 질문). 버튼 이름은 ko 값을 참조
+  src/pages/GuidePage.tsx  사용 방법 탭 (/guide, 위쪽 메뉴의 시작하기 바로 옆·시작 안내 아래 링크). 보는 사람에게 보이는 항목만(guideViewer·visibleGuide) 골라 components/GuideView.tsx 로 그린다
   src/components/SessionUnderstand.tsx  "세션 (대화 기록) 분석" 문서 (작업 요약 → 작업 설명 → 개념 → 내 지식 → 보안 점검 + 도움 패널). 고정 주소 /sessions/:sessionKey/analysis, 예전 탭 주소도 유지 (pages/SessionPage.tsx)
   src/components/SessionAnalysisTree.tsx 저장된 분석 문서·하위 절의 트리. wiki/documents.ts와 /api/projects/:id/session-analyses가 원문·AI 호출 없이 저장된 결과만 모은다
   src/context/DisplayContext.tsx        화면 설정(본문 14px·코드 12px·촘촘한 밀도 기본), 설명 난이도와 분리해 브라우저에 저장
@@ -89,6 +93,8 @@ web/               Vite + React 19 + react-router UI (한국어)
   src/components/SecurityReview.tsx    AI가 선정한 보안·데이터 주의사항과 출처 표시
   src/components/HelpPanel.tsx          도움 패널 (설명/질문/퀴즈), src/context/FocusContext.tsx 가 지금 보는 대상을 공유
   src/components/CodeBlock.tsx          의존성 없는 코드 색칠(토큰 분석, React 텍스트로만 그림). 파일 보기·레포 위키 코드·기능 페이지가 함께 쓴다
+  src/components/GuideView.tsx          사용 방법 안내 화면(처음 순서·화면별 버튼·자주 묻는 질문·찾기 칸 filterGuide). 앱 사용 방법 탭과 레포 위키 '어떻게 사용하나요?'가 함께 쓴다
+  src/components/RepoUsageView.tsx      레포 위키 '어떻게 사용하나요?' 탭 (분석하기 → 작업 진행 → GuideView, 근거·확인한 질문)
   src/pages/FeaturePage.tsx             주요 기능 페이지 (/projects/:id/features/:featureId). 본문은 components/RepoFeatureView.tsx, 기능 카드는 RepoWikiView 의 FeatureCards
 scripts/           dev.mjs(웹+API 동시 실행), memory-db.mjs(로컬 PostgreSQL 준비), check-memory-db.ts(Supabase·PostgreSQL 접속 검사), setup-accounts.ts(관리자 회원 스키마 준비), postgres-init.sql(pgvector 확장), grant-read-acl.sh(다중 계정 읽기 ACL)
                    inspect-cloud.ts(관리자 읽기 전용 DB 행 수·통계 확인, 개인 데이터 출력 금지)
@@ -154,6 +160,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **주요 기능은 사용자가 하는 일로, 본문보다 먼저 따로 묻는다.** `server/src/repo/feature-pick.ts`의 `askRepoFeatures`가 "이 프로젝트 자체의 주요 기능은 무엇이라고 생각하나요?"(`REPO_FEATURE_QUESTION`)를 묻는다(`repo_wiki_features`, 일반 작업이라 Claude CLI면 기본 모델, withReader). 입력(`Materials.featureUser`)은 README·실행 스크립트·API 경로·표를 쓰는 파일·파일 목록과 모든 세션의 '만들어진 것'(`repo/session-made.ts`)이다. 답은 자연어 `answer`, 사용자가 직접 하는 일 단위의 `features`, 로그인·저장·기록·설정 같은 `foundations`(공통 기반)다. 표 이름이나 공용 저장 모듈로 기능을 만들지 않고 표는 근거로만 쓴다(예전의 "모든 표를 기능에 잇도록 기능을 고르라"는 규칙은 쓰지 않는다). 고른 목록은 본문 입력에 '정해진 주요 기능'으로 붙고 본문 응답의 `features`를 대신하며, 검사는 `applyRepoAi`가 같게 한다. 이때 표 연결 질문은 새 기능을 만들지 않는다(`newFeatures: false`). 질문이 실패하면 경고를 남기고 본문 작성에서 고른다. 취소는 전파한다. 질문 입력과 시스템 프롬프트는 문장 레이어 지문(`textInputHash`)에 들어가고 미리 보기에도 보인다. 연결 근거 검사는 완화하지 않는다.
 - **세션의 '만들어진 것'은 규칙으로 모아 저장한다.** `sessionMade`는 `summarizeBuilt` 결과에서 요청(`ownWords`, 160자)·요청 뒤 에이전트 보고 앞부분(240자)·만들고 고친 파일(세션 작업 폴더 안 상대 경로만, 많이 손댄 순)·지운 파일·커밋 첫 줄·패키지 이름만 뽑고 모두 `maskSecrets`한다(처음 2개와 마지막 4개 요청). AI를 부르지 않는다. 레포 위키 판을 만들 때 프로젝트의 모든 세션(최대 `SESSION_MADE_LIMITS.sessions`)에서 모으고 `repo/sessions-made.json`(`SESSION_MADE_VERSION`)에 POST에서만 저장한다. 세션 파일의 수정 시각·크기가 같으면 다시 읽지 않는다. 질문 글(`sessionMadeText`)은 여러 세션에서 손댄 파일을 먼저 보이고 최근 세션부터 24,000자까지 싣는다.
 - **주요 기능 페이지는 질문을 AI가 만들고 코드는 서버가 읽는다.** `server/src/repo/feature.ts`: 기능 목록은 레포 위키 AI 출력(`features`)을 `applyRepoAi`에서 검사한 것만 쓴다(참조를 하나라도 확인하지 못하면 그 기능을 거른다, id는 `FEATURE_ID`라 파일 이름에 안전). 주요 기능 목록은 이것 하나다. 사용자 페이지에는 `{ kind: 'features' }` 블록으로 같은 목록을 넣고(AI가 `sourceBlocks`에 `features`로 위치를 고르거나, 없으면 첫 절 다음), AI가 절로 기능을 따로 나열하게 하지 않는다. 분석은 POST로만 시작하며 질문 계획 → (읽기 → 답·후속 질문) × `REPO_FEATURE_LIMITS.rounds` → 페이지 작성 순서다. 파일은 `readRepoText`로만 읽고 글자 수 상한을 지킨다. 근거는 실제로 보낸 발췌 안의 범위만 받는다(`resolveFeatureRef`). 시스템·사용자 프롬프트는 AI가 가리킨 줄을 저장소에서 그대로 옮기고 AI가 다시 쓴 프롬프트를 싣지 않는다. 화면에 보이는 프롬프트 문장은 `repo/prompt-text.ts`의 `extractPrompts`가 구문 분석으로 꺼낸다: 요청 객체의 역할 키(`system`·`user`·`prompt` 등, AI 요청 키가 둘 이상인 객체)와 `{ role, content }` 메시지만 보고, 호출 인자로 넘기는 요청을 우선한다. 값은 같은 파일 변수·상수, 상대 경로로 불러온 파일(`readRepoText`, 읽기 상한), 저장소 함수의 반환값(매개변수에 실제 인자를 넣음)까지 따라간다. 고정 문장이 없는 값은 식 그대로 slot으로 둔다. 역할 키가 없으면 범위 안 문장이 하나일 때만 쓰고 오류·로그 문구는 뺀다. 이 결과는 저장하지 않고 페이지를 읽을 때 `withPromptText`로 계산한다(파일 지문이 분석 때와 같을 때만 파일 전체로 따라간다). 모델 값은 가리킨 줄에 그 문자열이 있을 때만 싣는다(`acceptFeaturePage`). AI 호출 단서 줄(`AI_MARKER`)은 어디를 볼지 알려 주는 입력일 뿐 화면 설명으로 쓰지 않는다. 질문 단계는 `task=repo-inspect`, 페이지 작성은 일반 작업이다.
+- **'어떻게 사용하나요?'는 앱의 사용 방법 탭을 만든 순서를 AI가 저장소마다 따라 한다.** `server/src/repo/usage.ts`: 서버가 이름 규칙(`usageScore`: 화면 문구 파일·진입점·화면 파일·사용자 문서·`package.json`, 테스트·예제 폴더 제외)으로 후보를 고르고 선언·연결, 버튼·메뉴 단서 줄(`UI_MARKER`, 어디를 볼지 알려 주는 입력일 뿐 화면 설명으로 쓰지 않는다), 문구 파일의 묶음 위치, README 앞부분을 모은다. 분석은 POST(**분석하기**)로만 시작하며 질문 계획 → (읽기 → 답·후속 질문) × `REPO_USAGE_LIMITS.rounds` → 안내 작성 순서다(질문 단계 `task=repo-inspect`, 작성은 일반 작업, 모두 withReader). 읽기·근거 검사는 주요 기능 분석의 `readFeatureExcerpts`·`resolveFeatureRef`·`acceptFeatureRound`를 그대로 쓴다. `acceptUsagePage`는 근거를 하나라도 확인하지 못한 단계·버튼·질문을 거르고 버튼이 없는 절을 빼며, 절 id(`u1`…)는 코드가 붙인다. 화면 문구(`label`)는 인용한 발췌에 그 글자가 그대로 있을 때만 싣는다. 프롬프트는 쓰는 사람 입장만 쓰게 하고(운영자·관리자 화면·설치·배포·환경 변수 제외), 사용자마다 다르게 보이는 버튼을 거르지 않고 설명에 보이는 조건을 적게 한다. 저장은 `repo/usage.<수준>.json`, GET은 저장한 것만 돌려주며 큰 재료 파일을 읽지 않는다. 화면은 앱 사용 방법 탭과 같은 `GuideView`로 그린다.
 - **내 지식 설명 문장은 응원하되 상태를 넘겨짚지 않는다.** 맞힌 것을 칭찬하고 문제 풀기를 권하는 문장이다. AI 사실(`entryFacts`)에는 맞힌 횟수만 넣고 오답·질문 수·검토 여부는 넣지 않는다. AI 문장은 `server/src/learner/knowledge-text.ts` 의 `acceptKnowledgeText` 를 거친다: "모르십니다"류 단정, 확인되지 않았는데 "이해하고 계십니다"류, 맞힌 문제가 없는데 "맞히셨어요"류는 버리고 생성 실패를 표시한다(같은 사실로 다시 부르지 않도록 거른 것도 저장). 상태 자체는 AI 가 바꾸지 못한다.
 - **저장소 스캔은 읽기만.** `server/src/repo/scan.ts` 는 쓰기·명령 실행(git 포함)을 하지 않고, 심볼릭 링크를 따라가지 않으며, `.env`·키 파일을 열지 않는다(`.env.example` 은 변수 이름만). 표 정의용 `.sql`·`.prisma` 파일은 `readRepoText`로만 읽고 테스트 폴더·`down.sql`은 건너뛴다(`isSchemaFile`, 최대 `DB_LIMITS`). 새로 읽을 파일 종류를 늘리면 비밀값이 섞이지 않는지 테스트(`server/test/repo`)를 붙인다.
 - **내 지식 위키: 언급은 증거가 아니다.** 사용자 메시지의 언급은 설명 문장의 맥락으로만 쓰고 상태는 learner 원장으로만 정한다. 붙여 넣은 글(`<pasted_content>`)은 언급으로 보지 않는다 (`ownWords`).
@@ -179,7 +186,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - **TypeScript strict** + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`. 타입만 쓰는 import 는 `import type`. 배열 인덱싱 결과는 `undefined` 가능성을 처리합니다.
 - **ESM, 확장자 없는 상대 import** (`moduleResolution: Bundler`). 디렉터리를 가리킬 때는 `./claude-code/index` 처럼 `index` 까지 씁니다.
 - **타입·스키마는 shared 에.** server 와 web 이 함께 쓰는 타입, API 요청/응답 DTO, LLM 출력 스키마는 `shared/src/` 에 두고 zod 로 정의합니다.
-- **한국어.** 화면 문자열, API 오류 메시지, 로그, 코드 주석, README 는 한국어입니다. 웹 화면 문자열은 컴포넌트에 직접 쓰지 말고 `web/src/i18n/ko.ts` 에 추가합니다.
+- **한국어.** 화면 문자열, API 오류 메시지, 로그, 코드 주석, README 는 한국어입니다. 웹 화면 문자열은 컴포넌트에 직접 쓰지 말고 `web/src/i18n/ko.ts` 에 추가합니다. 사용 방법 탭의 긴 안내만 `web/src/i18n/guide.ts` 에 둡니다.
 - **API 오류**는 `throw new HttpError(status, code, message)` 로 던지고, 응답 형식은 `{ error: { code, message } }` 입니다.
 - **파서는 순수 함수로.** 어댑터의 분류·파싱 로직은 파일 IO 와 분리해 픽스처 없이도 테스트할 수 있게 합니다. 모르는 레코드 유형은 예외를 던지지 말고 건너뛰거나 `parseWarnings` 에 남깁니다.
 - **셸 명령 해석**은 `server/src/lib/shell.ts` 를 재사용합니다 (heredoc 처리 포함). 정규식으로 따로 만들지 않습니다.
@@ -239,7 +246,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 위키 AI 프롬프트나 출력 스키마(`WikiAiOutputSchema`)를 바꾸면 `shared/src/wiki.ts` 의 `WIKI_AI_PROMPT_VERSION` 을 올린다 (저장된 AI 레이어 무효화).
 - 내 지식 설명 문장 프롬프트·사실 형식을 바꾸면 `server/src/learner/knowledge-text.ts` 의 `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 올린다.
 - 레포 위키의 원문 자료(스캔 결과·draft 블록·`RepoFacts`) 형식을 바꾸면 `server/src/repo/wiki.ts` 의 `REPO_WIKI_VERSION` 을 올린다. 판(revision) 지문에 들어가므로 새 판의 문장 레이어가 따로 생기고, 예전 위키는 업데이트 전까지 예전 문장과 업데이트 안내를 보여 준다.
-- 주요 기능 페이지의 프롬프트·출력 스키마·저장 형식(`RepoFeaturePage`)을 바꾸면 `server/src/repo/feature.ts` 의 `FEATURE_PAGE_VERSION` 을 올린다. 레포 위키 출력의 `features` 형식을 바꾸면 `repo/service.ts` 의 `REPO_TEXT_VERSION` 을 올린다. 레포 위키는 시스템 프롬프트와 입력 전체가 지문(`inputHash`)에 들어간다. 공통 문체나 문장 형식이 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올려 기존 문장 레이어를 갱신 대상으로 돌린다.
+- 주요 기능 페이지의 프롬프트·출력 스키마·저장 형식(`RepoFeaturePage`)을 바꾸면 `server/src/repo/feature.ts` 의 `FEATURE_PAGE_VERSION` 을, '어떻게 사용하나요?'의 프롬프트·출력 스키마·저장 형식(`RepoUsagePage`)을 바꾸면 `server/src/repo/usage.ts` 의 `USAGE_PAGE_VERSION` 을 올린다. 레포 위키 출력의 `features` 형식을 바꾸면 `repo/service.ts` 의 `REPO_TEXT_VERSION` 을 올린다. 레포 위키는 시스템 프롬프트와 입력 전체가 지문(`inputHash`)에 들어간다. 공통 문체나 문장 형식이 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올려 기존 문장 레이어를 갱신 대상으로 돌린다.
 - 읽는 사람 문체 지침(`server/src/llm/reader.ts`)을 바꾸면 `ENRICH_PROMPT_VERSION`, `WIKI_AI_PROMPT_VERSION`, `KNOWLEDGE_TEXT_PROMPT_VERSION` 을 함께 올린다 (이 셋은 지문에 시스템 프롬프트 본문이 들어가지 않는다). 수준을 추가하면 `READER_LEVELS`, `reader.ts` 의 지침, `web/src/i18n/ko.ts` 의 `reader.levels`, `docs/features.md`의 "읽는 사람 수준과 화면 설정"을 함께 고친다.
 - 위키용 개념 필드를 바꾸면 `server/src/wiki/catalog.ts` 의 `CATALOG_VERSION`, 상태 전이 규칙을 바꾸면 `POLICY_VERSION`, 원장 형식을 바꾸면 `shared/src/wiki.ts` 의 `WIKI_SCHEMA_VERSION` 을 올린다.
 
@@ -249,6 +256,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 글씨와 여백은 화면 설정 변수(`--ui-font-size`, `--code-font-size`, `--card-padding` 등)로 정하고, 설명 난이도·학습자 이해 상태와 연동하지 않는다. 설정은 오른쪽 위 톱니바퀴 팝업 하나로 모은다.
 - 색상은 `web/src/styles/app.css`의 의미별 토큰(`--panel`, `--surface`, `--text` 등)으로 정한다. 새 패널에도 라이트·다크 모드, 키보드 초점, 좁은 화면, 동작 줄이기를 함께 확인한다.
 - 내 지식·퀴즈·학습 기록 문구는 응원하는 말투로 쓴다. 화면에는 맞힌 횟수만 세고 오답 수·질문 수는 원장에 두어 설명 방침에만 쓴다. 맞힌 문제가 없으면 `간단히 확인하기`(도움 패널은 `퀴즈` 탭)로 문제 풀기를 권한다. 확인 기록이 없는 상태(`unknown`)는 배지로 표시하지 않고, 상태는 카드마다 배지 하나로만 보인다. 카드 제목 옆에는 개념 분류만 두고, 상태·자기보고·학습 흐름 배지는 `LearningHistory`의 첫 줄(`status`)에 모은다. 상태 배지와 겹치는 `practicing`은 표시하지 않는다. `알고 있어요` 버튼(내 지식·도움 패널·세션 분석 카드)은 바로 기록하지 않고 `QuizCard purpose="self_check"`를 연다. 내 지식 카드는 한 번 보는 동안 처음 놓인 묶음을 유지한다(답한 뒤 카드가 옮겨져 채점 결과가 사라지지 않게). 내 지식 카드의 `질문하기`는 `FocusContext`가 있으면 도움 패널 질문 탭을, 없으면 첫 근거 세션의 분석 문서(`askConceptPath`, `?ask=<개념 ID>`)를 연다. 도움 질문 API는 세션 근거가 필요하므로 세션 없는 질문 경로를 따로 만들지 않는다. 내 지식 상단 대시보드(`KnowledgeDashboard`)는 카드 배지와 같은 기준으로 알게 된 개념·맞힌 문제·아직 안 풀어 본 개념을 세고(오답 수는 세지 않음), 숫자는 타일, 비율은 같은 색 옅은 단계 트랙의 막대 하나로 그린다. `MemoryPanel`(내 기억 검색)은 사람이 다시 볼 기록만 보여 준다: 답을 받은 내 질문(`/api/me/questions`)과 문제 은행의 풀어 본 문제(`/api/me/solved`, 맞힌 문제만 표시). 둘 다 현재 계정 권한의 프로젝트만, AI 호출 없이 `q` 키워드로 거르며 패널을 펼쳤을 때만 읽는다. 퀴즈 응답·자기보고·열람 같은 내부 원장 기록은 저장과 도움 패널 기억 검색에는 계속 쓰되 이 목록에 보이지 않는다. 기억 저장소 설정과 색인 갱신은 `useTechnicalDetails` 사용자의 기술 정보에만 둔다. `사실 아직 잘 몰라요`(정정 이벤트, 배지 `더 알아보는 중`)는 `익히는 중`·`문제로 확인했어요` 카드에만 두고, 나머지 카드에는 `잘 모르겠어요`(자기보고 unsure)를 둔다. "검토 전"·"숙련 인증"처럼 부족함을 강조하는 문구를 쓰지 않는다.
+- 사용 방법 탭(`web/src/i18n/guide.ts`)은 쓰는 사람 입장만 적는다: 버튼·표시 이름, 하는 일, 쓰면 좋은 때. 회원 관리·서버 설정·환경변수 같은 운영 내용은 넣지 않는다(운영은 `docs/deployment.md`). 버튼 이름은 문자열로 다시 쓰지 말고 `ko` 값을 참조해 화면 문구가 바뀌면 함께 바뀌게 한다. 버튼 이름을 끼워 넣을 때는 뒤의 조사(을/를, 으로/로)가 맞는지 확인한다. 버튼·탭을 추가하거나 동작을 바꾸면 해당 절을 고치고, 새 주요 버튼은 `web/test/guide.test.ts`의 빠지면 안 되는 목록에도 넣는다(빈 문구·`undefined`·관리자 화면 언급도 검사). 권한·설정에 따라 일부 사람에게만 보이는 버튼은 항목에 `show`(`GuideAudience`)를 달아 그 버튼이 보이는 사람에게만 안내한다. 새 조건은 `GuidePage.tsx`의 `guideViewer`에 화면과 **같은 조건**으로 추가하고 테스트의 `gated` 목록에 넣는다. 이 조건은 안내 표시용이며 서버 권한을 바꾸지 않는다.
 - 기술 용어는 쉬운 말을 먼저 쓰고 필요한 원어만 덧붙인다. 퀴즈 문장을 바꾸면 문항 version과 은행 version을 올리되 정답·검토 상태를 임의로 바꾸지 않는다.
 - 개념의 작업 연결 설명은 확인한 사실과 알아둘 이유(`whyItMatters`)를 잇는다. 잘린 대화·링크·언급 횟수를 본문에 나열하지 않고 원문은 접힌 기록에 둔다. `contextKind=mention`은 대화 언급만 확인된 경우로, 구현·실행 사실로 표현하지 않는다. 자동 감지 개념을 추가할 때는 실용적인 이유도 함께 작성한다.
 - 레포 위키의 `security` 절도 AI가 근거를 읽고 작성한다. 세션마다 보안·데이터 항목과 근거를 보존하며, 위키가 만들어진 세션 수와 미점검 범위를 표시한다. 설치 버전별 취약점 검사나 실제 서비스 점검을 한 것으로 표현하지 않는다.
@@ -264,7 +272,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 확인하지 못한 근거 표시는 버리기 전에 `repo/ref-fix.ts`로 한 번 다시 묻는다(`repo_wiki_refs`, `task=repo-inspect`). `unverifiedRepoRefs`가 `applyRepoAi`와 같은 검사(`refResolver`)로 통과하지 못한 표시만 모으고, 후보는 서버가 실제로 보낸 표시만 준다: 경로 모양의 표시에는 같은 파일의 발췌와 F:경로만(다른 파일로 바꿔 끼우지 않게), 경로가 아닌 표시에는 추가 확인 발췌. `F:` 없이 제공된 파일 경로를 그대로 쓴 표시는 같은 파일 표시로 읽는다(줄 범위 검사는 같다). AI는 후보 중에서 고르기만 하고 후보 밖의 답은 버린다. 고른 표시도 `applyRepoAi`의 검사를 그대로 거치며 같은 표시는 두 번 묻지 않는다. 후보가 없거나 고치지 못한 표시가 남은 항목은 예전처럼 거른다. 문장을 쓰지 않는 호출이라 withReader 를 붙이지 않는다.
 - 원본 그래프의 모든 노드에 검증된 동작 설명과 유효한 영역이 있어야 레포 위키를 완료로 저장한다. 누락 시 `repo_wiki_flow` 작업으로 한 번 보완하고 다시 검사한다. 여전히 누락되면 생성 실패로 저장하며 설명 없는 성공 캐시를 만들지 않는다. 보완은 `repo-inspect` 프로필을 쓰고 빠진 노드와 그 파일의 코드 발췌, 이미 통과한 영역만 전달한다(`repoFlowRepairUser`). 통과한 노드·영역은 보완 응답으로 바꾸지 않는다(`mergeRepoFlowRepair`).
 - `repo/inspect.ts`는 AI가 최대 6곳의 확인 위치·질문을 고른 뒤 `readRepoText`로 합계 24,000자 이내의 마스킹된 발췌를 읽고 짧은 답을 받는다. 저장소 밖·숨김 설정·키·심볼릭 링크는 읽지 않으며 알려진 지문과 다른 파일도 추가 확인에서 제외한다. 추가 답의 출처는 실제 제공한 줄 범위와 대조한다. GET 미리 보기는 AI를 호출하지 않고 기본 입력과 추가 확인 상한을 알린다.
-- `LlmRequest.task=repo-inspect`만 Claude CLI의 `haiku`·`--effort low`로 실행한다 (레포 위키 추가 확인·연결 그림 보완·확인하지 못한 근거 표시 다시 고르기·표와 주요 기능 관계 질문, 주요 기능 분석의 질문 단계). CLI 도구는 계속 비활성화하고 서버가 파일을 읽는다. CLI 실패는 기존 OpenRouter 경로를 쓰며 취소는 전파한다. 보조 확인 실패는 경고를 남기고 원래 코드 근거로 작성할 수 있다.
+- `LlmRequest.task=repo-inspect`만 Claude CLI의 `haiku`·`--effort low`로 실행한다 (레포 위키 추가 확인·연결 그림 보완·확인하지 못한 근거 표시 다시 고르기·표와 주요 기능 관계 질문, 주요 기능 분석과 '어떻게 사용하나요?' 분석의 질문 단계). CLI 도구는 계속 비활성화하고 서버가 파일을 읽는다. CLI 실패는 기존 OpenRouter 경로를 쓰며 취소는 전파한다. 보조 확인 실패는 경고를 남기고 원래 코드 근거로 작성할 수 있다.
 - 실제 파일 내용의 지문이 위키 근거와 달라지면 현재 파일임을 알리고 예전 줄 강조를 끈다. 글꼴을 적용해도 줄 번호가 변하지 않도록 비밀값 마스킹은 줄바꿈을 보존한다.
 
 ### AI 호출 추가

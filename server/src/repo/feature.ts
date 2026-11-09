@@ -83,7 +83,7 @@ export const FeaturePageSchema = z.object({
 });
 export type FeaturePageOutput = z.infer<typeof FeaturePageSchema>;
 
-interface Candidate { path: string; lines?: number; symbols: string[]; imports: string[]; importedBy: string[] }
+export interface Candidate { path: string; lines?: number; symbols: string[]; imports: string[]; importedBy: string[] }
 export interface Excerpt { ref: string; path: string; startLine: number; endLine: number; hash: string; code: string; partial: boolean }
 
 export interface FeatureMaterials {
@@ -152,10 +152,10 @@ export async function collectFeatureMaterials(input: { root: string; feature: Re
   return { feature: input.feature, fileSet, candidates, sessions: input.sessions ?? [], excerpts, budget: REPO_FEATURE_LIMITS.maxChars, read };
 }
 
-/** AI 가 고른 위치를 읽어 발췌를 만든다. 같은 시작 줄은 다시 읽지 않고 이미 보낸 발췌를 다시 쓴다. */
-export async function readFeatureExcerpts(m: FeatureMaterials, questions: z.infer<typeof Question>[]): Promise<{ question: string; ref: string; code: string; partial: boolean }[]> {
+/** AI 가 고른 위치를 읽어 발췌를 만든다. 같은 시작 줄은 다시 읽지 않고 이미 보낸 발췌를 다시 쓴다. (사용 방법 분석도 같이 쓴다) */
+export async function readFeatureExcerpts(m: Pick<FeatureMaterials, 'fileSet' | 'excerpts' | 'budget' | 'read'>, questions: z.infer<typeof Question>[], limit: number = REPO_FEATURE_LIMITS.questionsPerRound): Promise<{ question: string; ref: string; code: string; partial: boolean }[]> {
   const out: { question: string; ref: string; code: string; partial: boolean }[] = [];
-  for (const q of questions.slice(0, REPO_FEATURE_LIMITS.questionsPerRound)) {
+  for (const q of questions.slice(0, limit)) {
     if (!m.fileSet.has(q.path)) continue;
     const start = Math.max(0, q.line - 11);
     const again = [...m.excerpts.values()].find((e) => e.path === q.path && e.startLine === start + 1 && e.endLine > e.startLine);
@@ -200,15 +200,15 @@ export function resolveFeatureRef(ref: string, m: Pick<FeatureMaterials, 'excerp
   return null;
 }
 
-function allRefs(refs: string[], m: Pick<FeatureMaterials, 'excerpts' | 'candidates'>): RepoSource[] | null {
+export function allRefs(refs: string[], m: Pick<FeatureMaterials, 'excerpts' | 'candidates'>): RepoSource[] | null {
   const out = refs.map((r) => resolveFeatureRef(r, m)?.source ?? null);
   return out.length && out.every((x) => !!x) ? (out as RepoSource[]) : null;
 }
 
 /** 한 단계의 답 검사: 근거를 하나라도 확인하지 못하면 그 답을 버린다. */
-export function acceptFeatureRound(output: z.infer<typeof FeatureRoundSchema>, m: Pick<FeatureMaterials, 'excerpts' | 'candidates'>, round: number): { questions: RepoFeatureQuestion[]; dropped: number } {
+export function acceptFeatureRound(output: z.infer<typeof FeatureRoundSchema>, m: Pick<FeatureMaterials, 'excerpts' | 'candidates'>, round: number, limit: number = REPO_FEATURE_LIMITS.questionsPerRound): { questions: RepoFeatureQuestion[]; dropped: number } {
   let dropped = 0;
-  const questions = output.answers.slice(0, REPO_FEATURE_LIMITS.questionsPerRound).flatMap((a) => {
+  const questions = output.answers.slice(0, limit).flatMap((a) => {
     const sources = allRefs(a.sources, m);
     if (!sources || !a.answer.trim()) { dropped++; return []; }
     return [{ round, question: clean(a.question, 500), answer: clean(a.answer, 1500), sources }];

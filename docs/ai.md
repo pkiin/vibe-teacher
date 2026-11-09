@@ -43,7 +43,7 @@ AI 미설정·권한 부족·취소·오류 상태에서는 새 설명을 생성
 아래 파일 경로는 기존 비회원/홈 토큰 모드 기준입니다. Supabase 회원 모드는 같은 상대 키를 `vt_documents`와 추가 전용 `vt_events`에 사용자 ID별로 저장하며, 로컬 파일로 대체 저장하지 않습니다.
 
 - 대화 기록 분석 문서: `~/.vibe-teacher/wiki/projects/<프로젝트>/snapshots/`, 수준별 AI 설명은 `ai/`
-- 레포 위키: 같은 프로젝트의 `repo/`, 수준별 문장과 주요 기능 목록은 `repo/text/`, 기능별 페이지는 `repo/features/<기능>.<수준>.json`
+- 레포 위키: 같은 프로젝트의 `repo/`, 수준별 문장과 주요 기능 목록은 `repo/text/`, 기능별 페이지는 `repo/features/<기능>.<수준>.json`, 어떻게 사용하나요? 안내는 `repo/usage.<수준>.json`
 - 개인 이해 정보: `~/.vibe-teacher/wiki/learners/<ID>/events.jsonl`
 - 개인 설명: 같은 사용자 폴더의 `knowledge-text.json`
 - 문제 은행: 같은 사용자 폴더의 `question-bank.jsonl` (정답이 공개된 연습 문제만, 회원 모드는 `vt_events`).
@@ -64,7 +64,7 @@ AI 미설정·권한 부족·취소·오류 상태에서는 새 설명을 생성
 | `vt_ai_runs` | 사용자 작업 하나(예: 레포 위키 생성 1회)의 최종 결과물 `result`(검사·필터를 거쳐 저장한 결과), 저장 위치 `artifact_key`(`vt_documents`·`vt_events`의 키), `status`·`error`, 시작·종료 시각 |
 | `vt_ai_run_usage` (보기) | 작업별 호출 수·토큰 합계·요금 합계·사용한 모델 |
 
-두 표는 `run_id`로 연결하며 `feature`(`session_enrich`, `session_wiki`, `repo_wiki`, `repo_feature`, `knowledge_text`, `help_answer`, `practice_question`), `project_id`, `session_key`, `reader_level`로 기능과 대상을 구분합니다. 요금은 OpenRouter가 응답에 담아 준 `usage.cost`, Claude CLI의 `total_cost_usd`(USD)입니다.
+두 표는 `run_id`로 연결하며 `feature`(`session_enrich`, `session_wiki`, `repo_wiki`, `repo_feature`, `repo_usage`, `knowledge_text`, `help_answer`, `practice_question`), `project_id`, `session_key`, `reader_level`로 기능과 대상을 구분합니다. 요금은 OpenRouter가 응답에 담아 준 `usage.cost`, Claude CLI의 `total_cost_usd`(USD)입니다.
 
 - API 키·인증 헤더·실행 파일 경로·환경변수는 저장하지 않습니다. 저장 전에 비밀값을 다시 마스킹합니다. 대신 프롬프트에 들어간 세션 요약·코드 발췌가 그대로 남으므로 Supabase 대시보드 접근 권한을 관리자에게만 주세요.
 - 앱은 회원 본인 토큰으로 **행 추가만** 합니다. 회원은 자기 기록도 Data API로 조회·수정·삭제할 수 없습니다 (연습 문항 정답이 결과물에 들어 있기 때문). 관리자는 Supabase 대시보드의 SQL Editor·Table Editor에서 조회합니다.

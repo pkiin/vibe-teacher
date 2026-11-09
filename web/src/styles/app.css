@@ -759,6 +759,9 @@ summary::marker { color: var(--muted); }
 .start-goal { white-space: pre-wrap; }
 .start-prompt { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.8; padding: var(--card-padding); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 .start-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.start-next { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 16px; }
+.start-next h2 { margin: 0 0 4px; font-size: 1.05em; }
+.start-next p { margin: 0; }
 .member-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 16px; }
 .member-email { font-size: 1.1em; overflow-wrap: anywhere; }
 .member-account { display: flex; gap: 8px; align-items: baseline; margin: 8px 0; flex-wrap: wrap; }
@@ -781,3 +784,31 @@ summary::marker { color: var(--muted); }
 .storage-activity summary { cursor: pointer; font-weight: 600; }
 .storage-activity .table-scroll { overflow-x: auto; margin-block: 12px; }
 @media (max-width: 480px) { .work-steps { gap: 4px; font-size: .75em; } .network-activity { bottom: 10px; width: max-content; } }
+/* 사용 방법: 버튼 이름 → 하는 일 → 쓰면 좋은 때. 좁은 화면에서는 한 줄씩 쌓는다. */
+.guide-page { max-width: 1000px; }
+.guide-page > p { line-height: var(--read-line-height); max-width: 46em; }
+.guide-flow h2, .guide-section h2 { margin: 0 0 8px; }
+.guide-flow ol { margin: 0; padding-left: 24px; display: grid; gap: 10px; line-height: var(--read-line-height); }
+.guide-flow li { display: grid; gap: 2px; }
+.guide-flow li > span { color: var(--muted); }
+.guide-search { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 20px 0 8px; }
+.guide-search label { font-weight: 600; }
+.guide-search input { flex: 1 1 240px; min-width: 0; max-width: 420px; min-height: var(--control-height); box-sizing: border-box; }
+.guide-section { margin-top: 16px; padding: var(--section-padding); }
+.guide-section > p { margin: 0 0 8px; line-height: var(--read-line-height); }
+.guide-where { color: var(--muted); font-size: var(--font-small); }
+.guide-where .pill { margin-left: 0; margin-right: 4px; }
+.guide-part h3 { margin: 18px 0 4px; font-size: calc(var(--ui-font-size) * 1.05); }
+.guide-items { margin: 0; }
+.guide-item { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr); gap: 4px 16px; padding: 10px 0; border-top: 1px solid var(--border); }
+.guide-item dt, .guide-item dd { margin: 0; min-width: 0; }
+.guide-item dd p { margin: 0; line-height: var(--read-line-height); }
+.guide-name { display: inline-block; max-width: 100%; box-sizing: border-box; padding: 2px 10px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--surface); color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.guide-label { display: block; margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
+.guide-item dd .guide-tip { margin-top: 4px; color: var(--muted); }
+.guide-item dd .repo-evidence, .guide-flow li .repo-evidence, .guide-faq .repo-evidence { margin-top: 4px; }
+.guide-tip strong { color: var(--green); margin-right: 4px; }
+.guide-faq { border-top: 1px solid var(--border); padding: 10px 0; }
+.guide-faq summary { cursor: pointer; font-weight: 600; }
+.guide-faq p { margin: 8px 0 0; line-height: var(--read-line-height); }
+@media (max-width: 640px) { .guide-item { grid-template-columns: 1fr; } .guide-section { padding: var(--card-padding); } }

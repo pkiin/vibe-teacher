@@ -98,7 +98,7 @@ function AiCall({ call }: { call: RepoFeatureAiCall }) {
   );
 }
 
-function Questions({ questions }: { questions: RepoFeatureQuestion[] }) {
+export function Questions({ questions }: { questions: RepoFeatureQuestion[] }) {
   const rounds = [...new Set(questions.map((q) => q.round))].sort((a, b) => a - b);
   return (
     <>

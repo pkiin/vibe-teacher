@@ -8,7 +8,8 @@ import { namedFunctions, type NamedFunction } from './db-calls';
 
 export const MAX_SOURCE_BYTES = 200_000;
 const EXAMPLE = /^\.env\.(example|sample|template|dist)$/i;
-const TEXT = /\.(?:[cm]?[jt]sx?|py|md|markdown|txt|json|ya?ml|toml|html|css|scss|sql|prisma|sh|go|rs|java|rb|php)$/i;
+/** 화면 템플릿(vue·svelte·astro)은 레포 위키의 사용 방법 분석이 화면 문구를 읽으려고 연다. 다른 파일과 같이 비밀값을 가린다 */
+const TEXT = /\.(?:[cm]?[jt]sx?|py|md|markdown|txt|json|ya?ml|toml|html|vue|svelte|astro|css|scss|sql|prisma|sh|go|rs|java|rb|php)$/i;
 const SKIP = new Set(['node_modules', 'dist', 'build', 'out', 'vendor', 'coverage', 'venv', 'target']);
 
 /** 경로를 조립하기 전에 숨김 설정과 비밀 파일을 제외한다. */

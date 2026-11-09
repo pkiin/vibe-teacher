@@ -16,6 +16,7 @@ import { Tabs } from './Tabs';
 import { DatabaseView } from './RepoDatabaseView';
 import { RepoFlowView } from './RepoFlowView';
 import { RepoSourceViewer } from './RepoSourceViewer';
+import { RepoUsageView } from './RepoUsageView';
 import { sessionAnalysisPath } from '../lib/session-analysis';
 
 type FileSource = Extract<RepoSource, { kind: 'file' }>;
@@ -183,7 +184,7 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState(false);
   const [source, setSource] = useState<FileSource | null>(null);
-  const [view, setView] = useState<'user' | 'features' | 'system' | 'security'>('user');
+  const [view, setView] = useState<'user' | 'features' | 'system' | 'usage' | 'security'>('user');
   const [jobId, setJobId] = useState<string | null>(null);
   const jobPath = jobId ? `/api/projects/${projectId}/repo-wiki/jobs/${jobId}` : null;
   const { job, error: jobError } = useJob<unknown>(jobPath);
@@ -291,7 +292,7 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
     );
   }
   const canAi = !!me?.canEnrich && !!me?.llmStatus?.available;
-  const sections = view === 'features' ? [] : view === 'system' ? wiki.system : wiki.user.filter((s) => view === 'security' ? s.id === 'security' : s.id !== 'security');
+  const sections = view === 'features' || view === 'usage' ? [] : view === 'system' ? wiki.system : wiki.user.filter((s) => view === 'security' ? s.id === 'security' : s.id !== 'security');
   const gen = generatorLine(wiki.generator);
   const git = ko.repo.git(wiki.inputs.repo.branch, wiki.inputs.repo.head);
   const analyzedAt = new Map((analyzed.data?.features ?? []).flatMap((f) => (f.analyzedAt ? [[f.id, f.analyzedAt] as const] : [])));
@@ -336,9 +337,10 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
         <AiPreview key={reader.level} projectId={projectId} />
       </div>
 
-      <Tabs tabs={(['user', 'features', 'system', 'security'] as const).map((id) => ({ id, label: ko.repo.views[id]!, ...(id === 'features' && wiki.features?.length ? { badge: wiki.features.length } : {}) }))} active={view} onChange={(id) => setView(id as typeof view)} />
+      <Tabs tabs={(['user', 'features', 'system', 'usage', 'security'] as const).map((id) => ({ id, label: ko.repo.views[id]!, ...(id === 'features' && wiki.features?.length ? { badge: wiki.features.length } : {}) }))} active={view} onChange={(id) => setView(id as typeof view)} />
       <p className="small muted">{ko.repo.viewNote[view]}</p>
       {view === 'features' && <FeatureCards projectId={projectId} features={features.features} />}
+      {view === 'usage' && <RepoUsageView projectId={projectId} />}
       {view === 'security' && !sections.length && <Notice kind="warn">{wiki.generator.kind === 'llm' ? ko.security.repoEmpty : ko.security.generating}</Notice>}
       {sections.length > 0 && <nav className="repo-toc small" aria-label={ko.repo.contents}>
         {sections.map((s) => (

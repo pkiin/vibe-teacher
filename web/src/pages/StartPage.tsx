@@ -75,5 +75,9 @@ export function StartPage() {
     </section>}
     {error && <p role="alert" className="notice notice-error">{error}</p>}
     {!editing && me?.reader && !me.reader.chosen && <ReaderLevelSetup />}
+    {!editing && profile && <section className="card start-next">
+      <div><h2>{ko.guide.fromStartTitle}</h2><p className="muted">{ko.guide.fromStartText}</p></div>
+      <Link className="btn" to="/guide">{ko.guide.fromStartLink} →</Link>
+    </section>}
   </div>;
 }
