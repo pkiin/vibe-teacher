@@ -13,11 +13,11 @@ import { ErrorBox, Loading } from './Notice';
 import { KnowledgeList } from './KnowledgeList';
 import { UnifiedAiPanel } from './UnifiedAiPanel';
 import { SessionSummaryCard, WikiBody, WikiCoverage, WikiHeader } from './WikiSections';
-import { SecurityReview } from './SecurityReview';
+import { SECURITY_REVIEW_VISIBLE, SecurityReview } from './SecurityReview';
 import { askedConcept } from '../lib/session-analysis';
 
 /**
- * 세션 (대화 기록) 분석 문서 — 작업·개념·보안 주의사항을 한 화면에 잇고,
+ * 세션 (대화 기록) 분석 문서 — 작업·개념(보안 주의사항은 SECURITY_REVIEW_VISIBLE 일 때만)을 한 화면에 잇고,
  * 오른쪽 도움 패널(설명/질문/퀴즈)이 지금 보고 있는 대상을 따라간다.
  */
 export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKey: string; projectId: string; onJump?: (i: number) => void }) {
@@ -113,7 +113,7 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
       <div className="understand">
         <div className="understand-main">
           <nav className="reading-path" aria-label={ko.reading.path}>
-            {(['summary', 'wiki', 'concepts', 'knowledge', 'security'] as const).map((key, index) => (
+            {(['summary', 'wiki', 'concepts', 'knowledge', 'security'] as const).filter((key) => key !== 'security' || SECURITY_REVIEW_VISIBLE).map((key, index) => (
               <a key={key} href={`#${key}`}><span aria-hidden="true">{index + 1}</span>{ko.reading[key]}</a>
             ))}
           </nav>
@@ -161,7 +161,7 @@ export function SessionUnderstand({ sessionKey, projectId, onJump }: { sessionKe
           <h2 id="knowledge">{ko.knowledge.sessionTitle}</h2>
           <KnowledgeList sessionKey={sessionKey} onProfile={onProfile} refreshKey={`${profile?.revision}|${profile?.activityRevision}|${wiki?.ai?.createdAt}|${enrichment?.createdAt}`} showMeta={false} />
 
-          <SecurityReview wiki={wiki} onJump={onJump} />
+          {SECURITY_REVIEW_VISIBLE && <SecurityReview wiki={wiki} onJump={onJump} />}
         </div>
         <HelpPanel data={data} />
       </div>

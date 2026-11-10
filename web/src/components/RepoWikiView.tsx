@@ -17,6 +17,7 @@ import { DatabaseView } from './RepoDatabaseView';
 import { RepoFlowView } from './RepoFlowView';
 import { RepoSourceViewer } from './RepoSourceViewer';
 import { RepoUsageView } from './RepoUsageView';
+import { SECURITY_REVIEW_VISIBLE } from './SecurityReview';
 import { sessionAnalysisPath } from '../lib/session-analysis';
 
 type FileSource = Extract<RepoSource, { kind: 'file' }>;
@@ -337,7 +338,7 @@ export function RepoWikiView({ projectId }: { projectId: string }) {
         <AiPreview key={reader.level} projectId={projectId} />
       </div>
 
-      <Tabs tabs={(['user', 'features', 'system', 'usage', 'security'] as const).map((id) => ({ id, label: ko.repo.views[id]!, ...(id === 'features' && wiki.features?.length ? { badge: wiki.features.length } : {}) }))} active={view} onChange={(id) => setView(id as typeof view)} />
+      <Tabs tabs={(['user', 'features', 'system', 'usage', 'security'] as const).filter((id) => id !== 'security' || SECURITY_REVIEW_VISIBLE).map((id) => ({ id, label: ko.repo.views[id]!, ...(id === 'features' && wiki.features?.length ? { badge: wiki.features.length } : {}) }))} active={view} onChange={(id) => setView(id as typeof view)} />
       <p className="small muted">{ko.repo.viewNote[view]}</p>
       {view === 'features' && <FeatureCards projectId={projectId} features={features.features} />}
       {view === 'usage' && <RepoUsageView projectId={projectId} />}

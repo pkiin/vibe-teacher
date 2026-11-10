@@ -51,6 +51,7 @@ export function GuidePage() {
       <Breadcrumb items={[{ label: t.title }]} />
       <h1>{t.title}</h1>
       <p>{t.intro}</p>
+      <div className="notice notice-info guide-support" role="note"><p><strong>{t.supportTitle}</strong><br />{t.supportText}</p></div>
       <p className="small muted">{t.note} {t.mine}</p>
       <GuideView idPrefix="guide" steps={guideSteps} sections={sections} faq={faq} placeholder={t.searchPlaceholder} />
     </div>

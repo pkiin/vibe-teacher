@@ -5,6 +5,7 @@ import { useReader } from '../hooks/useReader';
 import { ko } from '../i18n/ko';
 import { sessionAnalysisPath } from '../lib/session-analysis';
 import { ErrorBox, Loading, fmtDate } from './Notice';
+import { SECURITY_REVIEW_VISIBLE } from './SecurityReview';
 
 /** 저장된 분석 문서와 하위 절을 부모·자식 목록으로 연결한다. */
 export function SessionAnalysisTree({ projectId, data }: { projectId: string; data: SessionAnalysisDocumentsResponse }) {
@@ -25,7 +26,7 @@ export function SessionAnalysisTree({ projectId, data }: { projectId: string; da
                 <p className="small muted"><time dateTime={doc.createdAt}>{fmtDate(doc.createdAt)}</time>{doc.stale ? ` · ${ko.analysis.stale}` : ''}</p>
                 {doc.summary && <p className="small">{doc.summary}</p>}
                 <ul className="small">
-                  {doc.sections.map((section) => <li key={section}><Link to={sessionAnalysisPath(doc.sessionKey, section)}>{ko.analysis.sections[section]}</Link></li>)}
+                  {doc.sections.filter((section) => section !== 'security' || SECURITY_REVIEW_VISIBLE).map((section) => <li key={section}><Link to={sessionAnalysisPath(doc.sessionKey, section)}>{ko.analysis.sections[section]}</Link></li>)}
                 </ul>
               </details>
             </li>

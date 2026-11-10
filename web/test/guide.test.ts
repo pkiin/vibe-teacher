@@ -45,6 +45,14 @@ describe('사용 방법 탭', () => {
     expect(links.slice(0, 4)).toEqual(['/', '/', '/guide', '/accounts']);
   });
 
+  it('맨 위에서 웹 앱·웹 서비스 기준이라는 지원 범위를 처음 순서보다 먼저 알린다', () => {
+    const html = render();
+    expect(html).toContain(ko.guide.supportTitle);
+    expect(html).toContain(ko.guide.supportText);
+    expect(html.indexOf(ko.guide.supportTitle)).toBeGreaterThan(html.indexOf(ko.guide.intro));
+    expect(html.indexOf(ko.guide.supportTitle)).toBeLessThan(html.indexOf(ko.guide.flowTitle));
+  });
+
   it('일반 회원에게는 그 사람 화면에 보이지 않는 메뉴와 버튼을 안내하지 않는다', () => {
     const html = render();
     for (const name of gated) expect(hasItem(html, name), name).toBe(false);
@@ -111,6 +119,11 @@ describe('사용 방법 탭', () => {
     expect(text).not.toContain(ko.members.title);
     expect(text).not.toContain(ko.sources.scanTitle);
     expect(text).not.toContain('VIBE_TEACHER_');
+  });
+  it('화면에서 숨겨 둔 보안 점검은 안내하지 않는다', () => {
+    const text = allTexts().join('\n');
+    for (const name of [ko.security.title, ko.repo.views.security!, ko.reading.security, ko.analysis.sections.security]) expect(text).not.toContain(name);
+    expect(text).not.toContain('보안 주의사항');
   });
 
   it('찾기 칸에 넣은 말이 들어 있는 항목만 남기고, 절 제목이 맞으면 절 전체를 남긴다', () => {

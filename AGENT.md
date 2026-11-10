@@ -84,13 +84,13 @@ web/               Vite + React 19 + react-router UI (한국어)
   src/i18n/ko.ts   화면 문자열 모음
   src/i18n/guide.ts 사용 방법 탭 내용(화면별 버튼 이름 → 하는 일 → 쓰면 좋은 때, 처음 순서, 자주 묻는 질문). 버튼 이름은 ko 값을 참조
   src/pages/GuidePage.tsx  사용 방법 탭 (/guide, 위쪽 메뉴의 시작하기 바로 옆·시작 안내 아래 링크). 보는 사람에게 보이는 항목만(guideViewer·visibleGuide) 골라 components/GuideView.tsx 로 그린다
-  src/components/SessionUnderstand.tsx  "세션 (대화 기록) 분석" 문서 (작업 요약 → 작업 설명 → 개념 → 내 지식 → 보안 점검 + 도움 패널). 고정 주소 /sessions/:sessionKey/analysis, 예전 탭 주소도 유지 (pages/SessionPage.tsx)
+  src/components/SessionUnderstand.tsx  "세션 (대화 기록) 분석" 문서 (작업 요약 → 작업 설명 → 개념 → 내 지식 + 도움 패널, 보안 점검 절은 지금 숨김). 고정 주소 /sessions/:sessionKey/analysis, 예전 탭 주소도 유지 (pages/SessionPage.tsx)
   src/components/SessionAnalysisTree.tsx 저장된 분석 문서·하위 절의 트리. wiki/documents.ts와 /api/projects/:id/session-analyses가 원문·AI 호출 없이 저장된 결과만 모은다
   src/context/DisplayContext.tsx        화면 설정(본문 14px·코드 12px·촘촘한 밀도 기본), 설명 난이도와 분리해 브라우저에 저장
   src/components/SettingsPopover.tsx    오른쪽 위 톱니바퀴 설정. Modal.tsx 의 네이티브 dialog로 초점·Escape·복귀 처리
   src/components/RepoSourceViewer.tsx   근거 파일 원문·줄 강조·검색, RepoFlowView.tsx 는 검증된 파일 연결을 SVG로 표시
   src/components/RepoDatabaseView.tsx   데이터베이스 표: 요약 표(표 → 저장하는 내용 → 쓰는 기능)와 표별 컬럼·조건·들어가는 내용
-  src/components/SecurityReview.tsx    AI가 선정한 보안·데이터 주의사항과 출처 표시
+  src/components/SecurityReview.tsx    AI가 선정한 보안·데이터 주의사항과 출처 표시. SECURITY_REVIEW_VISIBLE=false 로 지금은 세션 분석·레포 위키 탭·분석 문서 목록 어디에도 보이지 않는다
   src/components/HelpPanel.tsx          도움 패널 (설명/질문/퀴즈), src/context/FocusContext.tsx 가 지금 보는 대상을 공유
   src/components/CodeBlock.tsx          의존성 없는 코드 색칠(토큰 분석, React 텍스트로만 그림). 파일 보기·레포 위키 코드·기능 페이지가 함께 쓴다
   src/components/GuideView.tsx          사용 방법 안내 화면(처음 순서·화면별 버튼·자주 묻는 질문·찾기 칸 filterGuide). 앱 사용 방법 탭과 레포 위키 '어떻게 사용하나요?'가 함께 쓴다
@@ -260,6 +260,7 @@ npx vitest run -t "codex adapter"              # 이름으로 골라 실행
 - 기술 용어는 쉬운 말을 먼저 쓰고 필요한 원어만 덧붙인다. 퀴즈 문장을 바꾸면 문항 version과 은행 version을 올리되 정답·검토 상태를 임의로 바꾸지 않는다.
 - 개념의 작업 연결 설명은 확인한 사실과 알아둘 이유(`whyItMatters`)를 잇는다. 잘린 대화·링크·언급 횟수를 본문에 나열하지 않고 원문은 접힌 기록에 둔다. `contextKind=mention`은 대화 언급만 확인된 경우로, 구현·실행 사실로 표현하지 않는다. 자동 감지 개념을 추가할 때는 실용적인 이유도 함께 작성한다.
 - 레포 위키의 `security` 절도 AI가 근거를 읽고 작성한다. 세션마다 보안·데이터 항목과 근거를 보존하며, 위키가 만들어진 세션 수와 미점검 범위를 표시한다. 설치 버전별 취약점 검사나 실제 서비스 점검을 한 것으로 표현하지 않는다.
+- 보안·취약점 점검은 실제로 쓸 만한 결과를 내지 못해 화면에서 숨겼다(`web/src/components/SecurityReview.tsx`의 `SECURITY_REVIEW_VISIBLE`). 세션 분석의 보안 절·목차 항목, 레포 위키의 `보안 및 취약점 점검` 탭, 분석 문서 목록의 `보안 주의사항` 링크가 이 값을 따른다. AI 생성·저장·서버 응답은 바꾸지 않았다. 다시 보이려면 이 값을 켜고 사용 방법 탭(`guide.ts`)·`docs/features.md`·분석 안내 문구의 보안 설명을 되살린다. 숨긴 동안 사용 방법 탭에 보안 점검을 안내하지 않는다(`web/test/guide.test.ts`).
 - 레포 위키 문장 형식·공통 문체가 바뀌면 `repo/service.ts`의 `REPO_TEXT_VERSION`도 올린다. 예전 문장 레이어는 GET에서 사용하지 않고 자동 작성 대상으로 돌린다.
 - 레포 위키의 표 블록에는 `role`(`api`·`scripts`)을 붙이고, 화면은 `TABLE_FOLD_ROWS`(8줄)를 넘는 표를 `<details>`로 접어 `ko.repo.fold` 문구로 펼친다. 데이터베이스 표는 `RepoDatabaseView`가 그리며 표가 `OPEN_TABLES`(3개)를 넘으면 표별 상세를 접고, 요약 표의 표 이름을 누르면 그 상세를 펼친다.
 - 레포 위키 API 표는 방식·경로·동작 설명·파일 순서다. 동작 설명은 경로별 코드 발췌를 받은 AI가 작성하고, `applyRepoAi`에서 방식·경로·파일이 일치하고 해당 파일 근거가 확인된 설명만 병합한다. 원문 경로·파일과 다른 자료 블록은 보존한다. 같은 원문 블록(`sourceBlocks` id)은 페이지마다 처음 고른 절에만 싣고 근거도 그 절에만 붙인다. 저장된 예전 레이어는 `compose`에서 `dropRepeatedBlocks`로 같은 그림·표·코드를 한 번만 남긴다(문장 블록은 지우지 않는다).
