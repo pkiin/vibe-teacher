@@ -62,7 +62,10 @@ describe('세션 분석의 기술 정보 표시', () => {
 describe('위키 문서 연결', () => {
   it('프로젝트 문서 트리에서 분석 문서와 하위 절을 고정 주소로 연다', () => {
     const html = render(createElement(SessionAnalysisTree, { projectId: 'p1', data: { totalSessions: 2, documents: [{ sessionKey: 'claude:s/1', title: '로그인 추가', createdAt: enrichment.createdAt, status: 'complete', stale: false, sections: ['summary', 'wiki', 'concepts', 'security'] }] } }));
-    for (const section of ['', '#summary', '#wiki', '#concepts', '#security']) expect(html).toContain(`href="/sessions/claude%3As%2F1/analysis${section}"`);
+    for (const section of ['', '#summary', '#wiki', '#concepts']) expect(html).toContain(`href="/sessions/claude%3As%2F1/analysis${section}"`);
+    // 보안 점검은 지금 화면에서 숨겨 두었으므로 서버가 절을 알려 줘도 링크를 만들지 않는다.
+    expect(html).not.toContain('#security');
+    expect(html).not.toContain(ko.analysis.sections.security);
     expect(html).toContain('href="/projects/p1?tab=sessions"');
     expect(html).toContain('<ul>');
   });

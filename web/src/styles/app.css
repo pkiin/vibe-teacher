@@ -787,6 +787,7 @@ summary::marker { color: var(--muted); }
 /* 사용 방법: 버튼 이름 → 하는 일 → 쓰면 좋은 때. 좁은 화면에서는 한 줄씩 쌓는다. */
 .guide-page { max-width: 1000px; }
 .guide-page > p { line-height: var(--read-line-height); max-width: 46em; }
+.guide-support p { margin: 0; line-height: var(--read-line-height); max-width: 46em; }
 .guide-flow h2, .guide-section h2 { margin: 0 0 8px; }
 .guide-flow ol { margin: 0; padding-left: 24px; display: grid; gap: 10px; line-height: var(--read-line-height); }
 .guide-flow li { display: grid; gap: 2px; }
@@ -803,7 +804,7 @@ summary::marker { color: var(--muted); }
 .guide-item { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr); gap: 4px 16px; padding: 10px 0; border-top: 1px solid var(--border); }
 .guide-item dt, .guide-item dd { margin: 0; min-width: 0; }
 .guide-item dd p { margin: 0; line-height: var(--read-line-height); }
-.guide-name { display: inline-block; max-width: 100%; box-sizing: border-box; padding: 2px 10px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--surface); color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.guide-name { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
 .guide-label { display: block; margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
 .guide-item dd .guide-tip { margin-top: 4px; color: var(--muted); }
 .guide-item dd .repo-evidence, .guide-flow li .repo-evidence, .guide-faq .repo-evidence { margin-top: 4px; }

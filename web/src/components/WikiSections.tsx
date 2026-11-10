@@ -6,6 +6,7 @@ import { MiniMarkdown } from './MiniMarkdown';
 import { Notice, fmtDate } from './Notice';
 import { WikiAlertCard } from './WikiAlertCard';
 import { WikiItemCard } from './WikiItemCard';
+import { SECURITY_REVIEW_VISIBLE } from './SecurityReview';
 
 /** AI 세션 분석 결과 요약 (없으면 안내만) */
 export function SessionSummaryCard({ enrichment }: { enrichment: EnrichmentRecord | null }) {
@@ -78,7 +79,7 @@ export function WikiBody({ wiki, profile, learner, projectId, sessionKey, onJump
   const [showDeferred, setShowDeferred] = useState(false);
   const { snapshot, plan } = wiki;
   const items = new Map(snapshot.items.map((i) => [i.id, i]));
-  // 보안·데이터 항목은 위쪽 전용 섹션에서 예산과 관계없이 모두 보여 준다.
+  // 보안·데이터 항목은 보안 점검 절(SecurityReview)에서 예산과 관계없이 모두 보여 준다. 그 절은 지금 숨겨 두었다 (SECURITY_REVIEW_VISIBLE).
   const alerts = snapshot.findings.filter((f) => plan.commonAlertIds.includes(f.id) && f.category !== 'security' && f.category !== 'data');
   const card = (id: string, bundle: (typeof plan.bundles)[number] | null) => {
     const item = items.get(id);
@@ -86,7 +87,7 @@ export function WikiBody({ wiki, profile, learner, projectId, sessionKey, onJump
   };
   return (
     <>
-      <h3>{ko.security.otherAlerts}</h3>
+      <h3>{SECURITY_REVIEW_VISIBLE ? ko.security.otherAlerts : ko.wiki.alerts}</h3>
       <p className="small muted">{ko.wiki.alertsNote}</p>
       {plan.budget.status === 'mandatory_overflow' && <Notice kind="warn">{ko.wiki.overflow}</Notice>}
       {alerts.length ? alerts.map((f) => <WikiAlertCard key={f.id} finding={f} snapshot={snapshot} onJump={onJump} />) : null}

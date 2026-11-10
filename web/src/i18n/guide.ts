@@ -66,7 +66,7 @@ export const guideSteps: GuideStep[] = [
   { title: '설명 난이도 고르기', text: `처음 들어오면 “${ko.reader.setupTitle}”가 나와요. 읽기 편한 수준을 고르면 AI가 모든 설명을 그 말투로 써요. 나중에 오른쪽 위 톱니바퀴에서 언제든 바꿀 수 있어요.` },
   { title: '시작하기에서 지금 단계 고르기', text: '아이디어만 있어도, 이미 만든 코드가 있어도 괜찮아요. 단계를 고르면 다음에 할 일과 AI 코딩 도구에 붙여 넣을 첫 요청을 만들어 드려요.', to: '/' },
   { title: '내 프로젝트에서 대화 기록 열기', text: 'AI 코딩 도구를 실행했던 폴더가 프로젝트로 보여요. 프로젝트 › 세션(대화 한 번) 순서로 들어가세요.', to: '/accounts' },
-  { title: '세션 분석 시작하기', text: `세션을 열고 ‘${ko.aiUnified.run}’을 누르면 이번 대화에서 한 작업, 알아 두면 좋은 개념, 보안 주의사항을 문서로 정리해요.` },
+  { title: '세션 분석 시작하기', text: `세션을 열고 ‘${ko.aiUnified.run}’을 누르면 이번 대화에서 한 작업과 알아 두면 좋은 개념을 문서로 정리해요.` },
   { title: '궁금한 건 묻고, 문제로 확인하기', text: '오른쪽 도움 패널에서 질문하고 짧은 문제를 풀어 보세요. 맞힌 개념이 내 지식에 쌓여요.' },
   { title: '레포 위키로 프로젝트 전체 보기', text: `프로젝트 화면에서 ‘${ko.repo.build}’를 누르면 프로젝트가 무엇이고 어떻게 동작하는지 한 문서로 정리해요.` },
   { title: '내 앱의 사용 설명서 만들기', text: `레포 위키의 ‘${ko.repo.views.usage}’ 탭에서 ‘${ko.usage.analyze}’를 누르면, 그 앱을 쓰는 사람을 위한 사용 방법(화면별 버튼이 하는 일과 쓰면 좋은 때)을 AI가 코드를 읽고 써 줘요.` },
@@ -158,7 +158,7 @@ export const guideSections: GuideSection[] = [
           { name: ko.repo.tab, what: '이 프로젝트가 무엇이고 어떻게 동작하는지 AI가 코드와 대화 기록을 읽고 정리한 문서예요. 아래 “레포 위키” 절에 자세히 있어요.' },
           { name: ko.repo.sessionsTab, what: '이 프로젝트에서 AI 코딩 도구와 나눈 대화 목록이에요. 대화 한 번이 세션 하나예요. 시작 시각, 길이, 내 메시지 수, AI가 실행한 작업 수, 모델을 보여 줘요.', tip: `제목을 눌러 세션을 열고 ‘${ko.aiUnified.run}’을 눌러 보세요.` },
           { name: ko.repo.knowledgeTab, what: '이 프로젝트의 대화에서 나온 개념과 내 학습 기록만 모아 보여 줘요. 카드 사용법은 “내 지식” 절과 같아요.' },
-          { name: ko.analysis.documents, what: `레포 위키 탭 맨 위에 있어요. 이 프로젝트에서 분석한 대화 문서를 목록으로 모았어요. 문서 제목이나 ‘${Object.values(ko.analysis.sections).join('·')}’을 누르면 그 부분으로 바로 가요.`, tip: `“${ko.analysis.partial}”나 “${ko.analysis.stale}”가 보이면 그 세션을 열어 다시 분석해 보세요.` },
+          { name: ko.analysis.documents, what: `레포 위키 탭 맨 위에 있어요. 이 프로젝트에서 분석한 대화 문서를 목록으로 모았어요. 문서 제목이나 ‘${[ko.analysis.sections.summary, ko.analysis.sections.wiki, ko.analysis.sections.concepts].join('·')}’을 누르면 그 부분으로 바로 가요.`, tip: `“${ko.analysis.partial}”나 “${ko.analysis.stale}”가 보이면 그 세션을 열어 다시 분석해 보세요.` },
           { name: ko.analysis.browseSessions, what: '세션 목록 탭으로 이동해요. 아직 분석한 문서가 없을 때 여기서 시작하면 돼요.' },
         ],
       },
@@ -181,13 +181,12 @@ export const guideSections: GuideSection[] = [
         ],
       },
       {
-        title: '다섯 개의 페이지',
+        title: '네 개의 페이지',
         items: [
           { name: ko.repo.views.user!, what: `${ko.repo.viewNote.user} 주요 기능 카드도 이 페이지에 함께 있어요.`, tip: '프로젝트를 처음 보는 사람이라면 여기부터 읽으세요.' },
           { name: ko.repo.views.features!, what: '사용자가 이 프로젝트로 직접 하는 일을 기능 카드로 모았어요. 카드를 누르면 그 기능의 페이지가 열려요.', tip: '“이 기능은 어떤 파일로 되어 있지?”가 궁금할 때 좋아요. 아래 “주요 기능 페이지” 절을 보세요.' },
           { name: ko.repo.views.system!, what: ko.repo.viewNote.system!, tip: '코드를 고치기 전에 어느 파일이 무엇을 하는지 파악할 때 좋아요.' },
           { name: ko.repo.views.usage!, what: '이 프로젝트를 쓰는 사람 입장에서 화면마다 있는 버튼과 기능이 하는 일, 언제 쓰면 좋은지를 AI가 코드를 읽고 정리한 안내예요. 처음 순서, 화면별 버튼 설명, 자주 묻는 질문으로 되어 있어요. 아래 “어떻게 사용하나요? (내 앱 사용 설명서)” 절을 보세요.', tip: '내가 만든 앱의 사용 설명서가 필요할 때, 다른 사람에게 앱 쓰는 법을 알려 줄 때 좋아요.' },
-          { name: ko.repo.views.security!, what: '코드와 대화 기록에서 찾은 보안·데이터 주의사항과 확인할 방법이에요. 실제 서비스나 설치된 버전을 자동으로 검사한 결과는 아니에요.', tip: '배포하거나 다른 사람에게 공개하기 전에 한 번 읽어 보세요.' },
         ],
       },
       {
@@ -281,7 +280,7 @@ export const guideSections: GuideSection[] = [
       {
         title: '세 개의 탭',
         items: [
-          { name: ko.understand.tab, what: '이 대화에서 한 작업, 알아 두면 좋은 개념, 보안 주의사항을 정리한 분석 문서예요. 아래 “세션 분석 문서” 절에 자세히 있어요.' },
+          { name: ko.understand.tab, what: '이 대화에서 한 작업과 알아 두면 좋은 개념을 정리한 분석 문서예요. 아래 “세션 분석 문서” 절에 자세히 있어요.' },
           { name: ko.session.tabs.messages, what: `내가 직접 입력한 메시지만 순서대로 보여 줘요. AI 답변, 도구 결과, 자동으로 끼워 넣어진 글은 빼요. ${ko.session.slashCommand}(/로 시작), ${ko.session.interrupted}, ${ko.session.turnDuration}, 그때 열려 있던 파일도 표시해요.`, tip: '내가 어떻게 요청했는지 돌아보면 다음에 더 좋은 요청을 쓰는 데 도움이 돼요.' },
           { name: ko.common.copyAll, what: '내 메시지 전체를 번호를 붙여 복사해요.', tip: '비슷한 작업을 다시 할 때 예전 요청을 참고하거나, 회고 글을 쓸 때 써 보세요.' },
           { name: ko.session.tabs.built, what: '요청마다 내가 요청한 내용과 에이전트가 작업 뒤에 남긴 결과 보고를 함께 보여 줘요. 마지막 보고는 펼쳐져 있고, 이전 요청은 눌러서 읽어요.' },
@@ -296,12 +295,12 @@ export const guideSections: GuideSection[] = [
     id: 'analysis',
     title: ko.aiUnified.title,
     where: `세션 화면 › ${ko.understand.tab} 탭`,
-    intro: '코딩 에이전트와 나눈 대화를 AI가 읽고, 이번 대화에서 한 작업 · 알아 두면 좋은 개념 · 보안 주의사항을 한 문서로 정리해요. 오른쪽(좁은 화면에서는 아래)의 도움 패널과 함께 읽어요.',
+    intro: '코딩 에이전트와 나눈 대화를 AI가 읽고, 이번 대화에서 한 작업과 알아 두면 좋은 개념을 한 문서로 정리해요. 오른쪽(좁은 화면에서는 아래)의 도움 패널과 함께 읽어요.',
     parts: [
       {
         title: '분석하기',
         items: [
-          { name: ko.aiUnified.run, what: '작업 요약과 작업·개념·보안 분석을 함께 시작해요. 보통 1~3분 걸려요. 설명 난이도를 고르기 전에는 시작하지 않아요.', tip: '세션을 처음 열었다면 먼저 눌러 보세요. 자동으로 쓰기가 켜져 있으면 알아서 시작하기도 해요.' },
+          { name: ko.aiUnified.run, what: '작업 요약과 작업·개념 분석을 함께 시작해요. 보통 1~3분 걸려요. 설명 난이도를 고르기 전에는 시작하지 않아요.', tip: '세션을 처음 열었다면 먼저 눌러 보세요. 자동으로 쓰기가 켜져 있으면 알아서 시작하기도 해요.' },
           { name: ko.aiUnified.rerun, what: '이미 분석한 문서를 새로 써요. “대화 기록이 바뀌었습니다”가 보이면 눌러서 최신 대화로 갱신하세요.', tip: '바뀐 게 없으면 누르지 않아도 돼요. 같은 기록·같은 설명 난이도라면 저장된 결과를 그대로 보여 줘요.' },
           { name: ko.aiUnified.cancel, what: '진행 중인 분석을 멈춰요.' },
           { name: ko.aiUnified.preview, what: 'AI에 보낼 요약을 미리 확인해요. 원본 기록 파일과 도구 출력 전체는 보내지 않고 비밀값은 가려요.', show: 'technical' },
@@ -310,7 +309,7 @@ export const guideSections: GuideSection[] = [
       {
         title: '문서를 읽는 순서',
         items: [
-          { name: `${ko.reading.path} (1~5)`, what: `문서 맨 위의 번호 목차예요. ${[ko.reading.summary, ko.reading.wiki, ko.reading.concepts, ko.reading.knowledge, ko.reading.security].join(' → ')} 순서이고, 누르면 그 절로 이동해요.` },
+          { name: `${ko.reading.path} (1~4)`, what: `문서 맨 위의 번호 목차예요. ${[ko.reading.summary, ko.reading.wiki, ko.reading.concepts, ko.reading.knowledge].join(' → ')} 순서이고, 누르면 그 절로 이동해요.` },
           { name: ko.understand.summary, what: `요청한 작업과 결과를 짧게 요약하고, 목표 달성 정도(${Object.values(ko.enrich.outcome).join('·')}), ${ko.enrich.features}, ${ko.enrich.nextSteps}을 보여 줘요.`, tip: `‘${ko.enrich.nextSteps}’은 다음 대화의 첫 요청으로 쓰기 좋아요.` },
           { name: ko.understand.wiki, what: `이번 작업에서 바뀐 것과 그 이유를 설명 카드로 정리해요. ‘${ko.wiki.alerts}’, ‘${ko.wiki.items}’, ‘${ko.wiki.deferred}’ 순서로 이어져요.` },
           { name: ko.wiki.alerts, what: '위험하거나 꼭 확인해야 할 항목이에요. 내 이해 수준과 관계없이 모든 사람에게 똑같이 보여요.', tip: '이 부분은 건너뛰지 말고 꼭 읽어 보세요.' },
@@ -321,7 +320,6 @@ export const guideSections: GuideSection[] = [
           { name: `${ko.concepts.relatedRecords} · ${ko.concepts.openMessage}`, what: '이 개념이 나온 대화 부분을 펼치고, 해당 메시지로 이동해요.' },
           { name: ko.wiki.coverage, what: `이번 분석에서 ${Object.values(ko.wiki.coverageKeys).join(', ')}을 어디까지 볼 수 있었는지 보여 줘요.`, tip: '“없음”인 자료는 분석에 들어가지 않았다는 뜻이에요. 그 부분에 대한 결론은 조심해서 읽으세요.' },
           { name: ko.knowledge.sessionTitle, what: '이 대화에서 나온 개념의 내 학습 상태와 문제 풀기 버튼이에요. 사용법은 “내 지식” 절과 같아요.' },
-          { name: ko.security.title, what: '이번 기록에서 찾은 보안·데이터 주의사항과 근거, 확인 방법이에요. 대화 기록을 근거로 한 점검이라, 실제 서비스나 설치된 버전의 취약점을 자동으로 검사한 결과는 아니에요.', tip: '“찾지 못했습니다”가 안전하다는 뜻은 아니에요. 비밀번호·키·개인정보를 다뤘다면 직접 한 번 더 살펴보세요.' },
         ],
       },
       {
